@@ -19,8 +19,8 @@ float_formatter = lambda x: "%.5f" % x
 import sys
 np.set_printoptions(formatter={'float_kind':float_formatter})
 
-mode     = 'learn_dump'
-sae_path = None
+mode     = 'learn'
+sae_path = ""
 
 from keras.optimizers import Adam
 from keras_adabound   import AdaBound
@@ -30,6 +30,10 @@ import keras.optimizers
 
 setattr(keras.optimizers,"radam", RAdam)
 setattr(keras.optimizers,"adabound", AdaBound)
+
+# ── Canonical directories ──────────────────────────────────────────────
+from latplan.util.paths import PROJECT_ROOT, DATA_DIR, OUT_DIR, find_dataset as _find_dataset
+os.makedirs(OUT_DIR, exist_ok=True)
 
 # default values
 default_parameters = {
@@ -47,7 +51,7 @@ default_parameters = {
     'dropout_z'       : False,
 }
 # hyperparameter tuning
-parameters = {
+"""parameters = {
     'beta'       :[-0.3,-0.1,0.0,0.1,0.3],
     'lr'         :[0.1,0.01,0.001,0.0001],
     'U'          :[20,40,80],
@@ -63,6 +67,49 @@ parameters = {
     'preencoder_l1':[0.0, 0.00001, 0.0001, 0.001, 0.01],
     'preencoder_delay':[0.05,0.1,0.2,0.3,0.5],
     'preencoder_output_activation':[("relu","MSE"),("linear","MSE"),("sigmoid","MSE"),("sigmoid","BCE")],
+    'loss':["BCE"],
+    'eval':["MSE"],
+}
+"""
+"""
+# 2 options for each parameter: 1) specify a list of values for tuning, 2) specify a single value to fix it
+parameters = {
+    'beta'       :[0.0,0.1],
+    'lr'         :[0.001,0.0001],
+    'U'          :[40,80],
+    'P'          :[20,40],
+    'A'          :[2,3],
+    'layer'      :[200,400],
+    'dropout'    :[0.3,0.5],
+    'noise'      :[0.2,0.4],
+    'zerosuppress'       :[0.0,0.05],
+    'zerosuppress_delay' :[0.1,0.2],
+    'preencoder_dimention':[50,100],
+    'preencoder_layers':[0,1],
+    'preencoder_l1':[0.0, 0.0001, 0.001],
+    'preencoder_delay':[0.1,0.2],
+    'preencoder_output_activation':[("relu","MSE"),("linear","MSE")],
+    'loss':["BCE"],
+    'eval':["MSE"],
+}
+"""
+# fixed parameters (not tuned) --> Make limi=1 in generic_search() if you use this
+parameters = {
+    'beta'       :[0.0],
+    'lr'         :[0.001],
+    'U'          :[40],
+    'P'          :[20],
+    'A'          :[2],
+    'layer'      :[200],
+    'dropout'    :[0.3],
+    'noise'      :[0.2],
+    'zerosuppress'       :[0.0],
+    'zerosuppress_delay' :[0.1],
+    'preencoder_dimention':[50],
+    'preencoder_layers':[0],
+    'preencoder_l1':[0.0],
+    'preencoder_delay':[0.1],
+    'preencoder_output_activation':[("relu","MSE")],
     'loss':["BCE"],
     'eval':["MSE"],
 }
@@ -171,9 +218,14 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
             default_parameters,
             parameters,
             path,
-            limit=300,
+            limit=1,
             report_best= lambda net: net.save(),
         )
+        ae.save()
+        if ae is None:
+            print("ERROR: Model was not returned by simple_genetic_search. Check parameters and training routine.")
+        else:
+            ae.save()
     elif 'reproduce' in mode:   # reproduce the best result from the grid search log
         if train_out is None:
             train_out = train
@@ -186,6 +238,7 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
             default_parameters,
             parameters,
             path,
+            limit=1,
             report_best= lambda net: net.save(),
         )
         ae.save()
@@ -215,7 +268,7 @@ def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=
     import importlib
     p = importlib.import_module('latplan.puzzles.puzzle_{}'.format(type))
     p.setup()
-    path = os.path.join(latplan.__path__[0],"puzzles","-".join(map(str,["puzzle",type,width,height]))+".npz")
+    path = _find_dataset("-".join(map(str,["puzzle",type,width,height]))+".npz")
     with np.load(path) as data:
         pre_configs = data['pres'][:num_examples]
         suc_configs = data['sucs'][:num_examples]
@@ -223,17 +276,15 @@ def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=
     configs = pre_configs
     objects = p.to_objects(configs, width, height, False)
     train = objects[:int(len(objects)*0.9)]
-    val   = data[int(len(data)*0.9):int(len(data)*0.95)]
-    test  = data[int(len(data)*0.95):]
+    val   = objects[int(len(objects)*0.9):int(len(objects)*0.95)]
+    test  = objects[int(len(objects)*0.95):]
 
-    ae = run(os.path.join("samples",sae_path), train, val, parameters)
+    ae = run(os.path.join(OUT_DIR,sae_path), train, val, parameters)
     show_summary(ae, train, test)
     plot_autoencoding_image(ae,test,train,"puzzle")
 
     dump_states (ae,objects)
     dump_actions(ae,p.object_transitions(width, height, configs=configs, one_per_state=True))
-    dump_all_states (ae,all_configs,        lambda configs: p.to_objects(configs,width,height),)
-    dump_all_actions(ae,all_configs,        lambda configs: p.object_transitions(width,height,configs),)
 
 def bboxes_to_onehot(bboxes,X,Y):
     batch, objs = bboxes.shape[0:2]
@@ -257,7 +308,7 @@ def blocksworld(aeclass="FirstOrderAE",track="blocks-5-3",U=None,A=None,P=None,n
             parameters[name] = [value]
     default_parameters["aeclass"] = aeclass
 
-    with np.load(os.path.join(latplan.__path__[0],"puzzles",track+".npz")) as data:
+    with np.load(_find_dataset(track+".npz")) as data:
         images = data['images'].astype(np.float32) / 256
         bboxes = data['bboxes']
         all_transitions_idx = data['transitions']
@@ -300,7 +351,7 @@ def blocksworld(aeclass="FirstOrderAE",track="blocks-5-3",U=None,A=None,P=None,n
 
     print("checkpoint")
 
-    ae = run(os.path.join(track,sae_path), train, val, parameters)
+    ae = run(os.path.join(OUT_DIR,track,sae_path), train, val, parameters)
     show_summary(ae, train, test)
 
     plot_autoencoding_image(ae,test,train,"blocks")
@@ -312,9 +363,89 @@ def blocksworld(aeclass="FirstOrderAE",track="blocks-5-3",U=None,A=None,P=None,n
                       lambda idx: all_states[idx.flatten()].reshape((len(idx),2,num_objs,-1)).transpose((1,0,2,3)))
 
 
+def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
+                    num_objects=None, comment=None,
+                    dataset_path=None, images_dir=None,
+                    transition_mode="all_pairs",
+                    epoch=5000):
+    """Train FOSAE on the VLM-annotated labeled-object COCO dataset.
+
+    Unlike puzzle/blocksworld domains, images here are real-world COCO photos
+    with semantically labeled objects (from fosae_labeled_dataset_unsloth.json).
+    Object labels are preserved so that predicate arguments in the extracted FOL
+    are annotated with real names (e.g. 'chair_0', 'television').
+
+    Parameters
+    ----------
+    aeclass         : FOSAE model class name registered in latplan.model
+    U, A, P         : FOSAE hyperparameter overrides
+    num_objects     : override MAX_OBJECTS per state (default: 8)
+    dataset_path    : path to fosae_labeled_dataset_unsloth.json (default: auto)
+    images_dir      : path to raw_images/ directory (default: auto)
+    transition_mode : 'sequential' | 'all_pairs' (default: all_pairs)
+    """
+    from latplan.puzzles.puzzle_labeled_objects import (
+        build_dataset, build_transitions, MAX_OBJECTS)
+    import json as _json
+
+    # Propagate any provided hyperparameter overrides
+    for name, value in dict(U=U, A=A, P=P).items():
+        if value is not None:
+            parameters[name] = [value]
+    default_parameters["aeclass"]    = aeclass
+    default_parameters["activation"] = "self.labeled_objects_activation"
+    default_parameters["epoch"]      = epoch
+
+    num_objs = num_objects if num_objects is not None else MAX_OBJECTS
+
+    print("Loading labeled-objects dataset...")
+    all_states, all_object_names, image_ids = build_dataset(
+        dataset_path=dataset_path, images_dir=images_dir, num_objs=num_objs)
+
+    num_states = len(all_states)
+    print(f"Loaded {num_states} states, {num_objs} objects each, "
+          f"feature_dim={all_states.shape[-1]}")
+
+    # Build transition pairs: (2, num_pairs, num_objs, feature_dim)
+    transitions = build_transitions(all_states, mode=transition_mode)
+    num_trans   = transitions.shape[1]
+    print(f"Built {num_trans} transitions (mode='{transition_mode}')")
+
+    # Flatten both transition endpoints into the states pool for training
+    states = transitions.reshape((num_trans * 2, num_objs, -1))
+
+    if num_states < 100:
+        # Very small dataset: use entire set for every split
+        train = all_states
+        val   = all_states
+        test  = all_states
+    else:
+        train = states[:int(len(states) * 0.9)]
+        val   = states[int(len(states) * 0.9):int(len(states) * 0.95)]
+        test  = states[int(len(states) * 0.95):]
+
+    out_path = os.path.join(OUT_DIR, "labeled_objects", sae_path)
+    os.makedirs(out_path, exist_ok=True)
+
+    ae = run(out_path, train, val, parameters)
+    show_summary(ae, train, test)
+    plot_autoencoding_image(ae, test, train, "blocks")
+
+    dump_states (ae, all_states)
+    dump_actions(ae, transitions)
+
+    # Persist object names so extract_fol.py can reconstruct predicate labels
+    names_path = os.path.join(out_path, "object_names.json")
+    with open(names_path, "w") as f:
+        _json.dump({"image_ids": image_ids, "object_names": all_object_names}, f, indent=2)
+    print(f"Object names saved to {names_path}")
+
+
 def main():
     global mode, sae_path
     import sys
+    # Hardcode sae_path for smoke model usage
+    sae_path = "labeled_objects"
     if len(sys.argv) == 1:
         print({ k for k in dir(latplan.model)})
         gs = globals()
@@ -323,7 +454,8 @@ def main():
         print('args:',sys.argv)
         sys.argv.pop(0)
         mode = sys.argv.pop(0)
-        sae_path = "_".join(sys.argv)
+        # Commented out dynamic assignment:
+        # sae_path = "_".join(sys.argv)
         task = sys.argv.pop(0)
 
         def myeval(str):

@@ -1,9 +1,8 @@
-
 import numpy as np
 import imageio
 
 def split_image(path,width,height):
-    img = imageio.imread(path,as_gray=True)/256
+    img = imageio.imread(path, mode='F')/256
     # convert the image to *greyscale*
     W, H = img.shape
     dW, dH = W//width, H//height
