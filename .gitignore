@@ -1,27 +1,54 @@
-*~
-#*
-*.log
-*.valid
+# ============================================================
+# Generated Datasets  (reproducible via setup-dataset.py)
+# ============================================================
+data/*.npz
+data/*.npy
+latplan/puzzles/*.npz
+latplan/puzzles/*.npy
+
+# ============================================================
+# Training Outputs  (reproducible by training)
+# ============================================================
+out/
+!out/.gitkeep
+samples/
+
+# Old-style training output dirs at project root
+blocks-4-4/
+blocks-5-3/
+
+# ============================================================
+# Keras / TensorFlow
+# ============================================================
+**/logs/
+**/events.out.tfevents.*
+
+# ============================================================
+# Lock files
+# ============================================================
+**/lock
+
+# ============================================================
+# Python
+# ============================================================
+__pycache__/
 *.pyc
-*.csv
-*.png
-*.pddl
-*.plan
-*.negative
-learn/events*
-/mnist_model/
-*.bin
-*.lprof
-/samples/table
-samples*/
-problem-instances/*/
-blocks*/
-countries*/
-problem-instances-ama2/
-problem-instances-16/
-problem-instances-16-korf/
-problem-instances-cube-aae/
-downward/
-/build/
-/dist/
-/latplan.egg-info/
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# ============================================================
+# OS / IDE
+# ============================================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ============================================================
+# Old / intermediate generation artefacts
+# ============================================================
+data/gen/old/
