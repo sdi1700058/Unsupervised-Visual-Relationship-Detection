@@ -79,6 +79,15 @@ This dict can be used while building the network, making it easier to perform a 
         self.compiled = False
         self.loaded = False
         self.parameters = parameters
+        # Set self.eval from parameters, handling dict or list
+        if isinstance(parameters, dict):
+            eval_val = parameters.get('eval', 'MSE')
+            if isinstance(eval_val, list):
+                self.eval = eval_val[0]
+            else:
+                self.eval = eval_val
+        else:
+            self.eval = 'MSE'
         if "full_epoch" not in parameters:
             if "epoch" in self.parameters:
                 # in test time, epoch may not be set
@@ -88,11 +97,11 @@ This dict can be used while building the network, making it easier to perform a 
         self.metrics = []
         self.nets    = [None]
         self.losses  = [None]
-        import datetime
+        import datetime, os
         self.callbacks = [LambdaCallback(on_epoch_end=self.bar_update,
                                          # on_epoch_begin=self.bar_update
                                          ),
-                          keras.callbacks.TensorBoard(log_dir=self.local('logs/{}-{}'.format(path,datetime.datetime.now().isoformat())), write_graph=False)]
+                          keras.callbacks.TensorBoard(log_dir=self.local('logs/{}-{}'.format(os.path.basename(path),datetime.datetime.now().isoformat())), write_graph=False)]
 
     def build(self,*args,**kwargs):
         """An interface for building a network. Input-shape: list of dimensions.
@@ -1141,6 +1150,18 @@ class BaseFirstOrderMixin:
                                              axis = -1)
             return wrap(x,result,name="obj_activation")
         return obj_activation
+    
+    def labeled_objects_activation(self, input_shape):
+        """Activation for the labeled-objects domain.
+
+        Object features are greyscale image patches (float in [0,1]) plus
+        4 normalised bounding-box values [cx/W, cy/H, w/W, h/H] (also [0,1]).
+        A plain sigmoid is appropriate for the entire feature vector.
+        """
+        def obj_activation(x):
+            return wrap(x, K.sigmoid(x), name="obj_activation")
+        return obj_activation
+    
     def blocks_renderer(self):
         picsize = np.array(self.parameters["picsize"])
         picsize_grid = (picsize / 5).round().astype(np.int32)
@@ -1233,7 +1254,7 @@ class BaseFirstOrderMixin:
         b = self.encode(x)
         y = self.autoencode(x)
 
-        if mode is "puzzle":
+        if mode == "puzzle":
             render, render_each = self.puzzle_renderer()
         else:
             render, render_each = self.blocks_renderer()
@@ -1272,10 +1293,15 @@ class BaseFirstOrderMixin:
         return
 
     def plot_pos_neg(self,data,path,verbose=False,examples=10,mode="puzzle"):
-        pass
+        self.load()
+        if mode == "puzzle":
+            render, _ = self.puzzle_renderer()
+        else:
+            render, _ = self.blocks_renderer()
 
     def plot_pn_decisiontree(self,data,name,verbose=False,mode="puzzle"):
-        pass
+        if mode != "puzzle":
+            return
 
     def report(self,train_data,
                test_data=None,
@@ -1545,7 +1571,8 @@ class FirstOrderSAE(BaseFirstOrderMixin, ZeroSuppressMixin, ConcreteLatentMixin,
             graph.render("{}_{}".format(name,pn)) # .pdf
 
     pass
-
+#Alias
+FirstOrderAE = FirstOrderSAE
 
 
 # Transition AE + Action AE double wielding! #################################
