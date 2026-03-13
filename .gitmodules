@@ -1,6 +1,0 @@
-[submodule "planner-scripts"]
-	path = planner-scripts
-	url = https://github.com/guicho271828/planner-scripts
-[submodule "downward"]
-	path = downward
-	url = https://github.com/guicho271828/FastDownward.git
