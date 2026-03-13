@@ -9,7 +9,7 @@ latplan/puzzles/*.npy
 # ============================================================
 # Training Outputs  (reproducible by training)
 # ============================================================
-out/
+#out/
 !out/.gitkeep
 samples/
 

@@ -1,0 +1,4892 @@
+{
+  "total_states": 200,
+  "predicate_activation_rates": [
+    [
+      0.375,
+      0.325,
+      0.5,
+      0.7,
+      0.46,
+      0.405,
+      0.49,
+      0.68,
+      0.495,
+      0.385,
+      0.57,
+      0.6,
+      0.475,
+      0.635,
+      0.43,
+      0.715,
+      0.465,
+      0.475,
+      0.435,
+      0.755
+    ],
+    [
+      0.63,
+      0.445,
+      0.595,
+      0.705,
+      0.475,
+      0.41,
+      0.47,
+      0.63,
+      0.545,
+      0.4,
+      0.635,
+      0.625,
+      0.57,
+      0.54,
+      0.35,
+      0.755,
+      0.645,
+      0.62,
+      0.465,
+      0.7
+    ],
+    [
+      0.45,
+      0.49,
+      0.475,
+      0.59,
+      0.515,
+      0.43,
+      0.49,
+      0.59,
+      0.5,
+      0.395,
+      0.53,
+      0.57,
+      0.51,
+      0.71,
+      0.36,
+      0.68,
+      0.48,
+      0.53,
+      0.435,
+      0.695
+    ],
+    [
+      0.485,
+      0.525,
+      0.505,
+      0.625,
+      0.47,
+      0.33,
+      0.6,
+      0.56,
+      0.535,
+      0.45,
+      0.6,
+      0.625,
+      0.47,
+      0.525,
+      0.37,
+      0.45,
+      0.595,
+      0.55,
+      0.42,
+      0.555
+    ],
+    [
+      0.49,
+      0.515,
+      0.485,
+      0.655,
+      0.475,
+      0.385,
+      0.515,
+      0.64,
+      0.51,
+      0.485,
+      0.6,
+      0.62,
+      0.49,
+      0.45,
+      0.45,
+      0.33,
+      0.505,
+      0.53,
+      0.44,
+      0.72
+    ],
+    [
+      0.375,
+      0.325,
+      0.5,
+      0.7,
+      0.46,
+      0.405,
+      0.49,
+      0.68,
+      0.495,
+      0.385,
+      0.57,
+      0.6,
+      0.475,
+      0.635,
+      0.43,
+      0.715,
+      0.465,
+      0.475,
+      0.435,
+      0.755
+    ],
+    [
+      0.445,
+      0.5,
+      0.545,
+      0.695,
+      0.48,
+      0.345,
+      0.56,
+      0.57,
+      0.57,
+      0.375,
+      0.575,
+      0.645,
+      0.595,
+      0.645,
+      0.385,
+      0.755,
+      0.555,
+      0.535,
+      0.425,
+      0.62
+    ],
+    [
+      0.445,
+      0.55,
+      0.435,
+      0.69,
+      0.495,
+      0.36,
+      0.635,
+      0.655,
+      0.585,
+      0.385,
+      0.67,
+      0.605,
+      0.475,
+      0.62,
+      0.38,
+      0.52,
+      0.535,
+      0.555,
+      0.38,
+      0.62
+    ],
+    [
+      0.415,
+      0.44,
+      0.415,
+      0.6,
+      0.465,
+      0.21,
+      0.465,
+      0.59,
+      0.695,
+      0.405,
+      0.81,
+      0.68,
+      0.225,
+      0.51,
+      0.405,
+      0.31,
+      0.69,
+      0.32,
+      0.545,
+      0.605
+    ],
+    [
+      0.41,
+      0.53,
+      0.49,
+      0.69,
+      0.48,
+      0.43,
+      0.5,
+      0.7,
+      0.57,
+      0.39,
+      0.665,
+      0.545,
+      0.495,
+      0.66,
+      0.44,
+      0.68,
+      0.465,
+      0.45,
+      0.41,
+      0.705
+    ],
+    [
+      0.505,
+      0.48,
+      0.635,
+      0.695,
+      0.545,
+      0.415,
+      0.505,
+      0.58,
+      0.585,
+      0.41,
+      0.51,
+      0.595,
+      0.54,
+      0.485,
+      0.4,
+      0.52,
+      0.615,
+      0.55,
+      0.495,
+      0.655
+    ],
+    [
+      0.445,
+      0.5,
+      0.545,
+      0.695,
+      0.48,
+      0.345,
+      0.56,
+      0.57,
+      0.57,
+      0.375,
+      0.575,
+      0.645,
+      0.595,
+      0.645,
+      0.385,
+      0.755,
+      0.555,
+      0.535,
+      0.425,
+      0.62
+    ],
+    [
+      0.75,
+      0.41,
+      0.54,
+      0.64,
+      0.455,
+      0.37,
+      0.43,
+      0.59,
+      0.48,
+      0.315,
+      0.55,
+      0.53,
+      0.55,
+      0.595,
+      0.33,
+      0.65,
+      0.58,
+      0.63,
+      0.555,
+      0.71
+    ],
+    [
+      0.6,
+      0.475,
+      0.515,
+      0.665,
+      0.515,
+      0.355,
+      0.57,
+      0.6,
+      0.54,
+      0.42,
+      0.555,
+      0.65,
+      0.495,
+      0.395,
+      0.35,
+      0.58,
+      0.62,
+      0.525,
+      0.41,
+      0.515
+    ],
+    [
+      0.48,
+      0.375,
+      0.53,
+      0.54,
+      0.425,
+      0.375,
+      0.53,
+      0.655,
+      0.46,
+      0.45,
+      0.595,
+      0.605,
+      0.475,
+      0.625,
+      0.44,
+      0.66,
+      0.525,
+      0.5,
+      0.41,
+      0.605
+    ],
+    [
+      0.63,
+      0.425,
+      0.595,
+      0.565,
+      0.42,
+      0.35,
+      0.49,
+      0.52,
+      0.535,
+      0.405,
+      0.58,
+      0.72,
+      0.555,
+      0.425,
+      0.405,
+      0.535,
+      0.64,
+      0.615,
+      0.45,
+      0.6
+    ],
+    [
+      0.445,
+      0.5,
+      0.545,
+      0.695,
+      0.48,
+      0.345,
+      0.56,
+      0.57,
+      0.57,
+      0.375,
+      0.575,
+      0.645,
+      0.595,
+      0.645,
+      0.385,
+      0.755,
+      0.555,
+      0.535,
+      0.425,
+      0.62
+    ],
+    [
+      0.455,
+      0.565,
+      0.425,
+      0.59,
+      0.505,
+      0.36,
+      0.62,
+      0.66,
+      0.505,
+      0.38,
+      0.615,
+      0.525,
+      0.535,
+      0.705,
+      0.39,
+      0.74,
+      0.47,
+      0.46,
+      0.485,
+      0.695
+    ],
+    [
+      0.6,
+      0.48,
+      0.46,
+      0.6,
+      0.51,
+      0.29,
+      0.675,
+      0.635,
+      0.485,
+      0.375,
+      0.62,
+      0.625,
+      0.425,
+      0.56,
+      0.41,
+      0.645,
+      0.56,
+      0.505,
+      0.495,
+      0.59
+    ],
+    [
+      0.43,
+      0.5,
+      0.505,
+      0.75,
+      0.46,
+      0.425,
+      0.56,
+      0.6,
+      0.485,
+      0.42,
+      0.62,
+      0.615,
+      0.42,
+      0.605,
+      0.375,
+      0.725,
+      0.515,
+      0.495,
+      0.51,
+      0.665
+    ],
+    [
+      0.55,
+      0.415,
+      0.56,
+      0.605,
+      0.46,
+      0.385,
+      0.495,
+      0.625,
+      0.47,
+      0.435,
+      0.545,
+      0.61,
+      0.525,
+      0.48,
+      0.44,
+      0.6,
+      0.525,
+      0.515,
+      0.48,
+      0.695
+    ],
+    [
+      0.445,
+      0.55,
+      0.435,
+      0.69,
+      0.495,
+      0.36,
+      0.635,
+      0.655,
+      0.585,
+      0.385,
+      0.67,
+      0.605,
+      0.475,
+      0.62,
+      0.38,
+      0.52,
+      0.535,
+      0.555,
+      0.38,
+      0.62
+    ],
+    [
+      0.62,
+      0.5,
+      0.53,
+      0.7,
+      0.475,
+      0.365,
+      0.555,
+      0.61,
+      0.58,
+      0.405,
+      0.705,
+      0.62,
+      0.49,
+      0.56,
+      0.325,
+      0.555,
+      0.56,
+      0.6,
+      0.49,
+      0.7
+    ],
+    [
+      0.485,
+      0.525,
+      0.505,
+      0.625,
+      0.47,
+      0.33,
+      0.6,
+      0.56,
+      0.535,
+      0.45,
+      0.6,
+      0.625,
+      0.47,
+      0.525,
+      0.37,
+      0.45,
+      0.595,
+      0.55,
+      0.42,
+      0.555
+    ],
+    [
+      0.715,
+      0.495,
+      0.47,
+      0.57,
+      0.47,
+      0.43,
+      0.485,
+      0.595,
+      0.53,
+      0.385,
+      0.505,
+      0.59,
+      0.535,
+      0.59,
+      0.4,
+      0.555,
+      0.56,
+      0.505,
+      0.49,
+      0.595
+    ],
+    [
+      0.43,
+      0.5,
+      0.505,
+      0.75,
+      0.46,
+      0.425,
+      0.56,
+      0.6,
+      0.485,
+      0.42,
+      0.62,
+      0.615,
+      0.42,
+      0.605,
+      0.375,
+      0.725,
+      0.515,
+      0.495,
+      0.51,
+      0.665
+    ],
+    [
+      0.66,
+      0.515,
+      0.58,
+      0.275,
+      0.34,
+      0.39,
+      0.34,
+      0.495,
+      0.46,
+      0.395,
+      0.34,
+      0.605,
+      0.455,
+      0.455,
+      0.395,
+      0.405,
+      0.655,
+      0.605,
+      0.535,
+      0.675
+    ],
+    [
+      0.485,
+      0.525,
+      0.505,
+      0.625,
+      0.47,
+      0.33,
+      0.6,
+      0.56,
+      0.535,
+      0.45,
+      0.6,
+      0.625,
+      0.47,
+      0.525,
+      0.37,
+      0.45,
+      0.595,
+      0.55,
+      0.42,
+      0.555
+    ],
+    [
+      0.645,
+      0.485,
+      0.555,
+      0.415,
+      0.385,
+      0.315,
+      0.565,
+      0.61,
+      0.495,
+      0.435,
+      0.59,
+      0.64,
+      0.43,
+      0.59,
+      0.415,
+      0.6,
+      0.565,
+      0.555,
+      0.495,
+      0.71
+    ],
+    [
+      0.52,
+      0.535,
+      0.53,
+      0.575,
+      0.42,
+      0.33,
+      0.43,
+      0.55,
+      0.445,
+      0.36,
+      0.495,
+      0.575,
+      0.555,
+      0.575,
+      0.385,
+      0.705,
+      0.56,
+      0.56,
+      0.475,
+      0.58
+    ],
+    [
+      0.44,
+      0.41,
+      0.52,
+      0.73,
+      0.535,
+      0.28,
+      0.49,
+      0.58,
+      0.47,
+      0.37,
+      0.575,
+      0.67,
+      0.47,
+      0.57,
+      0.39,
+      0.6,
+      0.69,
+      0.455,
+      0.47,
+      0.555
+    ],
+    [
+      0.66,
+      0.445,
+      0.505,
+      0.61,
+      0.47,
+      0.37,
+      0.525,
+      0.655,
+      0.5,
+      0.425,
+      0.675,
+      0.635,
+      0.52,
+      0.585,
+      0.42,
+      0.6,
+      0.5,
+      0.575,
+      0.475,
+      0.72
+    ],
+    [
+      0.545,
+      0.415,
+      0.375,
+      0.665,
+      0.42,
+      0.265,
+      0.42,
+      0.61,
+      0.44,
+      0.345,
+      0.525,
+      0.545,
+      0.49,
+      0.61,
+      0.375,
+      0.71,
+      0.655,
+      0.485,
+      0.55,
+      0.605
+    ],
+    [
+      0.445,
+      0.55,
+      0.435,
+      0.69,
+      0.495,
+      0.36,
+      0.635,
+      0.655,
+      0.585,
+      0.385,
+      0.67,
+      0.605,
+      0.475,
+      0.62,
+      0.38,
+      0.52,
+      0.535,
+      0.555,
+      0.38,
+      0.62
+    ],
+    [
+      0.77,
+      0.43,
+      0.425,
+      0.675,
+      0.42,
+      0.38,
+      0.505,
+      0.615,
+      0.52,
+      0.395,
+      0.63,
+      0.605,
+      0.465,
+      0.62,
+      0.395,
+      0.67,
+      0.555,
+      0.615,
+      0.58,
+      0.595
+    ],
+    [
+      0.49,
+      0.515,
+      0.485,
+      0.655,
+      0.475,
+      0.385,
+      0.515,
+      0.64,
+      0.51,
+      0.485,
+      0.6,
+      0.62,
+      0.49,
+      0.45,
+      0.45,
+      0.33,
+      0.505,
+      0.53,
+      0.44,
+      0.72
+    ],
+    [
+      0.45,
+      0.49,
+      0.475,
+      0.59,
+      0.515,
+      0.43,
+      0.49,
+      0.59,
+      0.5,
+      0.395,
+      0.53,
+      0.57,
+      0.51,
+      0.71,
+      0.36,
+      0.68,
+      0.48,
+      0.53,
+      0.435,
+      0.695
+    ],
+    [
+      0.525,
+      0.565,
+      0.495,
+      0.62,
+      0.415,
+      0.35,
+      0.465,
+      0.605,
+      0.47,
+      0.33,
+      0.565,
+      0.555,
+      0.56,
+      0.64,
+      0.375,
+      0.69,
+      0.45,
+      0.59,
+      0.505,
+      0.6
+    ],
+    [
+      0.84,
+      0.575,
+      0.225,
+      0.6,
+      0.525,
+      0.325,
+      0.48,
+      0.605,
+      0.505,
+      0.33,
+      0.63,
+      0.655,
+      0.33,
+      0.465,
+      0.39,
+      0.58,
+      0.68,
+      0.535,
+      0.455,
+      0.525
+    ],
+    [
+      0.815,
+      0.49,
+      0.355,
+      0.54,
+      0.635,
+      0.315,
+      0.49,
+      0.645,
+      0.525,
+      0.365,
+      0.595,
+      0.605,
+      0.4,
+      0.515,
+      0.415,
+      0.71,
+      0.605,
+      0.465,
+      0.345,
+      0.685
+    ]
+  ],
+  "always_on": [],
+  "always_off": [],
+  "variable": [
+    {
+      "unit": 0,
+      "predicate": 0,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 0,
+      "predicate": 1,
+      "activation_rate": 0.325
+    },
+    {
+      "unit": 0,
+      "predicate": 2,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 0,
+      "predicate": 3,
+      "activation_rate": 0.7
+    },
+    {
+      "unit": 0,
+      "predicate": 4,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 0,
+      "predicate": 5,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 0,
+      "predicate": 6,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 0,
+      "predicate": 7,
+      "activation_rate": 0.68
+    },
+    {
+      "unit": 0,
+      "predicate": 8,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 0,
+      "predicate": 9,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 0,
+      "predicate": 10,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 0,
+      "predicate": 11,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 0,
+      "predicate": 12,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 0,
+      "predicate": 13,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 0,
+      "predicate": 14,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 0,
+      "predicate": 15,
+      "activation_rate": 0.715
+    },
+    {
+      "unit": 0,
+      "predicate": 16,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 0,
+      "predicate": 17,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 0,
+      "predicate": 18,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 0,
+      "predicate": 19,
+      "activation_rate": 0.755
+    },
+    {
+      "unit": 1,
+      "predicate": 0,
+      "activation_rate": 0.63
+    },
+    {
+      "unit": 1,
+      "predicate": 1,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 1,
+      "predicate": 2,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 1,
+      "predicate": 3,
+      "activation_rate": 0.705
+    },
+    {
+      "unit": 1,
+      "predicate": 4,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 1,
+      "predicate": 5,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 1,
+      "predicate": 6,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 1,
+      "predicate": 7,
+      "activation_rate": 0.63
+    },
+    {
+      "unit": 1,
+      "predicate": 8,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 1,
+      "predicate": 9,
+      "activation_rate": 0.4
+    },
+    {
+      "unit": 1,
+      "predicate": 10,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 1,
+      "predicate": 11,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 1,
+      "predicate": 12,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 1,
+      "predicate": 13,
+      "activation_rate": 0.54
+    },
+    {
+      "unit": 1,
+      "predicate": 14,
+      "activation_rate": 0.35
+    },
+    {
+      "unit": 1,
+      "predicate": 15,
+      "activation_rate": 0.755
+    },
+    {
+      "unit": 1,
+      "predicate": 16,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 1,
+      "predicate": 17,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 1,
+      "predicate": 18,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 1,
+      "predicate": 19,
+      "activation_rate": 0.7
+    },
+    {
+      "unit": 2,
+      "predicate": 0,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 2,
+      "predicate": 1,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 2,
+      "predicate": 2,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 2,
+      "predicate": 3,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 2,
+      "predicate": 4,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 2,
+      "predicate": 5,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 2,
+      "predicate": 6,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 2,
+      "predicate": 7,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 2,
+      "predicate": 8,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 2,
+      "predicate": 9,
+      "activation_rate": 0.395
+    },
+    {
+      "unit": 2,
+      "predicate": 10,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 2,
+      "predicate": 11,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 2,
+      "predicate": 12,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 2,
+      "predicate": 13,
+      "activation_rate": 0.71
+    },
+    {
+      "unit": 2,
+      "predicate": 14,
+      "activation_rate": 0.36
+    },
+    {
+      "unit": 2,
+      "predicate": 15,
+      "activation_rate": 0.68
+    },
+    {
+      "unit": 2,
+      "predicate": 16,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 2,
+      "predicate": 17,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 2,
+      "predicate": 18,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 2,
+      "predicate": 19,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 3,
+      "predicate": 0,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 3,
+      "predicate": 1,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 3,
+      "predicate": 2,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 3,
+      "predicate": 3,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 3,
+      "predicate": 4,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 3,
+      "predicate": 5,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 3,
+      "predicate": 6,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 3,
+      "predicate": 7,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 3,
+      "predicate": 8,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 3,
+      "predicate": 9,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 3,
+      "predicate": 10,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 3,
+      "predicate": 11,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 3,
+      "predicate": 12,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 3,
+      "predicate": 13,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 3,
+      "predicate": 14,
+      "activation_rate": 0.37
+    },
+    {
+      "unit": 3,
+      "predicate": 15,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 3,
+      "predicate": 16,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 3,
+      "predicate": 17,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 3,
+      "predicate": 18,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 3,
+      "predicate": 19,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 4,
+      "predicate": 0,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 4,
+      "predicate": 1,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 4,
+      "predicate": 2,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 4,
+      "predicate": 3,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 4,
+      "predicate": 4,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 4,
+      "predicate": 5,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 4,
+      "predicate": 6,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 4,
+      "predicate": 7,
+      "activation_rate": 0.64
+    },
+    {
+      "unit": 4,
+      "predicate": 8,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 4,
+      "predicate": 9,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 4,
+      "predicate": 10,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 4,
+      "predicate": 11,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 4,
+      "predicate": 12,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 4,
+      "predicate": 13,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 4,
+      "predicate": 14,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 4,
+      "predicate": 15,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 4,
+      "predicate": 16,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 4,
+      "predicate": 17,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 4,
+      "predicate": 18,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 4,
+      "predicate": 19,
+      "activation_rate": 0.72
+    },
+    {
+      "unit": 5,
+      "predicate": 0,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 5,
+      "predicate": 1,
+      "activation_rate": 0.325
+    },
+    {
+      "unit": 5,
+      "predicate": 2,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 5,
+      "predicate": 3,
+      "activation_rate": 0.7
+    },
+    {
+      "unit": 5,
+      "predicate": 4,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 5,
+      "predicate": 5,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 5,
+      "predicate": 6,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 5,
+      "predicate": 7,
+      "activation_rate": 0.68
+    },
+    {
+      "unit": 5,
+      "predicate": 8,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 5,
+      "predicate": 9,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 5,
+      "predicate": 10,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 5,
+      "predicate": 11,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 5,
+      "predicate": 12,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 5,
+      "predicate": 13,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 5,
+      "predicate": 14,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 5,
+      "predicate": 15,
+      "activation_rate": 0.715
+    },
+    {
+      "unit": 5,
+      "predicate": 16,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 5,
+      "predicate": 17,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 5,
+      "predicate": 18,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 5,
+      "predicate": 19,
+      "activation_rate": 0.755
+    },
+    {
+      "unit": 6,
+      "predicate": 0,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 6,
+      "predicate": 1,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 6,
+      "predicate": 2,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 6,
+      "predicate": 3,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 6,
+      "predicate": 4,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 6,
+      "predicate": 5,
+      "activation_rate": 0.345
+    },
+    {
+      "unit": 6,
+      "predicate": 6,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 6,
+      "predicate": 7,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 6,
+      "predicate": 8,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 6,
+      "predicate": 9,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 6,
+      "predicate": 10,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 6,
+      "predicate": 11,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 6,
+      "predicate": 12,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 6,
+      "predicate": 13,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 6,
+      "predicate": 14,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 6,
+      "predicate": 15,
+      "activation_rate": 0.755
+    },
+    {
+      "unit": 6,
+      "predicate": 16,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 6,
+      "predicate": 17,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 6,
+      "predicate": 18,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 6,
+      "predicate": 19,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 7,
+      "predicate": 0,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 7,
+      "predicate": 1,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 7,
+      "predicate": 2,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 7,
+      "predicate": 3,
+      "activation_rate": 0.69
+    },
+    {
+      "unit": 7,
+      "predicate": 4,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 7,
+      "predicate": 5,
+      "activation_rate": 0.36
+    },
+    {
+      "unit": 7,
+      "predicate": 6,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 7,
+      "predicate": 7,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 7,
+      "predicate": 8,
+      "activation_rate": 0.585
+    },
+    {
+      "unit": 7,
+      "predicate": 9,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 7,
+      "predicate": 10,
+      "activation_rate": 0.67
+    },
+    {
+      "unit": 7,
+      "predicate": 11,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 7,
+      "predicate": 12,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 7,
+      "predicate": 13,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 7,
+      "predicate": 14,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 7,
+      "predicate": 15,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 7,
+      "predicate": 16,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 7,
+      "predicate": 17,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 7,
+      "predicate": 18,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 7,
+      "predicate": 19,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 8,
+      "predicate": 0,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 8,
+      "predicate": 1,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 8,
+      "predicate": 2,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 8,
+      "predicate": 3,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 8,
+      "predicate": 4,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 8,
+      "predicate": 5,
+      "activation_rate": 0.21
+    },
+    {
+      "unit": 8,
+      "predicate": 6,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 8,
+      "predicate": 7,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 8,
+      "predicate": 8,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 8,
+      "predicate": 9,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 8,
+      "predicate": 10,
+      "activation_rate": 0.81
+    },
+    {
+      "unit": 8,
+      "predicate": 11,
+      "activation_rate": 0.68
+    },
+    {
+      "unit": 8,
+      "predicate": 12,
+      "activation_rate": 0.225
+    },
+    {
+      "unit": 8,
+      "predicate": 13,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 8,
+      "predicate": 14,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 8,
+      "predicate": 15,
+      "activation_rate": 0.31
+    },
+    {
+      "unit": 8,
+      "predicate": 16,
+      "activation_rate": 0.69
+    },
+    {
+      "unit": 8,
+      "predicate": 17,
+      "activation_rate": 0.32
+    },
+    {
+      "unit": 8,
+      "predicate": 18,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 8,
+      "predicate": 19,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 9,
+      "predicate": 0,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 9,
+      "predicate": 1,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 9,
+      "predicate": 2,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 9,
+      "predicate": 3,
+      "activation_rate": 0.69
+    },
+    {
+      "unit": 9,
+      "predicate": 4,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 9,
+      "predicate": 5,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 9,
+      "predicate": 6,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 9,
+      "predicate": 7,
+      "activation_rate": 0.7
+    },
+    {
+      "unit": 9,
+      "predicate": 8,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 9,
+      "predicate": 9,
+      "activation_rate": 0.39
+    },
+    {
+      "unit": 9,
+      "predicate": 10,
+      "activation_rate": 0.665
+    },
+    {
+      "unit": 9,
+      "predicate": 11,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 9,
+      "predicate": 12,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 9,
+      "predicate": 13,
+      "activation_rate": 0.66
+    },
+    {
+      "unit": 9,
+      "predicate": 14,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 9,
+      "predicate": 15,
+      "activation_rate": 0.68
+    },
+    {
+      "unit": 9,
+      "predicate": 16,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 9,
+      "predicate": 17,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 9,
+      "predicate": 18,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 9,
+      "predicate": 19,
+      "activation_rate": 0.705
+    },
+    {
+      "unit": 10,
+      "predicate": 0,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 10,
+      "predicate": 1,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 10,
+      "predicate": 2,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 10,
+      "predicate": 3,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 10,
+      "predicate": 4,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 10,
+      "predicate": 5,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 10,
+      "predicate": 6,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 10,
+      "predicate": 7,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 10,
+      "predicate": 8,
+      "activation_rate": 0.585
+    },
+    {
+      "unit": 10,
+      "predicate": 9,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 10,
+      "predicate": 10,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 10,
+      "predicate": 11,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 10,
+      "predicate": 12,
+      "activation_rate": 0.54
+    },
+    {
+      "unit": 10,
+      "predicate": 13,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 10,
+      "predicate": 14,
+      "activation_rate": 0.4
+    },
+    {
+      "unit": 10,
+      "predicate": 15,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 10,
+      "predicate": 16,
+      "activation_rate": 0.615
+    },
+    {
+      "unit": 10,
+      "predicate": 17,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 10,
+      "predicate": 18,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 10,
+      "predicate": 19,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 11,
+      "predicate": 0,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 11,
+      "predicate": 1,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 11,
+      "predicate": 2,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 11,
+      "predicate": 3,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 11,
+      "predicate": 4,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 11,
+      "predicate": 5,
+      "activation_rate": 0.345
+    },
+    {
+      "unit": 11,
+      "predicate": 6,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 11,
+      "predicate": 7,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 11,
+      "predicate": 8,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 11,
+      "predicate": 9,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 11,
+      "predicate": 10,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 11,
+      "predicate": 11,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 11,
+      "predicate": 12,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 11,
+      "predicate": 13,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 11,
+      "predicate": 14,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 11,
+      "predicate": 15,
+      "activation_rate": 0.755
+    },
+    {
+      "unit": 11,
+      "predicate": 16,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 11,
+      "predicate": 17,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 11,
+      "predicate": 18,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 11,
+      "predicate": 19,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 12,
+      "predicate": 0,
+      "activation_rate": 0.75
+    },
+    {
+      "unit": 12,
+      "predicate": 1,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 12,
+      "predicate": 2,
+      "activation_rate": 0.54
+    },
+    {
+      "unit": 12,
+      "predicate": 3,
+      "activation_rate": 0.64
+    },
+    {
+      "unit": 12,
+      "predicate": 4,
+      "activation_rate": 0.455
+    },
+    {
+      "unit": 12,
+      "predicate": 5,
+      "activation_rate": 0.37
+    },
+    {
+      "unit": 12,
+      "predicate": 6,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 12,
+      "predicate": 7,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 12,
+      "predicate": 8,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 12,
+      "predicate": 9,
+      "activation_rate": 0.315
+    },
+    {
+      "unit": 12,
+      "predicate": 10,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 12,
+      "predicate": 11,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 12,
+      "predicate": 12,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 12,
+      "predicate": 13,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 12,
+      "predicate": 14,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 12,
+      "predicate": 15,
+      "activation_rate": 0.65
+    },
+    {
+      "unit": 12,
+      "predicate": 16,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 12,
+      "predicate": 17,
+      "activation_rate": 0.63
+    },
+    {
+      "unit": 12,
+      "predicate": 18,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 12,
+      "predicate": 19,
+      "activation_rate": 0.71
+    },
+    {
+      "unit": 13,
+      "predicate": 0,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 13,
+      "predicate": 1,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 13,
+      "predicate": 2,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 13,
+      "predicate": 3,
+      "activation_rate": 0.665
+    },
+    {
+      "unit": 13,
+      "predicate": 4,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 13,
+      "predicate": 5,
+      "activation_rate": 0.355
+    },
+    {
+      "unit": 13,
+      "predicate": 6,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 13,
+      "predicate": 7,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 13,
+      "predicate": 8,
+      "activation_rate": 0.54
+    },
+    {
+      "unit": 13,
+      "predicate": 9,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 13,
+      "predicate": 10,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 13,
+      "predicate": 11,
+      "activation_rate": 0.65
+    },
+    {
+      "unit": 13,
+      "predicate": 12,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 13,
+      "predicate": 13,
+      "activation_rate": 0.395
+    },
+    {
+      "unit": 13,
+      "predicate": 14,
+      "activation_rate": 0.35
+    },
+    {
+      "unit": 13,
+      "predicate": 15,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 13,
+      "predicate": 16,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 13,
+      "predicate": 17,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 13,
+      "predicate": 18,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 13,
+      "predicate": 19,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 14,
+      "predicate": 0,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 14,
+      "predicate": 1,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 14,
+      "predicate": 2,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 14,
+      "predicate": 3,
+      "activation_rate": 0.54
+    },
+    {
+      "unit": 14,
+      "predicate": 4,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 14,
+      "predicate": 5,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 14,
+      "predicate": 6,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 14,
+      "predicate": 7,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 14,
+      "predicate": 8,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 14,
+      "predicate": 9,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 14,
+      "predicate": 10,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 14,
+      "predicate": 11,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 14,
+      "predicate": 12,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 14,
+      "predicate": 13,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 14,
+      "predicate": 14,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 14,
+      "predicate": 15,
+      "activation_rate": 0.66
+    },
+    {
+      "unit": 14,
+      "predicate": 16,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 14,
+      "predicate": 17,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 14,
+      "predicate": 18,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 14,
+      "predicate": 19,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 15,
+      "predicate": 0,
+      "activation_rate": 0.63
+    },
+    {
+      "unit": 15,
+      "predicate": 1,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 15,
+      "predicate": 2,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 15,
+      "predicate": 3,
+      "activation_rate": 0.565
+    },
+    {
+      "unit": 15,
+      "predicate": 4,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 15,
+      "predicate": 5,
+      "activation_rate": 0.35
+    },
+    {
+      "unit": 15,
+      "predicate": 6,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 15,
+      "predicate": 7,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 15,
+      "predicate": 8,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 15,
+      "predicate": 9,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 15,
+      "predicate": 10,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 15,
+      "predicate": 11,
+      "activation_rate": 0.72
+    },
+    {
+      "unit": 15,
+      "predicate": 12,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 15,
+      "predicate": 13,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 15,
+      "predicate": 14,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 15,
+      "predicate": 15,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 15,
+      "predicate": 16,
+      "activation_rate": 0.64
+    },
+    {
+      "unit": 15,
+      "predicate": 17,
+      "activation_rate": 0.615
+    },
+    {
+      "unit": 15,
+      "predicate": 18,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 15,
+      "predicate": 19,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 16,
+      "predicate": 0,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 16,
+      "predicate": 1,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 16,
+      "predicate": 2,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 16,
+      "predicate": 3,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 16,
+      "predicate": 4,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 16,
+      "predicate": 5,
+      "activation_rate": 0.345
+    },
+    {
+      "unit": 16,
+      "predicate": 6,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 16,
+      "predicate": 7,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 16,
+      "predicate": 8,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 16,
+      "predicate": 9,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 16,
+      "predicate": 10,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 16,
+      "predicate": 11,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 16,
+      "predicate": 12,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 16,
+      "predicate": 13,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 16,
+      "predicate": 14,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 16,
+      "predicate": 15,
+      "activation_rate": 0.755
+    },
+    {
+      "unit": 16,
+      "predicate": 16,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 16,
+      "predicate": 17,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 16,
+      "predicate": 18,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 16,
+      "predicate": 19,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 17,
+      "predicate": 0,
+      "activation_rate": 0.455
+    },
+    {
+      "unit": 17,
+      "predicate": 1,
+      "activation_rate": 0.565
+    },
+    {
+      "unit": 17,
+      "predicate": 2,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 17,
+      "predicate": 3,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 17,
+      "predicate": 4,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 17,
+      "predicate": 5,
+      "activation_rate": 0.36
+    },
+    {
+      "unit": 17,
+      "predicate": 6,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 17,
+      "predicate": 7,
+      "activation_rate": 0.66
+    },
+    {
+      "unit": 17,
+      "predicate": 8,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 17,
+      "predicate": 9,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 17,
+      "predicate": 10,
+      "activation_rate": 0.615
+    },
+    {
+      "unit": 17,
+      "predicate": 11,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 17,
+      "predicate": 12,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 17,
+      "predicate": 13,
+      "activation_rate": 0.705
+    },
+    {
+      "unit": 17,
+      "predicate": 14,
+      "activation_rate": 0.39
+    },
+    {
+      "unit": 17,
+      "predicate": 15,
+      "activation_rate": 0.74
+    },
+    {
+      "unit": 17,
+      "predicate": 16,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 17,
+      "predicate": 17,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 17,
+      "predicate": 18,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 17,
+      "predicate": 19,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 18,
+      "predicate": 0,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 18,
+      "predicate": 1,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 18,
+      "predicate": 2,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 18,
+      "predicate": 3,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 18,
+      "predicate": 4,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 18,
+      "predicate": 5,
+      "activation_rate": 0.29
+    },
+    {
+      "unit": 18,
+      "predicate": 6,
+      "activation_rate": 0.675
+    },
+    {
+      "unit": 18,
+      "predicate": 7,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 18,
+      "predicate": 8,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 18,
+      "predicate": 9,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 18,
+      "predicate": 10,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 18,
+      "predicate": 11,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 18,
+      "predicate": 12,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 18,
+      "predicate": 13,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 18,
+      "predicate": 14,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 18,
+      "predicate": 15,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 18,
+      "predicate": 16,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 18,
+      "predicate": 17,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 18,
+      "predicate": 18,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 18,
+      "predicate": 19,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 19,
+      "predicate": 0,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 19,
+      "predicate": 1,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 19,
+      "predicate": 2,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 19,
+      "predicate": 3,
+      "activation_rate": 0.75
+    },
+    {
+      "unit": 19,
+      "predicate": 4,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 19,
+      "predicate": 5,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 19,
+      "predicate": 6,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 19,
+      "predicate": 7,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 19,
+      "predicate": 8,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 19,
+      "predicate": 9,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 19,
+      "predicate": 10,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 19,
+      "predicate": 11,
+      "activation_rate": 0.615
+    },
+    {
+      "unit": 19,
+      "predicate": 12,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 19,
+      "predicate": 13,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 19,
+      "predicate": 14,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 19,
+      "predicate": 15,
+      "activation_rate": 0.725
+    },
+    {
+      "unit": 19,
+      "predicate": 16,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 19,
+      "predicate": 17,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 19,
+      "predicate": 18,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 19,
+      "predicate": 19,
+      "activation_rate": 0.665
+    },
+    {
+      "unit": 20,
+      "predicate": 0,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 20,
+      "predicate": 1,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 20,
+      "predicate": 2,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 20,
+      "predicate": 3,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 20,
+      "predicate": 4,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 20,
+      "predicate": 5,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 20,
+      "predicate": 6,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 20,
+      "predicate": 7,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 20,
+      "predicate": 8,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 20,
+      "predicate": 9,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 20,
+      "predicate": 10,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 20,
+      "predicate": 11,
+      "activation_rate": 0.61
+    },
+    {
+      "unit": 20,
+      "predicate": 12,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 20,
+      "predicate": 13,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 20,
+      "predicate": 14,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 20,
+      "predicate": 15,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 20,
+      "predicate": 16,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 20,
+      "predicate": 17,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 20,
+      "predicate": 18,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 20,
+      "predicate": 19,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 21,
+      "predicate": 0,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 21,
+      "predicate": 1,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 21,
+      "predicate": 2,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 21,
+      "predicate": 3,
+      "activation_rate": 0.69
+    },
+    {
+      "unit": 21,
+      "predicate": 4,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 21,
+      "predicate": 5,
+      "activation_rate": 0.36
+    },
+    {
+      "unit": 21,
+      "predicate": 6,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 21,
+      "predicate": 7,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 21,
+      "predicate": 8,
+      "activation_rate": 0.585
+    },
+    {
+      "unit": 21,
+      "predicate": 9,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 21,
+      "predicate": 10,
+      "activation_rate": 0.67
+    },
+    {
+      "unit": 21,
+      "predicate": 11,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 21,
+      "predicate": 12,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 21,
+      "predicate": 13,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 21,
+      "predicate": 14,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 21,
+      "predicate": 15,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 21,
+      "predicate": 16,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 21,
+      "predicate": 17,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 21,
+      "predicate": 18,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 21,
+      "predicate": 19,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 22,
+      "predicate": 0,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 22,
+      "predicate": 1,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 22,
+      "predicate": 2,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 22,
+      "predicate": 3,
+      "activation_rate": 0.7
+    },
+    {
+      "unit": 22,
+      "predicate": 4,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 22,
+      "predicate": 5,
+      "activation_rate": 0.365
+    },
+    {
+      "unit": 22,
+      "predicate": 6,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 22,
+      "predicate": 7,
+      "activation_rate": 0.61
+    },
+    {
+      "unit": 22,
+      "predicate": 8,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 22,
+      "predicate": 9,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 22,
+      "predicate": 10,
+      "activation_rate": 0.705
+    },
+    {
+      "unit": 22,
+      "predicate": 11,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 22,
+      "predicate": 12,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 22,
+      "predicate": 13,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 22,
+      "predicate": 14,
+      "activation_rate": 0.325
+    },
+    {
+      "unit": 22,
+      "predicate": 15,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 22,
+      "predicate": 16,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 22,
+      "predicate": 17,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 22,
+      "predicate": 18,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 22,
+      "predicate": 19,
+      "activation_rate": 0.7
+    },
+    {
+      "unit": 23,
+      "predicate": 0,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 23,
+      "predicate": 1,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 23,
+      "predicate": 2,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 23,
+      "predicate": 3,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 23,
+      "predicate": 4,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 23,
+      "predicate": 5,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 23,
+      "predicate": 6,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 23,
+      "predicate": 7,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 23,
+      "predicate": 8,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 23,
+      "predicate": 9,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 23,
+      "predicate": 10,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 23,
+      "predicate": 11,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 23,
+      "predicate": 12,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 23,
+      "predicate": 13,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 23,
+      "predicate": 14,
+      "activation_rate": 0.37
+    },
+    {
+      "unit": 23,
+      "predicate": 15,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 23,
+      "predicate": 16,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 23,
+      "predicate": 17,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 23,
+      "predicate": 18,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 23,
+      "predicate": 19,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 24,
+      "predicate": 0,
+      "activation_rate": 0.715
+    },
+    {
+      "unit": 24,
+      "predicate": 1,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 24,
+      "predicate": 2,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 24,
+      "predicate": 3,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 24,
+      "predicate": 4,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 24,
+      "predicate": 5,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 24,
+      "predicate": 6,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 24,
+      "predicate": 7,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 24,
+      "predicate": 8,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 24,
+      "predicate": 9,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 24,
+      "predicate": 10,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 24,
+      "predicate": 11,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 24,
+      "predicate": 12,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 24,
+      "predicate": 13,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 24,
+      "predicate": 14,
+      "activation_rate": 0.4
+    },
+    {
+      "unit": 24,
+      "predicate": 15,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 24,
+      "predicate": 16,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 24,
+      "predicate": 17,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 24,
+      "predicate": 18,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 24,
+      "predicate": 19,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 25,
+      "predicate": 0,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 25,
+      "predicate": 1,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 25,
+      "predicate": 2,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 25,
+      "predicate": 3,
+      "activation_rate": 0.75
+    },
+    {
+      "unit": 25,
+      "predicate": 4,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 25,
+      "predicate": 5,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 25,
+      "predicate": 6,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 25,
+      "predicate": 7,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 25,
+      "predicate": 8,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 25,
+      "predicate": 9,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 25,
+      "predicate": 10,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 25,
+      "predicate": 11,
+      "activation_rate": 0.615
+    },
+    {
+      "unit": 25,
+      "predicate": 12,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 25,
+      "predicate": 13,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 25,
+      "predicate": 14,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 25,
+      "predicate": 15,
+      "activation_rate": 0.725
+    },
+    {
+      "unit": 25,
+      "predicate": 16,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 25,
+      "predicate": 17,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 25,
+      "predicate": 18,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 25,
+      "predicate": 19,
+      "activation_rate": 0.665
+    },
+    {
+      "unit": 26,
+      "predicate": 0,
+      "activation_rate": 0.66
+    },
+    {
+      "unit": 26,
+      "predicate": 1,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 26,
+      "predicate": 2,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 26,
+      "predicate": 3,
+      "activation_rate": 0.275
+    },
+    {
+      "unit": 26,
+      "predicate": 4,
+      "activation_rate": 0.34
+    },
+    {
+      "unit": 26,
+      "predicate": 5,
+      "activation_rate": 0.39
+    },
+    {
+      "unit": 26,
+      "predicate": 6,
+      "activation_rate": 0.34
+    },
+    {
+      "unit": 26,
+      "predicate": 7,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 26,
+      "predicate": 8,
+      "activation_rate": 0.46
+    },
+    {
+      "unit": 26,
+      "predicate": 9,
+      "activation_rate": 0.395
+    },
+    {
+      "unit": 26,
+      "predicate": 10,
+      "activation_rate": 0.34
+    },
+    {
+      "unit": 26,
+      "predicate": 11,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 26,
+      "predicate": 12,
+      "activation_rate": 0.455
+    },
+    {
+      "unit": 26,
+      "predicate": 13,
+      "activation_rate": 0.455
+    },
+    {
+      "unit": 26,
+      "predicate": 14,
+      "activation_rate": 0.395
+    },
+    {
+      "unit": 26,
+      "predicate": 15,
+      "activation_rate": 0.405
+    },
+    {
+      "unit": 26,
+      "predicate": 16,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 26,
+      "predicate": 17,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 26,
+      "predicate": 18,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 26,
+      "predicate": 19,
+      "activation_rate": 0.675
+    },
+    {
+      "unit": 27,
+      "predicate": 0,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 27,
+      "predicate": 1,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 27,
+      "predicate": 2,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 27,
+      "predicate": 3,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 27,
+      "predicate": 4,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 27,
+      "predicate": 5,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 27,
+      "predicate": 6,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 27,
+      "predicate": 7,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 27,
+      "predicate": 8,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 27,
+      "predicate": 9,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 27,
+      "predicate": 10,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 27,
+      "predicate": 11,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 27,
+      "predicate": 12,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 27,
+      "predicate": 13,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 27,
+      "predicate": 14,
+      "activation_rate": 0.37
+    },
+    {
+      "unit": 27,
+      "predicate": 15,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 27,
+      "predicate": 16,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 27,
+      "predicate": 17,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 27,
+      "predicate": 18,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 27,
+      "predicate": 19,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 28,
+      "predicate": 0,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 28,
+      "predicate": 1,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 28,
+      "predicate": 2,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 28,
+      "predicate": 3,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 28,
+      "predicate": 4,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 28,
+      "predicate": 5,
+      "activation_rate": 0.315
+    },
+    {
+      "unit": 28,
+      "predicate": 6,
+      "activation_rate": 0.565
+    },
+    {
+      "unit": 28,
+      "predicate": 7,
+      "activation_rate": 0.61
+    },
+    {
+      "unit": 28,
+      "predicate": 8,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 28,
+      "predicate": 9,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 28,
+      "predicate": 10,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 28,
+      "predicate": 11,
+      "activation_rate": 0.64
+    },
+    {
+      "unit": 28,
+      "predicate": 12,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 28,
+      "predicate": 13,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 28,
+      "predicate": 14,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 28,
+      "predicate": 15,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 28,
+      "predicate": 16,
+      "activation_rate": 0.565
+    },
+    {
+      "unit": 28,
+      "predicate": 17,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 28,
+      "predicate": 18,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 28,
+      "predicate": 19,
+      "activation_rate": 0.71
+    },
+    {
+      "unit": 29,
+      "predicate": 0,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 29,
+      "predicate": 1,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 29,
+      "predicate": 2,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 29,
+      "predicate": 3,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 29,
+      "predicate": 4,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 29,
+      "predicate": 5,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 29,
+      "predicate": 6,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 29,
+      "predicate": 7,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 29,
+      "predicate": 8,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 29,
+      "predicate": 9,
+      "activation_rate": 0.36
+    },
+    {
+      "unit": 29,
+      "predicate": 10,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 29,
+      "predicate": 11,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 29,
+      "predicate": 12,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 29,
+      "predicate": 13,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 29,
+      "predicate": 14,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 29,
+      "predicate": 15,
+      "activation_rate": 0.705
+    },
+    {
+      "unit": 29,
+      "predicate": 16,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 29,
+      "predicate": 17,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 29,
+      "predicate": 18,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 29,
+      "predicate": 19,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 30,
+      "predicate": 0,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 30,
+      "predicate": 1,
+      "activation_rate": 0.41
+    },
+    {
+      "unit": 30,
+      "predicate": 2,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 30,
+      "predicate": 3,
+      "activation_rate": 0.73
+    },
+    {
+      "unit": 30,
+      "predicate": 4,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 30,
+      "predicate": 5,
+      "activation_rate": 0.28
+    },
+    {
+      "unit": 30,
+      "predicate": 6,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 30,
+      "predicate": 7,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 30,
+      "predicate": 8,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 30,
+      "predicate": 9,
+      "activation_rate": 0.37
+    },
+    {
+      "unit": 30,
+      "predicate": 10,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 30,
+      "predicate": 11,
+      "activation_rate": 0.67
+    },
+    {
+      "unit": 30,
+      "predicate": 12,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 30,
+      "predicate": 13,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 30,
+      "predicate": 14,
+      "activation_rate": 0.39
+    },
+    {
+      "unit": 30,
+      "predicate": 15,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 30,
+      "predicate": 16,
+      "activation_rate": 0.69
+    },
+    {
+      "unit": 30,
+      "predicate": 17,
+      "activation_rate": 0.455
+    },
+    {
+      "unit": 30,
+      "predicate": 18,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 30,
+      "predicate": 19,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 31,
+      "predicate": 0,
+      "activation_rate": 0.66
+    },
+    {
+      "unit": 31,
+      "predicate": 1,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 31,
+      "predicate": 2,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 31,
+      "predicate": 3,
+      "activation_rate": 0.61
+    },
+    {
+      "unit": 31,
+      "predicate": 4,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 31,
+      "predicate": 5,
+      "activation_rate": 0.37
+    },
+    {
+      "unit": 31,
+      "predicate": 6,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 31,
+      "predicate": 7,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 31,
+      "predicate": 8,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 31,
+      "predicate": 9,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 31,
+      "predicate": 10,
+      "activation_rate": 0.675
+    },
+    {
+      "unit": 31,
+      "predicate": 11,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 31,
+      "predicate": 12,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 31,
+      "predicate": 13,
+      "activation_rate": 0.585
+    },
+    {
+      "unit": 31,
+      "predicate": 14,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 31,
+      "predicate": 15,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 31,
+      "predicate": 16,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 31,
+      "predicate": 17,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 31,
+      "predicate": 18,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 31,
+      "predicate": 19,
+      "activation_rate": 0.72
+    },
+    {
+      "unit": 32,
+      "predicate": 0,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 32,
+      "predicate": 1,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 32,
+      "predicate": 2,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 32,
+      "predicate": 3,
+      "activation_rate": 0.665
+    },
+    {
+      "unit": 32,
+      "predicate": 4,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 32,
+      "predicate": 5,
+      "activation_rate": 0.265
+    },
+    {
+      "unit": 32,
+      "predicate": 6,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 32,
+      "predicate": 7,
+      "activation_rate": 0.61
+    },
+    {
+      "unit": 32,
+      "predicate": 8,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 32,
+      "predicate": 9,
+      "activation_rate": 0.345
+    },
+    {
+      "unit": 32,
+      "predicate": 10,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 32,
+      "predicate": 11,
+      "activation_rate": 0.545
+    },
+    {
+      "unit": 32,
+      "predicate": 12,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 32,
+      "predicate": 13,
+      "activation_rate": 0.61
+    },
+    {
+      "unit": 32,
+      "predicate": 14,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 32,
+      "predicate": 15,
+      "activation_rate": 0.71
+    },
+    {
+      "unit": 32,
+      "predicate": 16,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 32,
+      "predicate": 17,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 32,
+      "predicate": 18,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 32,
+      "predicate": 19,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 33,
+      "predicate": 0,
+      "activation_rate": 0.445
+    },
+    {
+      "unit": 33,
+      "predicate": 1,
+      "activation_rate": 0.55
+    },
+    {
+      "unit": 33,
+      "predicate": 2,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 33,
+      "predicate": 3,
+      "activation_rate": 0.69
+    },
+    {
+      "unit": 33,
+      "predicate": 4,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 33,
+      "predicate": 5,
+      "activation_rate": 0.36
+    },
+    {
+      "unit": 33,
+      "predicate": 6,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 33,
+      "predicate": 7,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 33,
+      "predicate": 8,
+      "activation_rate": 0.585
+    },
+    {
+      "unit": 33,
+      "predicate": 9,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 33,
+      "predicate": 10,
+      "activation_rate": 0.67
+    },
+    {
+      "unit": 33,
+      "predicate": 11,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 33,
+      "predicate": 12,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 33,
+      "predicate": 13,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 33,
+      "predicate": 14,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 33,
+      "predicate": 15,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 33,
+      "predicate": 16,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 33,
+      "predicate": 17,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 33,
+      "predicate": 18,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 33,
+      "predicate": 19,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 34,
+      "predicate": 0,
+      "activation_rate": 0.77
+    },
+    {
+      "unit": 34,
+      "predicate": 1,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 34,
+      "predicate": 2,
+      "activation_rate": 0.425
+    },
+    {
+      "unit": 34,
+      "predicate": 3,
+      "activation_rate": 0.675
+    },
+    {
+      "unit": 34,
+      "predicate": 4,
+      "activation_rate": 0.42
+    },
+    {
+      "unit": 34,
+      "predicate": 5,
+      "activation_rate": 0.38
+    },
+    {
+      "unit": 34,
+      "predicate": 6,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 34,
+      "predicate": 7,
+      "activation_rate": 0.615
+    },
+    {
+      "unit": 34,
+      "predicate": 8,
+      "activation_rate": 0.52
+    },
+    {
+      "unit": 34,
+      "predicate": 9,
+      "activation_rate": 0.395
+    },
+    {
+      "unit": 34,
+      "predicate": 10,
+      "activation_rate": 0.63
+    },
+    {
+      "unit": 34,
+      "predicate": 11,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 34,
+      "predicate": 12,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 34,
+      "predicate": 13,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 34,
+      "predicate": 14,
+      "activation_rate": 0.395
+    },
+    {
+      "unit": 34,
+      "predicate": 15,
+      "activation_rate": 0.67
+    },
+    {
+      "unit": 34,
+      "predicate": 16,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 34,
+      "predicate": 17,
+      "activation_rate": 0.615
+    },
+    {
+      "unit": 34,
+      "predicate": 18,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 34,
+      "predicate": 19,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 35,
+      "predicate": 0,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 35,
+      "predicate": 1,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 35,
+      "predicate": 2,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 35,
+      "predicate": 3,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 35,
+      "predicate": 4,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 35,
+      "predicate": 5,
+      "activation_rate": 0.385
+    },
+    {
+      "unit": 35,
+      "predicate": 6,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 35,
+      "predicate": 7,
+      "activation_rate": 0.64
+    },
+    {
+      "unit": 35,
+      "predicate": 8,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 35,
+      "predicate": 9,
+      "activation_rate": 0.485
+    },
+    {
+      "unit": 35,
+      "predicate": 10,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 35,
+      "predicate": 11,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 35,
+      "predicate": 12,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 35,
+      "predicate": 13,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 35,
+      "predicate": 14,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 35,
+      "predicate": 15,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 35,
+      "predicate": 16,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 35,
+      "predicate": 17,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 35,
+      "predicate": 18,
+      "activation_rate": 0.44
+    },
+    {
+      "unit": 35,
+      "predicate": 19,
+      "activation_rate": 0.72
+    },
+    {
+      "unit": 36,
+      "predicate": 0,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 36,
+      "predicate": 1,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 36,
+      "predicate": 2,
+      "activation_rate": 0.475
+    },
+    {
+      "unit": 36,
+      "predicate": 3,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 36,
+      "predicate": 4,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 36,
+      "predicate": 5,
+      "activation_rate": 0.43
+    },
+    {
+      "unit": 36,
+      "predicate": 6,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 36,
+      "predicate": 7,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 36,
+      "predicate": 8,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 36,
+      "predicate": 9,
+      "activation_rate": 0.395
+    },
+    {
+      "unit": 36,
+      "predicate": 10,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 36,
+      "predicate": 11,
+      "activation_rate": 0.57
+    },
+    {
+      "unit": 36,
+      "predicate": 12,
+      "activation_rate": 0.51
+    },
+    {
+      "unit": 36,
+      "predicate": 13,
+      "activation_rate": 0.71
+    },
+    {
+      "unit": 36,
+      "predicate": 14,
+      "activation_rate": 0.36
+    },
+    {
+      "unit": 36,
+      "predicate": 15,
+      "activation_rate": 0.68
+    },
+    {
+      "unit": 36,
+      "predicate": 16,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 36,
+      "predicate": 17,
+      "activation_rate": 0.53
+    },
+    {
+      "unit": 36,
+      "predicate": 18,
+      "activation_rate": 0.435
+    },
+    {
+      "unit": 36,
+      "predicate": 19,
+      "activation_rate": 0.695
+    },
+    {
+      "unit": 37,
+      "predicate": 0,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 37,
+      "predicate": 1,
+      "activation_rate": 0.565
+    },
+    {
+      "unit": 37,
+      "predicate": 2,
+      "activation_rate": 0.495
+    },
+    {
+      "unit": 37,
+      "predicate": 3,
+      "activation_rate": 0.62
+    },
+    {
+      "unit": 37,
+      "predicate": 4,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 37,
+      "predicate": 5,
+      "activation_rate": 0.35
+    },
+    {
+      "unit": 37,
+      "predicate": 6,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 37,
+      "predicate": 7,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 37,
+      "predicate": 8,
+      "activation_rate": 0.47
+    },
+    {
+      "unit": 37,
+      "predicate": 9,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 37,
+      "predicate": 10,
+      "activation_rate": 0.565
+    },
+    {
+      "unit": 37,
+      "predicate": 11,
+      "activation_rate": 0.555
+    },
+    {
+      "unit": 37,
+      "predicate": 12,
+      "activation_rate": 0.56
+    },
+    {
+      "unit": 37,
+      "predicate": 13,
+      "activation_rate": 0.64
+    },
+    {
+      "unit": 37,
+      "predicate": 14,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 37,
+      "predicate": 15,
+      "activation_rate": 0.69
+    },
+    {
+      "unit": 37,
+      "predicate": 16,
+      "activation_rate": 0.45
+    },
+    {
+      "unit": 37,
+      "predicate": 17,
+      "activation_rate": 0.59
+    },
+    {
+      "unit": 37,
+      "predicate": 18,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 37,
+      "predicate": 19,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 38,
+      "predicate": 0,
+      "activation_rate": 0.84
+    },
+    {
+      "unit": 38,
+      "predicate": 1,
+      "activation_rate": 0.575
+    },
+    {
+      "unit": 38,
+      "predicate": 2,
+      "activation_rate": 0.225
+    },
+    {
+      "unit": 38,
+      "predicate": 3,
+      "activation_rate": 0.6
+    },
+    {
+      "unit": 38,
+      "predicate": 4,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 38,
+      "predicate": 5,
+      "activation_rate": 0.325
+    },
+    {
+      "unit": 38,
+      "predicate": 6,
+      "activation_rate": 0.48
+    },
+    {
+      "unit": 38,
+      "predicate": 7,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 38,
+      "predicate": 8,
+      "activation_rate": 0.505
+    },
+    {
+      "unit": 38,
+      "predicate": 9,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 38,
+      "predicate": 10,
+      "activation_rate": 0.63
+    },
+    {
+      "unit": 38,
+      "predicate": 11,
+      "activation_rate": 0.655
+    },
+    {
+      "unit": 38,
+      "predicate": 12,
+      "activation_rate": 0.33
+    },
+    {
+      "unit": 38,
+      "predicate": 13,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 38,
+      "predicate": 14,
+      "activation_rate": 0.39
+    },
+    {
+      "unit": 38,
+      "predicate": 15,
+      "activation_rate": 0.58
+    },
+    {
+      "unit": 38,
+      "predicate": 16,
+      "activation_rate": 0.68
+    },
+    {
+      "unit": 38,
+      "predicate": 17,
+      "activation_rate": 0.535
+    },
+    {
+      "unit": 38,
+      "predicate": 18,
+      "activation_rate": 0.455
+    },
+    {
+      "unit": 38,
+      "predicate": 19,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 39,
+      "predicate": 0,
+      "activation_rate": 0.815
+    },
+    {
+      "unit": 39,
+      "predicate": 1,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 39,
+      "predicate": 2,
+      "activation_rate": 0.355
+    },
+    {
+      "unit": 39,
+      "predicate": 3,
+      "activation_rate": 0.54
+    },
+    {
+      "unit": 39,
+      "predicate": 4,
+      "activation_rate": 0.635
+    },
+    {
+      "unit": 39,
+      "predicate": 5,
+      "activation_rate": 0.315
+    },
+    {
+      "unit": 39,
+      "predicate": 6,
+      "activation_rate": 0.49
+    },
+    {
+      "unit": 39,
+      "predicate": 7,
+      "activation_rate": 0.645
+    },
+    {
+      "unit": 39,
+      "predicate": 8,
+      "activation_rate": 0.525
+    },
+    {
+      "unit": 39,
+      "predicate": 9,
+      "activation_rate": 0.365
+    },
+    {
+      "unit": 39,
+      "predicate": 10,
+      "activation_rate": 0.595
+    },
+    {
+      "unit": 39,
+      "predicate": 11,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 39,
+      "predicate": 12,
+      "activation_rate": 0.4
+    },
+    {
+      "unit": 39,
+      "predicate": 13,
+      "activation_rate": 0.515
+    },
+    {
+      "unit": 39,
+      "predicate": 14,
+      "activation_rate": 0.415
+    },
+    {
+      "unit": 39,
+      "predicate": 15,
+      "activation_rate": 0.71
+    },
+    {
+      "unit": 39,
+      "predicate": 16,
+      "activation_rate": 0.605
+    },
+    {
+      "unit": 39,
+      "predicate": 17,
+      "activation_rate": 0.465
+    },
+    {
+      "unit": 39,
+      "predicate": 18,
+      "activation_rate": 0.345
+    },
+    {
+      "unit": 39,
+      "predicate": 19,
+      "activation_rate": 0.685
+    }
+  ],
+  "num_always_on": 0,
+  "num_always_off": 0,
+  "num_variable": 800
+}

@@ -1,0 +1,512 @@
+{
+  "total_states": 48,
+  "predicate_activation_rates": [
+    [
+      0.4583333333333333,
+      0.7083333333333334,
+      0.5208333333333334,
+      0.5208333333333334,
+      0.4375,
+      0.4166666666666667,
+      0.7083333333333334,
+      0.4791666666666667
+    ],
+    [
+      0.5833333333333334,
+      0.5416666666666666,
+      0.375,
+      0.4375,
+      0.5208333333333334,
+      0.5833333333333334,
+      0.625,
+      0.6041666666666666
+    ],
+    [
+      0.3541666666666667,
+      0.75,
+      0.625,
+      0.625,
+      0.3541666666666667,
+      0.3333333333333333,
+      0.6041666666666666,
+      0.375
+    ],
+    [
+      0.5208333333333334,
+      0.7083333333333334,
+      0.3125,
+      0.375,
+      0.4583333333333333,
+      0.6458333333333334,
+      0.6458333333333334,
+      0.6666666666666666
+    ],
+    [
+      0.3958333333333333,
+      0.6666666666666666,
+      0.4583333333333333,
+      0.5416666666666666,
+      0.4166666666666667,
+      0.4791666666666667,
+      0.7291666666666666,
+      0.5
+    ],
+    [
+      0.625,
+      0.6875,
+      0.3541666666666667,
+      0.6041666666666666,
+      0.6458333333333334,
+      0.625,
+      0.6666666666666666,
+      0.6458333333333334
+    ],
+    [
+      0.3541666666666667,
+      0.7291666666666666,
+      0.6458333333333334,
+      0.6666666666666666,
+      0.3333333333333333,
+      0.22916666666666666,
+      0.7916666666666666,
+      0.3541666666666667
+    ],
+    [
+      0.7916666666666666,
+      0.5625,
+      0.16666666666666666,
+      0.16666666666666666,
+      0.7916666666666666,
+      0.8125,
+      0.5625,
+      0.8333333333333334
+    ],
+    [
+      0.75,
+      0.4791666666666667,
+      0.20833333333333334,
+      0.4583333333333333,
+      0.7291666666666666,
+      0.6875,
+      0.5833333333333334,
+      0.75
+    ],
+    [
+      0.4583333333333333,
+      0.7083333333333334,
+      0.5416666666666666,
+      0.5833333333333334,
+      0.4375,
+      0.4375,
+      0.7916666666666666,
+      0.4583333333333333
+    ]
+  ],
+  "always_on": [],
+  "always_off": [],
+  "variable": [
+    {
+      "unit": 0,
+      "predicate": 0,
+      "activation_rate": 0.4583
+    },
+    {
+      "unit": 0,
+      "predicate": 1,
+      "activation_rate": 0.7083
+    },
+    {
+      "unit": 0,
+      "predicate": 2,
+      "activation_rate": 0.5208
+    },
+    {
+      "unit": 0,
+      "predicate": 3,
+      "activation_rate": 0.5208
+    },
+    {
+      "unit": 0,
+      "predicate": 4,
+      "activation_rate": 0.4375
+    },
+    {
+      "unit": 0,
+      "predicate": 5,
+      "activation_rate": 0.4167
+    },
+    {
+      "unit": 0,
+      "predicate": 6,
+      "activation_rate": 0.7083
+    },
+    {
+      "unit": 0,
+      "predicate": 7,
+      "activation_rate": 0.4792
+    },
+    {
+      "unit": 1,
+      "predicate": 0,
+      "activation_rate": 0.5833
+    },
+    {
+      "unit": 1,
+      "predicate": 1,
+      "activation_rate": 0.5417
+    },
+    {
+      "unit": 1,
+      "predicate": 2,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 1,
+      "predicate": 3,
+      "activation_rate": 0.4375
+    },
+    {
+      "unit": 1,
+      "predicate": 4,
+      "activation_rate": 0.5208
+    },
+    {
+      "unit": 1,
+      "predicate": 5,
+      "activation_rate": 0.5833
+    },
+    {
+      "unit": 1,
+      "predicate": 6,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 1,
+      "predicate": 7,
+      "activation_rate": 0.6042
+    },
+    {
+      "unit": 2,
+      "predicate": 0,
+      "activation_rate": 0.3542
+    },
+    {
+      "unit": 2,
+      "predicate": 1,
+      "activation_rate": 0.75
+    },
+    {
+      "unit": 2,
+      "predicate": 2,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 2,
+      "predicate": 3,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 2,
+      "predicate": 4,
+      "activation_rate": 0.3542
+    },
+    {
+      "unit": 2,
+      "predicate": 5,
+      "activation_rate": 0.3333
+    },
+    {
+      "unit": 2,
+      "predicate": 6,
+      "activation_rate": 0.6042
+    },
+    {
+      "unit": 2,
+      "predicate": 7,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 3,
+      "predicate": 0,
+      "activation_rate": 0.5208
+    },
+    {
+      "unit": 3,
+      "predicate": 1,
+      "activation_rate": 0.7083
+    },
+    {
+      "unit": 3,
+      "predicate": 2,
+      "activation_rate": 0.3125
+    },
+    {
+      "unit": 3,
+      "predicate": 3,
+      "activation_rate": 0.375
+    },
+    {
+      "unit": 3,
+      "predicate": 4,
+      "activation_rate": 0.4583
+    },
+    {
+      "unit": 3,
+      "predicate": 5,
+      "activation_rate": 0.6458
+    },
+    {
+      "unit": 3,
+      "predicate": 6,
+      "activation_rate": 0.6458
+    },
+    {
+      "unit": 3,
+      "predicate": 7,
+      "activation_rate": 0.6667
+    },
+    {
+      "unit": 4,
+      "predicate": 0,
+      "activation_rate": 0.3958
+    },
+    {
+      "unit": 4,
+      "predicate": 1,
+      "activation_rate": 0.6667
+    },
+    {
+      "unit": 4,
+      "predicate": 2,
+      "activation_rate": 0.4583
+    },
+    {
+      "unit": 4,
+      "predicate": 3,
+      "activation_rate": 0.5417
+    },
+    {
+      "unit": 4,
+      "predicate": 4,
+      "activation_rate": 0.4167
+    },
+    {
+      "unit": 4,
+      "predicate": 5,
+      "activation_rate": 0.4792
+    },
+    {
+      "unit": 4,
+      "predicate": 6,
+      "activation_rate": 0.7292
+    },
+    {
+      "unit": 4,
+      "predicate": 7,
+      "activation_rate": 0.5
+    },
+    {
+      "unit": 5,
+      "predicate": 0,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 5,
+      "predicate": 1,
+      "activation_rate": 0.6875
+    },
+    {
+      "unit": 5,
+      "predicate": 2,
+      "activation_rate": 0.3542
+    },
+    {
+      "unit": 5,
+      "predicate": 3,
+      "activation_rate": 0.6042
+    },
+    {
+      "unit": 5,
+      "predicate": 4,
+      "activation_rate": 0.6458
+    },
+    {
+      "unit": 5,
+      "predicate": 5,
+      "activation_rate": 0.625
+    },
+    {
+      "unit": 5,
+      "predicate": 6,
+      "activation_rate": 0.6667
+    },
+    {
+      "unit": 5,
+      "predicate": 7,
+      "activation_rate": 0.6458
+    },
+    {
+      "unit": 6,
+      "predicate": 0,
+      "activation_rate": 0.3542
+    },
+    {
+      "unit": 6,
+      "predicate": 1,
+      "activation_rate": 0.7292
+    },
+    {
+      "unit": 6,
+      "predicate": 2,
+      "activation_rate": 0.6458
+    },
+    {
+      "unit": 6,
+      "predicate": 3,
+      "activation_rate": 0.6667
+    },
+    {
+      "unit": 6,
+      "predicate": 4,
+      "activation_rate": 0.3333
+    },
+    {
+      "unit": 6,
+      "predicate": 5,
+      "activation_rate": 0.2292
+    },
+    {
+      "unit": 6,
+      "predicate": 6,
+      "activation_rate": 0.7917
+    },
+    {
+      "unit": 6,
+      "predicate": 7,
+      "activation_rate": 0.3542
+    },
+    {
+      "unit": 7,
+      "predicate": 0,
+      "activation_rate": 0.7917
+    },
+    {
+      "unit": 7,
+      "predicate": 1,
+      "activation_rate": 0.5625
+    },
+    {
+      "unit": 7,
+      "predicate": 2,
+      "activation_rate": 0.1667
+    },
+    {
+      "unit": 7,
+      "predicate": 3,
+      "activation_rate": 0.1667
+    },
+    {
+      "unit": 7,
+      "predicate": 4,
+      "activation_rate": 0.7917
+    },
+    {
+      "unit": 7,
+      "predicate": 5,
+      "activation_rate": 0.8125
+    },
+    {
+      "unit": 7,
+      "predicate": 6,
+      "activation_rate": 0.5625
+    },
+    {
+      "unit": 7,
+      "predicate": 7,
+      "activation_rate": 0.8333
+    },
+    {
+      "unit": 8,
+      "predicate": 0,
+      "activation_rate": 0.75
+    },
+    {
+      "unit": 8,
+      "predicate": 1,
+      "activation_rate": 0.4792
+    },
+    {
+      "unit": 8,
+      "predicate": 2,
+      "activation_rate": 0.2083
+    },
+    {
+      "unit": 8,
+      "predicate": 3,
+      "activation_rate": 0.4583
+    },
+    {
+      "unit": 8,
+      "predicate": 4,
+      "activation_rate": 0.7292
+    },
+    {
+      "unit": 8,
+      "predicate": 5,
+      "activation_rate": 0.6875
+    },
+    {
+      "unit": 8,
+      "predicate": 6,
+      "activation_rate": 0.5833
+    },
+    {
+      "unit": 8,
+      "predicate": 7,
+      "activation_rate": 0.75
+    },
+    {
+      "unit": 9,
+      "predicate": 0,
+      "activation_rate": 0.4583
+    },
+    {
+      "unit": 9,
+      "predicate": 1,
+      "activation_rate": 0.7083
+    },
+    {
+      "unit": 9,
+      "predicate": 2,
+      "activation_rate": 0.5417
+    },
+    {
+      "unit": 9,
+      "predicate": 3,
+      "activation_rate": 0.5833
+    },
+    {
+      "unit": 9,
+      "predicate": 4,
+      "activation_rate": 0.4375
+    },
+    {
+      "unit": 9,
+      "predicate": 5,
+      "activation_rate": 0.4375
+    },
+    {
+      "unit": 9,
+      "predicate": 6,
+      "activation_rate": 0.7917
+    },
+    {
+      "unit": 9,
+      "predicate": 7,
+      "activation_rate": 0.4583
+    }
+  ],
+  "num_always_on": 0,
+  "num_always_off": 0,
+  "num_variable": 80
+}
