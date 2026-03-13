@@ -1,3 +1,0 @@
-include latplan/puzzles/*.txt
-include latplan/puzzles/*.png
-include latplan/puzzles/*.bmp
