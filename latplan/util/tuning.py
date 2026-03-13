@@ -99,7 +99,7 @@ def nn_task(network, path, train_in, train_out, val_in, val_out, parameters):
               val_data=val_in,
               train_data_to=train_out,
               val_data_to=val_out,
-              save=False,
+              save=True,
               **parameters,)
     error = net.evaluate(val_in,val_out,batch_size=100,verbose=0)
     return net, error
@@ -270,10 +270,11 @@ def _generate_child_by_mutation(open_list, close_list, k, max_trial, parameters)
     raise HyperparameterGenerationError()
 
 def simple_genetic_search(task, default_config, parameters, path,
-                          initial_population=20,
-                          population=10,
+                          initial_population=1,
+                          population=1,
                           limit=float('inf'),
-                          report=None, report_best=None,):
+                          report=None, report_best=None,
+                          save_all_trials=True):
     "Initialize the queue by evaluating the N nodes. Select 2 parents randomly from top N nodes and perform the uniform crossover. Fall back to LGBFS on a fixed ratio (as a mutation)."
     best = {'eval'    :None, 'params'  :None, 'artifact':None}
 
@@ -300,24 +301,42 @@ def simple_genetic_search(task, default_config, parameters, path,
         return open_list, close_list
     open_list, close_list = call_with_lock(path, fn)
 
-    def _iter(config):
+    def _iter(config, trial_num):
         artifact, eval = task(merge_hash(default_config,config))
+        # Save model for every trial or only best so far
+        if hasattr(artifact, 'save'):
+            if save_all_trials:
+                trial_path = os.path.join(path, f"trial_t{trial_num}")
+                os.makedirs(trial_path, exist_ok=True)
+                artifact.path = trial_path
+                artifact.save()
         def fn():
             open_list, close_list = save_history(path, (eval, config, default_config))
+            # Save only the best so far if not saving all trials
             if (open_list[0][1] == config) and (len(open_list) < limit):
                 _update_best(artifact, eval, config, best, report, report_best)
+                if hasattr(artifact, 'save') and not save_all_trials:
+                    best_path = os.path.join(path, f"trial_t_best")
+                    artifact.path = best_path
+                    artifact.save()
             return open_list, close_list
         return call_with_lock(path, fn)
 
+    last_artifact = None
     try:
         print("Simple GA: Generating the initial population")
 
         gen_config = _random_configs(parameters)
+        trial_counter = 1
         try:
             while len(open_list) < initial_population:
                 while True:
                     try:
-                        open_list, close_list = _iter(next(gen_config))
+                        open_list, close_list = _iter(next(gen_config), trial_counter)
+                        trial_counter += 1
+                        # Track last artifact
+                        if len(open_list) > 0 and open_list[0][1] is not None:
+                            last_artifact = best['artifact']
                         break
                     except ResourceExhaustedError as e:
                         print(e)
@@ -352,7 +371,11 @@ def simple_genetic_search(task, default_config, parameters, path,
                         return best['artifact'],best['params'],best['eval']
             
             try:
-                open_list, close_list = _iter(child)
+                open_list, close_list = _iter(child, trial_counter)
+                trial_counter += 1
+                # Track last artifact
+                if len(open_list) > 0 and open_list[0][1] is not None:
+                    last_artifact = best['artifact']
             except ResourceExhaustedError as e:
                 print(e)
             except InvalidHyperparameterError as e:
@@ -360,8 +383,20 @@ def simple_genetic_search(task, default_config, parameters, path,
     except SignalInterrupt as e:
         print("received",e.signal,", optimization stopped")
     finally:
+        # Find best trial number
+        best_trial_num = None
+        for idx, entry in enumerate(open_list):
+            if entry[1] == best['params']:
+                best_trial_num = idx + 1
+                break
         _final_report(best)
-    return best['artifact'],best['params'],best['eval']
+        if best_trial_num is not None:
+            print(f"Best trial was trial_t{best_trial_num} with hyperparameters: {best['params']} and eval: {best['eval']}")
+        else:
+            print("Could not determine best trial number.")
+    # Guarantee a valid model is returned
+    artifact_to_return = best['artifact'] if best['artifact'] is not None else last_artifact
+    return artifact_to_return, best['params'], best['eval']
 
 
 # do not run it in parallel.
