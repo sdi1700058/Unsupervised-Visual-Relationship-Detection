@@ -77,21 +77,21 @@ def load_blocks_data_and_renderer(ae, track="blocks-5-3", num=10):
     return states, object_names, render
 
 
-def load_labeled_objects_data_and_renderer(model_dir, num=10,
+def load_labeled_objects_data_and_renderer(ae, model_dir, num=10,
                                            dataset_path=None, images_dir=None):
-    """Load labeled-objects data and build a patch-grid renderer.
-
-    The renderer arranges object patches (16x16 greyscale) into a small grid
-    so the state is humanly interpretable even without a spatial canvas.
+    """Load labeled-objects data using the same blocks-domain encoding used at
+    training time, and return the blocks_renderer for visualization.
 
     Returns: states, object_names (flat, from first state), render_fn,
              per_state_names (list-of-lists)
     """
     from latplan.puzzles.puzzle_labeled_objects import (
-        build_dataset, PATCH_SIZE, MAX_OBJECTS)
+        build_dataset, PICSIZE)
+    from latplan.puzzles.util import preprocess
+    from strips import bboxes_to_onehot
     import json as _json
 
-    states, per_state_names, image_ids = build_dataset(
+    images, bboxes, per_state_names, image_ids = build_dataset(
         dataset_path=dataset_path, images_dir=images_dir)
 
     # Try to load saved names that match training order
@@ -102,28 +102,24 @@ def load_labeled_objects_data_and_renderer(model_dir, num=10,
         per_state_names = saved["object_names"]
         image_ids       = saved["image_ids"]
 
+    # Apply the same preprocessing pipeline as strips.py labeled_objects()
+    picsize_grid = (np.array(PICSIZE) // 5).astype(int)
+    Y, X = picsize_grid[0], picsize_grid[1]
+    num_states, num_objs = images.shape[0], images.shape[1]
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    states = np.concatenate(
+        (images.reshape   ((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))),
+        axis=-1)
+
     states          = states[:num]
     per_state_names = per_state_names[:num]
     flat_names      = per_state_names[0] if per_state_names else []
 
-    patch_dim = PATCH_SIZE * PATCH_SIZE           # 256 grey pixels per object
-
-    def render_fn(x):
-        """x : (batch, num_objs, feature_dim) -> (batch, grid_H, grid_W)"""
-        batch, num_objs, _ = x.shape
-        cols = min(4, num_objs)
-        rows = (num_objs + cols - 1) // cols
-        grid_H = rows * PATCH_SIZE
-        grid_W = cols * PATCH_SIZE
-        out = np.zeros((batch, grid_H, grid_W), dtype=np.float32)
-        for b in range(batch):
-            for o in range(num_objs):
-                patch = x[b, o, :patch_dim].reshape(PATCH_SIZE, PATCH_SIZE)
-                r, c  = o // cols, o % cols
-                out[b,
-                    r * PATCH_SIZE:(r + 1) * PATCH_SIZE,
-                    c * PATCH_SIZE:(c + 1) * PATCH_SIZE] = patch
-        return out
+    render_fn, _ = ae.blocks_renderer()
 
     return states, flat_names, render_fn, per_state_names
 
@@ -342,7 +338,7 @@ def main():
     elif args.domain == "labeled_objects":
         data, obj_names, render_fn, per_state_names = \
             load_labeled_objects_data_and_renderer(
-                args.model_dir, args.num,
+                ae, args.model_dir, args.num,
                 dataset_path=args.dataset_path,
                 images_dir=args.images_dir)
     else:

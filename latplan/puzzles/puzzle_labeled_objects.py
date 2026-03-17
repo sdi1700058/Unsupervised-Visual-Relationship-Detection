@@ -3,19 +3,23 @@
 Labeled-objects data loader for FOSAE.
 
 Reads fosae_labeled_dataset_unsloth.json (VLM-annotated COCO images).
-Each image entry has objects with 'class' labels and 'bbox' [x1,y1,x2,y2].
+Each image entry has objects with 'class' labels and 'bbox' [x1,y1,x2,y2]
+in the original image's pixel coordinates.
 
-Object features per slot:
-  - Grayscale image crop resized to PATCH_SIZE x PATCH_SIZE  (preprocessed)
-  - Normalised bounding-box  [cx/W, cy/H, w/W, h/H]          (4 values)
+Follows the same encoding as the blocksworld domain so that blocks_activation
+and blocks_renderer can be reused verbatim:
 
-States:  (num_states, MAX_OBJECTS, FEATURE_DIM)
-Objects are ordered by area (largest first) so dominant objects get stable slots.
-Within each image, duplicate class names are disambiguated with a numeric suffix:
-  "chair" -> "chair_0", "chair_1", "chair_2"
+  Object feature vector (assembled in strips.py, same as blocksworld):
+    [ RGB patch (PATCH_SIZE^2 * 3 floats, sigmoid)
+    | x1_onehot (X bins)  | y1_onehot (Y bins)
+    | x2_onehot (X bins)  | y2_onehot (Y bins) ]
 
-The returned object_names list is used downstream by extract_fol.py to annotate
-predicate arguments with real semantic labels instead of generic "obj_0" indices.
+  Canvas:  CANVAS_H x CANVAS_W px, 5-px grid  →  Y = CANVAS_H//5, X = CANVAS_W//5
+  FEATURE_DIM = PATCH_SIZE*PATCH_SIZE*3 + 2*X + 2*Y  =  3072 + 200  =  3272
+
+build_dataset() returns raw (uint8 patches, uint16 pixel bboxes) so that the
+caller (strips.py / visualize_fol.py / extract_fol.py) can apply the standard
+preprocess() + bboxes_to_onehot() pipeline, identical to blocksworld.
 """
 
 import os
@@ -24,9 +28,13 @@ import numpy as np
 from PIL import Image
 
 # --- Tunable constants ---
-PATCH_SIZE   = 16    # each object crop is resized to PATCH_SIZE x PATCH_SIZE (grey)
-MAX_OBJECTS  = 8     # maximum number of objects per state (pad with zeros if fewer)
-FEATURE_DIM  = PATCH_SIZE * PATCH_SIZE + 4   # 256 + 4 = 260
+PATCH_SIZE  = 32          # object crop resized to PATCH_SIZE x PATCH_SIZE x 3
+MAX_OBJECTS = 10          # maximum objects per state (pad with zeros if fewer)
+
+# Canvas onto which all bboxes are mapped (matches blocks-5-3 picsize)
+CANVAS_H = 200
+CANVAS_W = 300
+PICSIZE  = [CANVAS_H, CANVAS_W, 3]   # same format as blocks .npz picsize field
 
 _DEFAULT_DATASET = os.path.join(
     os.path.dirname(__file__),
@@ -38,50 +46,27 @@ _DEFAULT_IMAGES = os.path.join(
 
 # --- Low-level helpers ---
 
-def _preprocess_patch(arr: np.ndarray) -> np.ndarray:
-    """Equalize + normalize + enhance a float array, matching latplan convention."""
-    from skimage import exposure
-    arr = arr.astype(float)
-    arr = exposure.equalize_hist(arr)
-    mn, mx = arr.min(), arr.max()
-    if mx > mn:
-        arr = (arr - mn) / (mx - mn)
-    arr = np.clip((arr - 0.5) * 3, -0.5, 0.5) + 0.5
-    return arr
-
-
 def _crop_object(pil_img: Image.Image, bbox, patch_size: int = PATCH_SIZE) -> np.ndarray:
-    """Crop and resize object to *greyscale* (patch_size, patch_size) in [0,1]."""
+    """Crop bbox from image and resize to (patch_size, patch_size, 3) uint8."""
     x1, y1, x2, y2 = bbox
     W, H = pil_img.size
     x1, x2 = max(0, int(x1)), min(W, int(x2))
     y1, y2 = max(0, int(y1)), min(H, int(y2))
     if x2 <= x1 or y2 <= y1:
-        return np.zeros((patch_size, patch_size), dtype=np.float32)
-    patch = pil_img.crop((x1, y1, x2, y2)).convert("L")
+        return np.zeros((patch_size, patch_size, 3), dtype=np.uint8)
+    patch = pil_img.crop((x1, y1, x2, y2))
     patch = patch.resize((patch_size, patch_size), Image.BILINEAR)
-    arr = np.array(patch, dtype=np.float32) / 255.0
-    return _preprocess_patch(arr).astype(np.float32)
+    return np.array(patch, dtype=np.uint8)   # (P, P, 3) in [0, 255]
 
 
-def _bbox_features(bbox, img_w: int, img_h: int) -> np.ndarray:
-    """Return [cx/W, cy/H, w/W, h/H] normalised centre+size representation.
-
-    Clamps to [0, 1] because VLM-generated bboxes can occasionally extend
-    outside image boundaries.
-    """
+def _scale_bbox_to_canvas(bbox, img_w: int, img_h: int) -> tuple:
+    """Scale (x1,y1,x2,y2) from original image pixels to CANVAS pixel coords."""
     x1, y1, x2, y2 = bbox
-    # Clamp to valid image region before normalising
-    x1 = max(0, min(img_w, x1))
-    x2 = max(0, min(img_w, x2))
-    y1 = max(0, min(img_h, y1))
-    y2 = max(0, min(img_h, y2))
-    cx = (x1 + x2) / 2.0
-    cy = (y1 + y2) / 2.0
-    bw = x2 - x1
-    bh = y2 - y1
-    return np.array([cx / img_w, cy / img_h, bw / img_w, bh / img_h],
-                    dtype=np.float32)
+    x1_c = int(np.clip(x1 * CANVAS_W / img_w, 0, CANVAS_W - 1))
+    y1_c = int(np.clip(y1 * CANVAS_H / img_h, 0, CANVAS_H - 1))
+    x2_c = int(np.clip(x2 * CANVAS_W / img_w, 0, CANVAS_W - 1))
+    y2_c = int(np.clip(y2 * CANVAS_H / img_h, 0, CANVAS_H - 1))
+    return (x1_c, y1_c, x2_c, y2_c)
 
 
 def _unique_names(objects) -> list:
@@ -111,55 +96,69 @@ def entry_to_state(entry: dict, images_dir: str,
                    num_objs: int = MAX_OBJECTS,
                    patch_size: int = PATCH_SIZE):
     """
-    Convert one dataset entry to
-      state  : (num_objs, FEATURE_DIM) float32 array
-      names  : list[str] of length num_objs (semantic labels or 'pad_k')
+    Convert one dataset entry to raw (uint8 patches, uint16 canvas bboxes, names).
 
-    Objects are sorted by descending bbox area so that the model's top slots
-    consistently correspond to dominant objects.
+    Returns
+    -------
+    patches  : (num_objs, patch_size, patch_size, 3)  uint8
+    bboxes   : (num_objs, 4)  uint16  pixel coords in CANVAS space
+    names    : list[str] of length num_objs
     """
     img_path = os.path.join(images_dir, entry["image"])
     pil_img  = Image.open(img_path).convert("RGB")
     W, H     = pil_img.size
 
     objs = entry.get("objects", [])
-    # Sort by descending area for stable ordering
+    # Sort by descending area for stable slot ordering
     objs = sorted(objs, key=lambda o: (o["bbox"][2]-o["bbox"][0])*(o["bbox"][3]-o["bbox"][1]),
                   reverse=True)
-    objs = objs[:num_objs]   # truncate to num_objs
+    objs = objs[:num_objs]
 
-    feature_dim = patch_size * patch_size + 4
-    vectors = []
     names   = _unique_names(objs)
+    patches = []
+    bboxes  = []
 
     for obj in objs:
-        patch = _crop_object(pil_img, obj["bbox"], patch_size)
-        bbox_feat = _bbox_features(obj["bbox"], W, H)
-        vectors.append(np.concatenate([patch.flatten(), bbox_feat]))
+        patches.append(_crop_object(pil_img, obj["bbox"], patch_size))
+        bboxes.append(_scale_bbox_to_canvas(obj["bbox"], W, H))
 
     # Pad with zeros for missing objects
     pad_names = [f"pad_{i}" for i in range(len(objs), num_objs)]
     for _ in pad_names:
-        vectors.append(np.zeros(feature_dim, dtype=np.float32))
-    names = names + pad_names
+        patches.append(np.zeros((patch_size, patch_size, 3), dtype=np.uint8))
+        bboxes.append((0, 0, 0, 0))
 
-    return np.stack(vectors, axis=0).astype(np.float32), names   # (num_objs, feat_dim)
+    return (np.array(patches, dtype=np.uint8),    # (num_objs, P, P, 3)
+            np.array(bboxes,   dtype=np.uint16),   # (num_objs, 4)
+            names + pad_names)
 
 
 # --- Dataset builder ---
 
 def build_dataset(dataset_path: str = None, images_dir: str = None,
                   num_objs: int = MAX_OBJECTS, patch_size: int = PATCH_SIZE,
-                  skip_empty: bool = True):
+                  skip_empty: bool = True, max_images: int = None):
     """
-    Load all images and return:
-      states       : (N, num_objs, feature_dim) float32
-      object_names : list[list[str]]  shape (N, num_objs)
-      image_ids    : list[str]        COCO filenames for each state
+    Load all images and return raw patches + pixel bboxes.
 
-    Parameters
-    ----------
-    skip_empty : if True, drop images with no detected objects.
+    Returns
+    -------
+    images       : (N, num_objs, patch_size, patch_size, 3)  uint8
+    bboxes       : (N, num_objs, 4)  uint16  pixel coords in CANVAS space
+    object_names : list[list[str]]  shape (N, num_objs)
+    image_ids    : list[str]  COCO filenames for each state
+
+    The caller is responsible for applying preprocessing and bbox one-hot
+    encoding (identical to the blocksworld pipeline in strips.py):
+
+        images = images.astype(np.float32) / 256
+        images = preprocess(images)                       # latplan.puzzles.util
+        picsize_grid = (np.array(PICSIZE) // 5).astype(int)
+        Y, X = picsize_grid[0], picsize_grid[1]           # 40, 60
+        bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)   # strips.py
+        states = np.concatenate(
+            (images.reshape((N, num_objs, -1)),
+             bboxes_onehot.reshape((N, num_objs, -1))), axis=-1)
     """
     if dataset_path is None:
         dataset_path = _DEFAULT_DATASET
@@ -172,16 +171,22 @@ def build_dataset(dataset_path: str = None, images_dir: str = None,
     with open(dataset_path) as f:
         data = json.load(f)
 
-    states, all_names, image_ids = [], [], []
+    if max_images is not None:
+        data = data[:max_images]
+
+    images_list, bboxes_list, all_names, image_ids = [], [], [], []
     for entry in data:
         if skip_empty and len(entry.get("objects", [])) == 0:
             continue
-        state, names = entry_to_state(entry, images_dir, num_objs, patch_size)
-        states.append(state)
+        patches, bboxes, names = entry_to_state(entry, images_dir, num_objs, patch_size)
+        images_list.append(patches)
+        bboxes_list.append(bboxes)
         all_names.append(names)
         image_ids.append(entry["image"])
 
-    return np.array(states, dtype=np.float32), all_names, image_ids
+    return (np.array(images_list, dtype=np.uint8),    # (N, num_objs, P, P, 3)
+            np.array(bboxes_list,  dtype=np.uint16),   # (N, num_objs, 4)
+            all_names, image_ids)
 
 
 def build_transitions(states: np.ndarray, mode: str = "sequential"):

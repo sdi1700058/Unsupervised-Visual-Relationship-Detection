@@ -221,7 +221,6 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
             limit=1,
             report_best= lambda net: net.save(),
         )
-        ae.save()
         if ae is None:
             print("ERROR: Model was not returned by simple_genetic_search. Check parameters and training routine.")
         else:
@@ -367,25 +366,29 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
                     num_objects=None, comment=None,
                     dataset_path=None, images_dir=None,
                     transition_mode="all_pairs",
-                    epoch=5000):
+                    epoch=5000, max_images=None, batch_size=None):
     """Train FOSAE on the VLM-annotated labeled-object COCO dataset.
 
-    Unlike puzzle/blocksworld domains, images here are real-world COCO photos
-    with semantically labeled objects (from fosae_labeled_dataset_unsloth.json).
-    Object labels are preserved so that predicate arguments in the extracted FOL
-    are annotated with real names (e.g. 'chair_0', 'television').
+    Uses the same encoding as blocksworld (blocks_activation, blocks_renderer):
+      feature = [ patch_pixels (32^2*3, sigmoid) | x1_onehot | y1_onehot | x2_onehot | y2_onehot ]
+    Bboxes are mapped to a 200x300 canvas (same as blocks-5-3) with a 5px grid.
 
     Parameters
     ----------
     aeclass         : FOSAE model class name registered in latplan.model
     U, A, P         : FOSAE hyperparameter overrides
-    num_objects     : override MAX_OBJECTS per state (default: 8)
+    num_objects     : override MAX_OBJECTS per state
     dataset_path    : path to fosae_labeled_dataset_unsloth.json (default: auto)
     images_dir      : path to raw_images/ directory (default: auto)
     transition_mode : 'sequential' | 'all_pairs' (default: all_pairs)
+    batch_size      : override default batch size (default: 1000). Use a value
+                      >= training set size to process the whole dataset in one
+                      GPU pass per epoch (maximises GPU utilisation on large-VRAM
+                      cards like the L40S).
     """
     from latplan.puzzles.puzzle_labeled_objects import (
-        build_dataset, build_transitions, MAX_OBJECTS)
+        build_dataset, build_transitions, MAX_OBJECTS, PICSIZE)
+    from latplan.puzzles.util import preprocess
     import json as _json
 
     # Propagate any provided hyperparameter overrides
@@ -393,18 +396,38 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
         if value is not None:
             parameters[name] = [value]
     default_parameters["aeclass"]    = aeclass
-    default_parameters["activation"] = "self.labeled_objects_activation"
+    default_parameters["activation"] = "self.blocks_activation"
     default_parameters["epoch"]      = epoch
+    if batch_size is not None:
+        default_parameters["batch_size"] = batch_size
 
     num_objs = num_objects if num_objects is not None else MAX_OBJECTS
 
     print("Loading labeled-objects dataset...")
-    all_states, all_object_names, image_ids = build_dataset(
-        dataset_path=dataset_path, images_dir=images_dir, num_objs=num_objs)
+    images, bboxes, all_object_names, image_ids = build_dataset(
+        dataset_path=dataset_path, images_dir=images_dir,
+        num_objs=num_objs, max_images=max_images)
 
-    num_states = len(all_states)
-    print(f"Loaded {num_states} states, {num_objs} objects each, "
-          f"feature_dim={all_states.shape[-1]}")
+    num_states = len(images)
+    print(f"Loaded {num_states} states, {num_objs} objects each")
+
+    # --- Same preprocessing pipeline as blocksworld ---
+    picsize      = np.array(PICSIZE)
+    picsize_grid = (picsize // 5).astype(int)        # [40, 60, 0]
+    Y, X         = picsize_grid[0], picsize_grid[1]  # Y=40, X=60
+
+    default_parameters["picsize_grid"] = list(map(int, picsize_grid))
+    default_parameters["picsize"]      = list(map(int, picsize))
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    all_states = np.concatenate(
+        (images.reshape   ((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))),
+        axis=-1)
+    del images, bboxes_onehot
+    print(f"Feature dim per object: {all_states.shape[-1]}")
 
     # Build transition pairs: (2, num_pairs, num_objs, feature_dim)
     transitions = build_transitions(all_states, mode=transition_mode)
@@ -424,7 +447,15 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
         val   = states[int(len(states) * 0.9):int(len(states) * 0.95)]
         test  = states[int(len(states) * 0.95):]
 
-    out_path = os.path.join(OUT_DIR, "labeled_objects", sae_path)
+    # Encode key hyperparameters in the directory name so concurrent runs
+    # with different settings don't overwrite each other.
+    _U_val = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A_val = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P_val = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    run_tag = f"{aeclass}_U{_U_val}_A{_A_val}_P{_P_val}"
+    if max_images is not None:
+        run_tag += f"_n{max_images}"
+    out_path = os.path.join(OUT_DIR, "labeled_objects", run_tag)
     os.makedirs(out_path, exist_ok=True)
 
     ae = run(out_path, train, val, parameters)

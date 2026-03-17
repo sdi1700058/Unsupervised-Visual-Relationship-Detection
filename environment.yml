@@ -9,11 +9,12 @@ dependencies:
       - h5py<3.0
       - matplotlib
       - progressbar2
-      - keras-adabound
-      - keras-rectified-adam
+      - keras-adabound==0.9.0          # newer versions use TF2 optimizer_v2 API
+      - keras-rectified-adam==0.9.0    # newer versions use TF2 optimizer_v2 API
       - timeout_decorator
       - ansicolors
       - scipy==1.4.1
       - scikit-image
       - imageio
       - pillow
+      - protobuf==3.20.3

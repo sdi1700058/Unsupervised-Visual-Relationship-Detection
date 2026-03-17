@@ -411,11 +411,22 @@ Poor python coders cannot enjoy the cleanness of CLOS :before, :after, :around m
             train_data_to_cache = [[ train_subdata_to[indices] for train_subdata_to in train_data_to ] for indices in indices_cache ]
             for epoch in range(epoch):
                 clist.on_epoch_begin(epoch,logs)
+                # Capture train_on_batch return values directly — this avoids the
+                # redundant generate_logs(train_data) full-dataset evaluate() call
+                # that previously re-ran the same forward pass every epoch.
+                _batch_logs  = {}
+                _batch_losses = []
                 for train_subdata_cache,train_subdata_to_cache in zip(train_data_cache,train_data_to_cache):
                     for net,train_subdata_batch_cache,train_subdata_to_batch_cache in zip(self.nets, train_subdata_cache,train_subdata_to_cache):
-                        net.train_on_batch(train_subdata_batch_cache, train_subdata_to_batch_cache)
+                        _r = net.train_on_batch(train_subdata_batch_cache, train_subdata_to_batch_cache)
+                        _batch_logs = {k: v for k, v in zip(net.metrics_names, ensure_list(_r))}
+                        _batch_losses.append(_batch_logs.get("loss", 0))
+                if len(_batch_losses) > 2:
+                    for _i, _l in enumerate(_batch_losses):
+                        _batch_logs["loss"+str(_i)] = _l
+                _batch_logs["loss"] = np.sum(_batch_losses)
+                logs = _batch_logs
 
-                logs = generate_logs(train_data, train_data_to)
                 for k,v in generate_logs(val_data,  val_data_to).items():
                     logs["val_"+k] = v
                 clist.on_epoch_end(epoch,logs)
@@ -1150,18 +1161,69 @@ class BaseFirstOrderMixin:
                                              axis = -1)
             return wrap(x,result,name="obj_activation")
         return obj_activation
-    
+
     def labeled_objects_activation(self, input_shape):
         """Activation for the labeled-objects domain.
 
-        Object features are greyscale image patches (float in [0,1]) plus
+        Object features are RGB image patches (float in [0,1]) plus
         4 normalised bounding-box values [cx/W, cy/H, w/W, h/H] (also [0,1]).
         A plain sigmoid is appropriate for the entire feature vector.
         """
         def obj_activation(x):
             return wrap(x, K.sigmoid(x), name="obj_activation")
         return obj_activation
-    
+
+    def labeled_objects_renderer(self, canvas_hw=(480, 480)):
+        """Renderer for the labeled-objects domain.
+
+        Reconstructs a scene by placing each object's RGB patch at its decoded
+        bounding-box position on a blank canvas.
+
+        Feature layout per object slot: [patch_size^2*3 pixels | cx/W cy/H w/W h/H]
+        """
+        import math
+        from skimage.transform import resize as sk_resize
+
+        CANVAS_H, CANVAS_W = canvas_hw
+
+        def _get_patch_size(states):
+            feat_dim = states.shape[2]
+            patch_pixels = feat_dim - 4
+            return int(round(math.sqrt(patch_pixels / 3)))
+
+        def render(states):
+            # states: (batch, num_objs, feature_dim)
+            patch_size = _get_patch_size(states)
+            patch_dim  = patch_size * patch_size * 3
+            patches = states[:, :, :patch_dim]            # (B, O, patch_dim)
+            bboxes  = states[:, :, patch_dim:]            # (B, O, 4) normalised
+
+            B = states.shape[0]
+            canvas = np.zeros((B, CANVAS_H, CANVAS_W, 3), dtype=np.float32)
+
+            for b in range(B):
+                for o in range(states.shape[1]):
+                    cx_n, cy_n, w_n, h_n = bboxes[b, o]
+                    if w_n < 1e-6 or h_n < 1e-6:
+                        continue   # padding / empty slot
+                    x1 = int((cx_n - w_n / 2) * CANVAS_W)
+                    y1 = int((cy_n - h_n / 2) * CANVAS_H)
+                    x2 = int((cx_n + w_n / 2) * CANVAS_W)
+                    y2 = int((cy_n + h_n / 2) * CANVAS_H)
+                    x1, x2 = max(0, x1), min(CANVAS_W, max(x1 + 1, x2))
+                    y1, y2 = max(0, y1), min(CANVAS_H, max(y1 + 1, y2))
+                    patch = patches[b, o].reshape((patch_size, patch_size, 3))
+                    canvas[b, y1:y2, x1:x2] = sk_resize(
+                        patch, (y2 - y1, x2 - x1, 3), preserve_range=True)
+            return canvas
+
+        def render_each(states):
+            patch_size = _get_patch_size(states)
+            patch_dim  = patch_size * patch_size * 3
+            return states[:, :, :patch_dim].reshape((-1, patch_size, patch_size, 3))
+
+        return render, render_each
+
     def blocks_renderer(self):
         picsize = np.array(self.parameters["picsize"])
         picsize_grid = (picsize / 5).round().astype(np.int32)
@@ -1256,6 +1318,8 @@ class BaseFirstOrderMixin:
 
         if mode == "puzzle":
             render, render_each = self.puzzle_renderer()
+        elif mode == "labeled_objects":
+            render, render_each = self.labeled_objects_renderer()
         else:
             render, render_each = self.blocks_renderer()
 
@@ -1478,8 +1542,10 @@ class FirstOrderSAE(BaseFirstOrderMixin, ZeroSuppressMixin, ConcreteLatentMixin,
 
     def plot_pos_neg(self,data,path,verbose=False,examples=10,mode="puzzle"):
         self.load()
-        if mode is "puzzle":
+        if mode == "puzzle":
             render, _ = self.puzzle_renderer()
+        elif mode == "labeled_objects":
+            render, _ = self.labeled_objects_renderer()
         else:
             render, _ = self.blocks_renderer()
 

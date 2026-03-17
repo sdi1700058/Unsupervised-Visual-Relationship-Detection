@@ -93,6 +93,9 @@ def load_labeled_objects_data(model_dir, dataset_path=None, images_dir=None,
                                num_examples=None):
     """Load the VLM-annotated COCO labeled-objects dataset.
 
+    Applies the same blocks-domain preprocessing used during training so that
+    feature vectors are compatible with the saved model.
+
     Returns
     -------
     states            : (N, num_objs, feature_dim) float32 array
@@ -104,9 +107,12 @@ def load_labeled_objects_data(model_dir, dataset_path=None, images_dir=None,
     Object names saved during training (object_names.json in model_dir) are
     loaded when available and used instead of rebuilding them from the dataset.
     """
-    from latplan.puzzles.puzzle_labeled_objects import build_dataset
+    from latplan.puzzles.puzzle_labeled_objects import build_dataset, PICSIZE
+    from latplan.puzzles.util import preprocess
+    from strips import bboxes_to_onehot
+    import numpy as np
 
-    states, per_state_names, image_ids = build_dataset(
+    images, bboxes, per_state_names, image_ids = build_dataset(
         dataset_path=dataset_path, images_dir=images_dir)
 
     # Try to load object names that were saved during the training run so that
@@ -118,6 +124,19 @@ def load_labeled_objects_data(model_dir, dataset_path=None, images_dir=None,
         per_state_names = saved["object_names"]
         image_ids       = saved["image_ids"]
         print(f"Loaded object names from {names_path}")
+
+    # Apply the same preprocessing pipeline as strips.py labeled_objects()
+    picsize_grid = (np.array(PICSIZE) // 5).astype(int)
+    Y, X = picsize_grid[0], picsize_grid[1]
+    num_states, num_objs = images.shape[0], images.shape[1]
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    states = np.concatenate(
+        (images.reshape   ((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))),
+        axis=-1)
 
     if num_examples and num_examples < len(states):
         states          = states[:num_examples]

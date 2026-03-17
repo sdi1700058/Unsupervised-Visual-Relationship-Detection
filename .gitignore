@@ -1,16 +1,17 @@
 # ============================================================
 # Generated Datasets  (reproducible via setup-dataset.py)
 # ============================================================
+data/
 data/*.npz
 data/*.npy
 latplan/puzzles/*.npz
 latplan/puzzles/*.npy
-
+notebooks/fiftyone_data/
 # ============================================================
 # Training Outputs  (reproducible by training)
 # ============================================================
-#out/
-!out/.gitkeep
+out/
+#!out/.gitkeep
 samples/
 
 # Old-style training output dirs at project root
@@ -27,6 +28,12 @@ blocks-5-3/
 # Lock files
 # ============================================================
 **/lock
+
+# ============================================================
+# Virtual environment and Keras config (kept inside project)
+# ============================================================
+venv/
+.keras/
 
 # ============================================================
 # Python
@@ -52,3 +59,4 @@ Thumbs.db
 # Old / intermediate generation artefacts
 # ============================================================
 data/gen/old/
+sh/
