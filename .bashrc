@@ -1,2 +1,2 @@
 
-conda activate latplan
+conda activate fosae

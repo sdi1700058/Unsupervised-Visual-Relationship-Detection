@@ -1,5 +1,5 @@
 
-name : latplan
+name : fosae
 dependencies:
   - python=3.7
   - pip
@@ -9,8 +9,8 @@ dependencies:
       - h5py<3.0
       - matplotlib
       - progressbar2
-      - keras-adabound==0.9.0          # newer versions use TF2 optimizer_v2 API
-      - keras-rectified-adam==0.9.0    # newer versions use TF2 optimizer_v2 API
+      - keras-adabound==0.6.0          # 0.6.0 is the highest version on PyPI
+      - keras-rectified-adam==0.9.0    # pinned to a Keras-2-compatible version
       - timeout_decorator
       - ansicolors
       - scipy==1.4.1

@@ -28,7 +28,8 @@ sudo apt install -y mercurial g++ cmake make flex bison g++-multilib
 
 #make -j 1 -C lisp
 conda env create -f environment.yml
-conda activate latplan
+conda run -n fosae pip install -e .
+conda activate fosae
 
 mkdir -p ~/.keras
 cp keras-tf.json ~/.keras/keras.json

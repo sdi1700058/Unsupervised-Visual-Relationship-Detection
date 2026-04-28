@@ -11,9 +11,9 @@ notebooks/fiftyone_data/
 # Training Outputs  (reproducible by training)
 # ============================================================
 out/
-#!out/.gitkeep
+!out/.gitkeep
 samples/
-
+original-repo/
 # Old-style training output dirs at project root
 blocks-4-4/
 blocks-5-3/
@@ -60,3 +60,6 @@ Thumbs.db
 # ============================================================
 data/gen/old/
 sh/
+AUDIT.md
+SPEC.md 
+CHANGES.md

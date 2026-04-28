@@ -1062,10 +1062,13 @@ class BaseFirstOrderMixin:
         num_features = input_shape[1]
         if ("preencoder_layers" in self.parameters) and (self.parameters["preencoder_layers"] > 0):
             return [
-                    *[
-                      Convolution1D(self.parameters["layer"], 1, activation="relu")
+                    BN(),
+                    *[layer
                       for _ in range(self.parameters["preencoder_layers"]-1)
-                      ],
+                      for layer in [
+                          Convolution1D(self.parameters["layer"], 1, activation="relu", use_bias=False),
+                          BN(),
+                      ]],
                     Convolution1D(self.parameters["preencoder_dimention"], 1,
                                   activation=self.parameters["preencoder_output_activation"][0],
                                   activity_regularizer=keras.regularizers.l1(self.parameters["preencoder_l1"])),
@@ -1079,10 +1082,12 @@ class BaseFirstOrderMixin:
         num_features = input_shape[1]
         if ("preencoder_layers" in self.parameters) and (self.parameters["preencoder_layers"] > 0):
             return [
-                    *[
-                      Convolution1D(self.parameters["layer"], 1, activation="relu")
+                    *[layer
                       for _ in range(self.parameters["preencoder_layers"]-1)
-                      ],
+                      for layer in [
+                          Convolution1D(self.parameters["layer"], 1, activation="relu", use_bias=False),
+                          BN(),
+                      ]],
                     Convolution1D(num_features, 1),
                     self.obj_activation(input_shape),
                     ]
@@ -1096,9 +1101,11 @@ class BaseFirstOrderMixin:
         # skip the inner layers during the bootstrapping.
         # after that, require the inner layers to reconstruct the embedding.
         def skipconnection_or_add_embedding_loss(x):
-            alpha = StepSchedule(schedule={
-                0:0,
-                (self.parameters["epoch"]*self.parameters["preencoder_delay"]):1,
+            delay = int(self.parameters["epoch"] * self.parameters["preencoder_delay"])
+            alpha = LinearSchedule(schedule={
+                0: 0,
+                delay: 0,
+                delay * 2: 1,
             })
             self.callbacks.append(LambdaCallback(on_epoch_end=alpha.update))
 

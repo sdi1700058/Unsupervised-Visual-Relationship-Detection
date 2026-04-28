@@ -1,0 +1,15 @@
+tensorflow-gpu==1.15.2
+keras==2.2.5
+h5py==2.10.0            # <3.0 required for Keras 2.2.5 model weight format
+numpy>=1.16.0,<1.24.0
+scipy==1.4.1
+scikit-image
+imageio
+pillow
+matplotlib
+progressbar2
+keras-adabound==0.6.0          # 0.6.0 is the highest version on PyPI
+keras-rectified-adam==0.9.0    # pinned to a Keras-2-compatible version
+timeout_decorator
+ansicolors
+protobuf==3.19.6       # TF 1.15 incompatible with protobuf >=3.21; 3.20.x not on PyPI for py3.6

@@ -48,7 +48,7 @@ echo "================================================================"
 # ── Bootstrap environment ─────────────────────────────────────────────────────
 # Loads gcc/python/cuda/cuDNN modules and activates the latplan venv.
 # sherlock_env.sh is tolerant of missing modules (prints warnings, does not exit).
-source "${PROJECT_DIR}/sherlock_env.sh"
+source "${PROJECT_DIR}/sh/sherlock_env.sh"
 
 # ── Verify GPU is visible ─────────────────────────────────────────────────────
 echo ""
