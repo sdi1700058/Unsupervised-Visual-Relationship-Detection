@@ -146,12 +146,55 @@ def load_labeled_objects_data(model_dir, dataset_path=None, images_dir=None,
     return states, per_state_names, image_ids
 
 
+def load_vidvrd_data(model_dir, annotations_dir=None, frames_dir=None,
+                     num_examples=None, category=None):
+    """Load VidVRD frames using the same blocks-domain encoding used in training.
+
+    Reads object_names.json saved during training (uses 'frame_ids' key).
+    """
+    from latplan.puzzles.puzzle_vidvrd import build_dataset, PICSIZE
+    from latplan.puzzles.util import preprocess
+    from strips import bboxes_to_onehot
+    import numpy as np
+
+    images, bboxes, per_state_names, frame_ids = build_dataset(
+        annotations_dir=annotations_dir, frames_dir=frames_dir,
+        category_filter=category)
+
+    names_path = os.path.join(model_dir, "object_names.json")
+    if os.path.isfile(names_path):
+        with open(names_path) as f:
+            saved = json.load(f)
+        per_state_names = saved["object_names"]
+        frame_ids       = saved.get("frame_ids", saved.get("image_ids", frame_ids))
+        print(f"Loaded object names from {names_path}")
+
+    picsize_grid = (np.array(PICSIZE) // 5).astype(int)
+    Y, X = picsize_grid[0], picsize_grid[1]
+    num_states, num_objs = images.shape[0], images.shape[1]
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    states = np.concatenate(
+        (images.reshape   ((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))),
+        axis=-1)
+
+    if num_examples and num_examples < len(states):
+        states          = states[:num_examples]
+        per_state_names = per_state_names[:num_examples]
+        frame_ids       = frame_ids[:num_examples]
+
+    return states, per_state_names, frame_ids
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Extract FOL predicates from a trained FOSAE model")
     parser.add_argument("model_dir", help="Path to the trained model directory")
     parser.add_argument("--domain", default="puzzle",
-                        choices=["puzzle", "blocks", "labeled_objects"],
+                        choices=["puzzle", "blocks", "labeled_objects", "vidvrd"],
                         help="Domain type (default: puzzle)")
     parser.add_argument("--type", default="mnist",
                         help="Puzzle type for puzzle domain (default: mnist)")
@@ -165,6 +208,12 @@ def main():
     parser.add_argument("--images-dir", default=None,
                         help="Path to raw_images/ directory "
                              "(labeled_objects domain only; default: auto)")
+    parser.add_argument("--annotations-dir", default=None,
+                        help="VidVRD annotations dir (vidvrd domain; default: auto)")
+    parser.add_argument("--frames-dir", default=None,
+                        help="VidVRD frames dir (vidvrd domain; default: auto)")
+    parser.add_argument("--category", default=None,
+                        help="VidVRD category filter (vidvrd domain; default: all)")
     parser.add_argument("--num", type=int, default=50,
                         help="Number of states to extract (default: 50)")
     parser.add_argument("--output", default=None,
@@ -206,6 +255,15 @@ def main():
             dataset_path=args.dataset_path,
             images_dir=args.images_dir,
             num_examples=args.num,
+        )
+        print(f"  Per-state object names loaded for {len(object_names)} states")
+    elif args.domain == "vidvrd":
+        data, object_names, image_ids = load_vidvrd_data(
+            args.model_dir,
+            annotations_dir=args.annotations_dir,
+            frames_dir=args.frames_dir,
+            num_examples=args.num,
+            category=args.category,
         )
         print(f"  Per-state object names loaded for {len(object_names)} states")
     else:

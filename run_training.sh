@@ -1,53 +1,56 @@
 #!/bin/bash
-# run_training.sh — Submit with: sbatch run_training.sh
+# run_training.sh — Generic SLURM batch script for any FOSAE training run.
 #
-# Runs:
-#   python strips.py learn labeled_objects FirstOrderSAE \
-#       10 2 100 5 None None None sequential 5000 5000
+# Usage (direct sbatch with default vidvrd training):
+#   sbatch run_training.sh
 #
-# Before first submission, create the logs directory:
-#   mkdir -p logs/
+# Usage (custom command via env var):
+#   sbatch --export=ALL,TRAIN_CMD="python3 strips.py learn vidvrd FirstOrderSAE 40 2 20 None None sequential 5000 None None 3 dog" run_training.sh
 #
-# Monitor after submission:
-#   squeue -u $USER                          # check queue position / status
-#   tail -f logs/fosae-learn.<JOBID>.out     # watch live output
-#   seff <JOBID>                             # resource usage report (after job ends)
-#   sacct -j <JOBID> --format=JobID,State,ExitCode,Elapsed,MaxRSS
+# Usage (preferred — through the wrapper):
+#   bash sh/submit.sh                              # all-cat vidvrd
+#   CATEGORY=person bash sh/submit.sh              # per-category
+#   FPS=5 EPOCH=8000 GPUS=2 bash sh/submit.sh
+#
+# Monitor:
+#   squeue -u $USER
+#   tail -f logs/<job-name>.<JOBID>.out
+#   seff <JOBID>
 
-# ── SLURM directives ──────────────────────────────────────────────────────────
-#SBATCH --job-name=fosae-learn
+# ── Default SLURM directives (override via sbatch CLI / wrapper) ─────────────
+#SBATCH --job-name=fosae-train
 #SBATCH --partition=gpu
 #SBATCH --gpus=1
-# GPU SKU constraint: disabled by default. The exact SKU names depend on which
-# nodes your account can access — verify with:  node_feat -p gpu | grep GPU_SKU
-# Then uncomment and fill in, e.g.:
-##SBATCH --constraint="GPU_SKU:TESLA_V100_PCIE|GPU_SKU:TESLA_V100_SXM2|GPU_SKU:TESLA_P100_PCIE"
-# Alternatively use GPU_MEM to require at least 16 GB VRAM:
-##SBATCH --constraint="GPU_MEM:16GB"
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=16G
+#SBATCH --mem=32G
 #SBATCH --time=24:00:00
-#SBATCH --output=logs/fosae-learn.%j.out
-#SBATCH --error=logs/fosae-learn.%j.err
-# Uncomment and fill in to receive email alerts:
+#SBATCH --output=logs/fosae-train.%j.out
+#SBATCH --error=logs/fosae-train.%j.err
+# GPU SKU constraint: uncomment + adjust if your account requires it
+# Run `node_feat -p gpu | grep GPU_SKU` to list available SKUs.
+##SBATCH --constraint="GPU_SKU:TESLA_V100_PCIE|GPU_SKU:TESLA_V100_SXM2"
+##SBATCH --constraint="GPU_MEM:16GB"
 ##SBATCH --mail-type=BEGIN,END,FAIL
 ##SBATCH --mail-user=yourname@stanford.edu
 
-set -eo pipefail  # no -u: venv activate script references unset vars
+set -eo pipefail  # no -u: venv activate references unset vars
 
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# ── Default training command (overridable via TRAIN_CMD env var) ─────────────
+DEFAULT_TRAIN_CMD="python3 strips.py learn vidvrd FirstOrderSAE 40 2 20 None None sequential 5000 None None 3"
+TRAIN_CMD="${TRAIN_CMD:-${DEFAULT_TRAIN_CMD}}"
+
 # ── Header ────────────────────────────────────────────────────────────────────
 echo "================================================================"
-echo "  Job ID   : ${SLURM_JOB_ID}"
-echo "  Node     : ${SLURMD_NODENAME}"
-echo "  Started  : $(date)"
-echo "  Dir      : ${PROJECT_DIR}"
+echo "  Job ID    : ${SLURM_JOB_ID:-N/A}"
+echo "  Node      : ${SLURMD_NODENAME:-N/A}"
+echo "  Started   : $(date)"
+echo "  Dir       : ${PROJECT_DIR}"
+echo "  TRAIN_CMD : ${TRAIN_CMD}"
 echo "================================================================"
 
 # ── Bootstrap environment ─────────────────────────────────────────────────────
-# Loads gcc/python/cuda/cuDNN modules and activates the latplan venv.
-# sherlock_env.sh is tolerant of missing modules (prints warnings, does not exit).
 source "${PROJECT_DIR}/sh/sherlock_env.sh"
 
 # ── Verify GPU is visible ─────────────────────────────────────────────────────
@@ -62,21 +65,19 @@ print("TF visible devices:", devs)
 assert any("GPU" in d for d in devs), "No GPU detected -- job will be very slow on CPU"
 PYEOF
 
-# ── Prepare output directory ─────────────────────────────────────────────────
-mkdir -p "${PROJECT_DIR}/out"
+# ── Prepare output / logs directories ────────────────────────────────────────
+mkdir -p "${PROJECT_DIR}/out" "${PROJECT_DIR}/logs"
 
 # ── Run training ──────────────────────────────────────────────────────────────
 echo ""
 echo "--- Training start: $(date) ---"
 cd "${PROJECT_DIR}"
-python3 strips.py learn labeled_objects FirstOrderSAE \
-    10 2 100 5 None None None sequential 5000 5000 9000
+eval "${TRAIN_CMD}"
 echo ""
 echo "--- Training end: $(date) ---"
 
-# ── Summarize output ──────────────────────────────────────────────────────────
+# ── Summarise output ──────────────────────────────────────────────────────────
 echo ""
 echo "--- Output files ---"
-ls -lh "${PROJECT_DIR}/out/labeled_objects/" 2>/dev/null \
-    || echo "(out/labeled_objects/ not found)"
+ls -lhR "${PROJECT_DIR}/out" 2>/dev/null | head -40
 echo "================================================================"

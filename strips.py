@@ -479,7 +479,8 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
 def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
            annotations_dir=None, frames_dir=None,
            transition_mode="sequential",
-           epoch=5000, max_videos=None, batch_size=None):
+           epoch=5000, max_videos=None, batch_size=None,
+           fps=3, category=None):
     """Train FOSAE on ImageNet-VidVRD. Download first: bash sh/download_vidvrd.sh"""
     from latplan.puzzles.puzzle_vidvrd import build_dataset, build_transitions, PICSIZE, MAX_OBJECTS
     from latplan.puzzles.util import preprocess
@@ -498,10 +499,13 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
+    if frames_dir is None:
+        frames_dir = os.path.join(DATA_DIR, "vidvrd", f"frames_{fps}fps", "train")
+
     print("Loading VidVRD dataset...")
     images, bboxes, all_object_names, frame_ids = build_dataset(
         annotations_dir=annotations_dir, frames_dir=frames_dir,
-        max_videos=max_videos)
+        max_videos=max_videos, category_filter=category)
 
     num_states, num_objs = len(images), images.shape[1]
     print(f"Loaded {num_states} frames, {num_objs} objects each")
@@ -535,8 +539,9 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     _U = parameters.get('U', [default_parameters.get('U', 'x')])[0]
     _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
     _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
-    run_tag  = f"{aeclass}_U{_U}_A{_A}_P{_P}"
-    out_path = os.path.join(OUT_DIR, "vidvrd", run_tag)
+    run_tag    = f"{aeclass}_U{_U}_A{_A}_P{_P}"
+    domain_tag = f"video-{category}" if category else "vidvrd"
+    out_path   = os.path.join(OUT_DIR, domain_tag, run_tag)
     os.makedirs(out_path, exist_ok=True)
 
     ae = run(out_path, train, val, parameters)

@@ -1,43 +1,36 @@
-# ============================================================
-# Generated Datasets  (reproducible via setup-dataset.py)
-# ============================================================
-data/
+# Generated datasets (reproducible via setup-dataset.py / sh/download_vidvrd.sh)
 data/*.npz
 data/*.npy
+data/blocks-*/
+data/blocks-*.npz
+data/vidvrd/raw/
+data/vidvrd/frames_*fps/
+data/vidvrd/videos_tmp/
+data/vidvrd/failed_videos.txt
+data/gen/annotated_images/
+notebooks/fiftyone_data/
 latplan/puzzles/*.npz
 latplan/puzzles/*.npy
-notebooks/fiftyone_data/
-# ============================================================
-# Training Outputs  (reproducible by training)
-# ============================================================
-out/
+data/*
+# Training outputs (reproducible by training)
+out/*
 !out/.gitkeep
 samples/
 original-repo/
-# Old-style training output dirs at project root
 blocks-4-4/
 blocks-5-3/
+logs/
 
-# ============================================================
-# Keras / TensorFlow
-# ============================================================
-**/logs/
+# Keras / TensorFlow / SLURM artefacts
 **/events.out.tfevents.*
-
-# ============================================================
-# Lock files
-# ============================================================
 **/lock
+slurm-*.out
 
-# ============================================================
-# Virtual environment and Keras config (kept inside project)
-# ============================================================
+# Virtual env + Keras config (kept inside project, not pushed)
 venv/
 .keras/
 
-# ============================================================
 # Python
-# ============================================================
 __pycache__/
 *.pyc
 *.pyo
@@ -47,20 +40,14 @@ __pycache__/
 dist/
 build/
 
-# ============================================================
 # OS / IDE
-# ============================================================
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
 .claude/
-
-# ============================================================
-# Old / intermediate generation artefacts
-# ============================================================
-data/gen/old/
-sh/
 AUDIT.md
-SPEC.md 
 CHANGES.md
+CLAUDE.md
+GUIDE.md
+SPEC.md

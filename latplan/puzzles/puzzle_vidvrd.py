@@ -23,11 +23,12 @@ from latplan.puzzles.puzzle_labeled_objects import (
     _crop_object, _scale_bbox_to_canvas, PATCH_SIZE, MAX_OBJECTS, CANVAS_H, CANVAS_W, PICSIZE)
 
 _DEFAULT_ANN_DIR    = os.path.join(os.path.dirname(__file__), "..", "..", "data", "vidvrd", "annotations")
-_DEFAULT_FRAMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "vidvrd", "frames")
+_DEFAULT_FRAMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "vidvrd", "frames_3fps")
 
 
 def build_dataset(annotations_dir=None, frames_dir=None,
-                  num_objs=MAX_OBJECTS, max_videos=None, split="train"):
+                  num_objs=MAX_OBJECTS, max_videos=None, split="train",
+                  category_filter=None):
     """
     Load all annotated frames from VidVRD.
 
@@ -62,12 +63,16 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         W, H   = ann["width"], ann["height"]
         tid_to_cat = {obj["tid"]: obj["category"] for obj in ann.get("subject/objects", [])}
 
+        if category_filter is not None and category_filter not in set(tid_to_cat.values()):
+            continue
+
         vid_frames_dir = os.path.join(frames_dir, vid_id)
 
         for fid, frame_objs in enumerate(ann.get("trajectories", [])):
             if not frame_objs:
                 continue
-            frame_path = os.path.join(vid_frames_dir, f"{fid+1:06d}.jpg")
+            # ffmpeg `-frame_pts true` writes source-frame-index filenames (B5).
+            frame_path = os.path.join(vid_frames_dir, f"{fid:06d}.jpg")
             if not os.path.exists(frame_path):
                 continue
 

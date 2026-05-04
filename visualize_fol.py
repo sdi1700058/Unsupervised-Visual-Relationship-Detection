@@ -297,12 +297,52 @@ def visualize_attention_overview(ae, data, object_names, output_dir, num_states=
     print(f"  Saved {filepath}")
 
 
+def load_vidvrd_data_and_renderer(ae, model_dir, num=10,
+                                   annotations_dir=None, frames_dir=None,
+                                   category=None):
+    """VidVRD analogue of load_labeled_objects_data_and_renderer."""
+    from latplan.puzzles.puzzle_vidvrd import build_dataset, PICSIZE
+    from latplan.puzzles.util import preprocess
+    from strips import bboxes_to_onehot
+    import json as _json
+
+    images, bboxes, per_state_names, frame_ids = build_dataset(
+        annotations_dir=annotations_dir, frames_dir=frames_dir,
+        category_filter=category)
+
+    names_path = os.path.join(model_dir, "object_names.json")
+    if os.path.isfile(names_path):
+        with open(names_path) as f:
+            saved = _json.load(f)
+        per_state_names = saved["object_names"]
+        frame_ids       = saved.get("frame_ids", saved.get("image_ids", frame_ids))
+
+    picsize_grid = (np.array(PICSIZE) // 5).astype(int)
+    Y, X = picsize_grid[0], picsize_grid[1]
+    num_states, num_objs = images.shape[0], images.shape[1]
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    states = np.concatenate(
+        (images.reshape   ((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))),
+        axis=-1)
+
+    states          = states[:num]
+    per_state_names = per_state_names[:num]
+    flat_names      = per_state_names[0] if per_state_names else []
+
+    render_fn, _ = ae.blocks_renderer()
+    return states, flat_names, render_fn, per_state_names
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Visualize FOL predicates from trained FOSAE")
     parser.add_argument("model_dir", help="Path to trained model directory")
     parser.add_argument("--domain", default="puzzle",
-                        choices=["puzzle", "blocks", "labeled_objects"])
+                        choices=["puzzle", "blocks", "labeled_objects", "vidvrd"])
     parser.add_argument("--type", default="mnist", help="Puzzle type (default: mnist)")
     parser.add_argument("--width", type=int, default=3)
     parser.add_argument("--height", type=int, default=3)
@@ -314,6 +354,12 @@ def main():
                         help="Path to JSON dataset (labeled_objects only)")
     parser.add_argument("--images-dir", default=None,
                         help="Path to raw_images/ dir (labeled_objects only)")
+    parser.add_argument("--annotations-dir", default=None,
+                        help="VidVRD annotations dir (vidvrd domain; default: auto)")
+    parser.add_argument("--frames-dir", default=None,
+                        help="VidVRD frames dir (vidvrd domain; default: auto)")
+    parser.add_argument("--category", default=None,
+                        help="VidVRD category filter (vidvrd domain; default: all)")
     args = parser.parse_args()
 
     # Setup
@@ -341,6 +387,13 @@ def main():
                 ae, args.model_dir, args.num,
                 dataset_path=args.dataset_path,
                 images_dir=args.images_dir)
+    elif args.domain == "vidvrd":
+        data, obj_names, render_fn, per_state_names = \
+            load_vidvrd_data_and_renderer(
+                ae, args.model_dir, args.num,
+                annotations_dir=args.annotations_dir,
+                frames_dir=args.frames_dir,
+                category=args.category)
     else:
         data, obj_names, render_fn = load_blocks_data_and_renderer(
             ae, args.track, args.num)
