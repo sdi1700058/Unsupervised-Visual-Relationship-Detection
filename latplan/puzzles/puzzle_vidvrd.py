@@ -25,6 +25,32 @@ from latplan.puzzles.puzzle_labeled_objects import (
 _DEFAULT_ANN_DIR    = os.path.join(os.path.dirname(__file__), "..", "..", "data", "vidvrd", "annotations")
 _DEFAULT_FRAMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "vidvrd", "frames_3fps")
 
+# Sidecar populated by build_dataset() so callers (strips.py, extract_fol.py,
+# visualize_fol.py) can audit which videos were actually loaded without
+# breaking the existing 4-tuple return signature.
+last_load_metadata = {}
+
+
+def _video_primary_category(ann):
+    """Primary subject of a VidVRD annotation = tid that appears in the most
+    frames (mean bbox area as tiebreaker). None if no trajectories/subjects."""
+    subjects = ann.get("subject/objects", [])
+    if not subjects:
+        return None
+    tid_to_cat = {o["tid"]: o["category"] for o in subjects}
+    tid_count = {}
+    tid_area  = {}
+    for frame_objs in ann.get("trajectories", []):
+        for o in frame_objs:
+            tid = o["tid"]
+            tid_count[tid] = tid_count.get(tid, 0) + 1
+            b = o["bbox"]
+            tid_area[tid] = tid_area.get(tid, 0) + (b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"])
+    if not tid_count:
+        return None
+    best_tid = max(tid_count, key=lambda t: (tid_count[t], tid_area.get(t, 0)))
+    return tid_to_cat.get(best_tid)
+
 
 def build_dataset(annotations_dir=None, frames_dir=None,
                   num_objs=MAX_OBJECTS, max_videos=None, split="train",
@@ -54,6 +80,9 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         ann_files = ann_files[:max_videos]
 
     images_list, bboxes_list, all_names, frame_ids = [], [], [], []
+    loaded_video_ids = []
+    loaded_primary   = {}
+    strict = os.environ.get("VIDVRD_STRICT_CATEGORY", "1") == "1"
 
     for ann_path in ann_files:
         with open(ann_path) as f:
@@ -62,9 +91,15 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         vid_id = ann["video_id"]
         W, H   = ann["width"], ann["height"]
         tid_to_cat = {obj["tid"]: obj["category"] for obj in ann.get("subject/objects", [])}
+        primary    = _video_primary_category(ann)
 
-        if category_filter is not None and category_filter not in set(tid_to_cat.values()):
-            continue
+        if category_filter is not None:
+            if strict:
+                if primary != category_filter:
+                    continue
+            else:
+                if category_filter not in set(tid_to_cat.values()):
+                    continue
 
         vid_frames_dir = os.path.join(frames_dir, vid_id)
 
@@ -103,8 +138,25 @@ def build_dataset(annotations_dir=None, frames_dir=None,
             all_names.append(names)
             frame_ids.append(f"{vid_id}/{fid:06d}")
 
+        if vid_id not in loaded_primary:
+            loaded_video_ids.append(vid_id)
+            loaded_primary[vid_id] = primary
+
     if not images_list:
         raise RuntimeError("No frames loaded. Check annotations_dir and frames_dir paths.")
+
+    last_load_metadata.clear()
+    last_load_metadata.update({
+        "category_filter": category_filter,
+        "strict": strict,
+        "video_ids": loaded_video_ids,
+        "primary_categories": loaded_primary,
+        "num_videos": len(loaded_video_ids),
+        "num_states": len(images_list),
+    })
+    print(f"[vidvrd-loader] category_filter={category_filter} strict={strict} "
+          f"loaded {len(loaded_video_ids)}/{len(ann_files)} videos, "
+          f"{len(images_list)} states")
 
     return (np.array(images_list, dtype=np.uint8),
             np.array(bboxes_list, dtype=np.uint16),

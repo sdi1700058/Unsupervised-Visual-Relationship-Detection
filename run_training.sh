@@ -1,41 +1,40 @@
 #!/bin/bash
 # run_training.sh — Generic SLURM batch script for any FOSAE training run.
 #
-# Usage (direct sbatch with default vidvrd training):
-#   sbatch run_training.sh
+# Preferred entry point: sh/submit.sh (sets all env vars + sbatch flags).
+# Direct usage:
+#   sbatch run_training.sh                                    # default vidvrd
+#   sbatch --export=ALL,TRAIN_CMD="python3 strips.py learn ..." run_training.sh
 #
-# Usage (custom command via env var):
-#   sbatch --export=ALL,TRAIN_CMD="python3 strips.py learn vidvrd FirstOrderSAE 40 2 20 None None sequential 5000 None None 3 dog" run_training.sh
+# Env vars consumed by post-train hooks (set automatically by sh/submit.sh):
+#   DOMAIN     — vidvrd | labeled_objects | puzzle | blocks (others skip hooks)
+#   AECLASS    — model class (default FirstOrderSAE)
+#   U, A, P    — hyperparameters that compose run_tag
+#   CATEGORY   — vidvrd category filter (or None / empty)
+#   EXTRACT_FOL=0  — disable extract_fol.py post-step
+#   VISUALIZE=0    — disable visualize_fol.py post-step
 #
-# Usage (preferred — through the wrapper):
-#   bash sh/submit.sh                              # all-cat vidvrd
-#   CATEGORY=person bash sh/submit.sh              # per-category
-#   FPS=5 EPOCH=8000 GPUS=2 bash sh/submit.sh
-#
-# Monitor:
-#   squeue -u $USER
-#   tail -f logs/<job-name>.<JOBID>.out
-#   seff <JOBID>
+# Monitor:  squeue -u $USER  /  tail -f logs/<job>.<JOBID>.out  /  seff <JOBID>
 
-# ── Default SLURM directives (override via sbatch CLI / wrapper) ─────────────
+# ── Default SLURM directives (sh/submit.sh overrides these via sbatch CLI) ───
 #SBATCH --job-name=fosae-train
 #SBATCH --partition=gpu
 #SBATCH --gpus=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=32G
 #SBATCH --time=24:00:00
-#SBATCH --output=logs/fosae-train.%j.out
-#SBATCH --error=logs/fosae-train.%j.err
-# GPU SKU constraint: uncomment + adjust if your account requires it
-# Run `node_feat -p gpu | grep GPU_SKU` to list available SKUs.
-##SBATCH --constraint="GPU_SKU:TESLA_V100_PCIE|GPU_SKU:TESLA_V100_SXM2"
+#SBATCH --output=logs/%x.%j.out
+#SBATCH --error=logs/%x.%j.err
 ##SBATCH --constraint="GPU_MEM:16GB"
 ##SBATCH --mail-type=BEGIN,END,FAIL
 ##SBATCH --mail-user=yourname@stanford.edu
 
 set -eo pipefail  # no -u: venv activate references unset vars
 
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="${SLURM_SUBMIT_DIR:-.}"
+if [[ ! -f "${PROJECT_DIR}/sh/sherlock_env.sh" ]]; then
+    PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
 # ── Default training command (overridable via TRAIN_CMD env var) ─────────────
 DEFAULT_TRAIN_CMD="python3 strips.py learn vidvrd FirstOrderSAE 40 2 20 None None sequential 5000 None None 3"
@@ -44,6 +43,7 @@ TRAIN_CMD="${TRAIN_CMD:-${DEFAULT_TRAIN_CMD}}"
 # ── Header ────────────────────────────────────────────────────────────────────
 echo "================================================================"
 echo "  Job ID    : ${SLURM_JOB_ID:-N/A}"
+echo "  Job Name  : ${SLURM_JOB_NAME:-N/A}"
 echo "  Node      : ${SLURMD_NODENAME:-N/A}"
 echo "  Started   : $(date)"
 echo "  Dir       : ${PROJECT_DIR}"
@@ -59,10 +59,14 @@ echo "--- GPU info ---"
 nvidia-smi --query-gpu=name,memory.total,driver_version --format=csv,noheader \
     || echo "WARNING: nvidia-smi unavailable"
 python3 - <<'PYEOF'
-from tensorflow.python.client import device_lib
-devs = [d.name for d in device_lib.list_local_devices()]
-print("TF visible devices:", devs)
-assert any("GPU" in d for d in devs), "No GPU detected -- job will be very slow on CPU"
+try:
+    from tensorflow.python.client import device_lib
+    devs = [d.name for d in device_lib.list_local_devices()]
+    print("TF visible devices:", devs)
+    if not any("GPU" in d for d in devs):
+        print("WARNING: No GPU detected — job will be very slow on CPU")
+except Exception as e:
+    print(f"WARNING: GPU check failed: {e}")
 PYEOF
 
 # ── Prepare output / logs directories ────────────────────────────────────────
@@ -72,12 +76,77 @@ mkdir -p "${PROJECT_DIR}/out" "${PROJECT_DIR}/logs"
 echo ""
 echo "--- Training start: $(date) ---"
 cd "${PROJECT_DIR}"
-eval "${TRAIN_CMD}"
+TRAIN_RC=0
+eval "${TRAIN_CMD}" || TRAIN_RC=$?
 echo ""
-echo "--- Training end: $(date) ---"
+echo "--- Training end: $(date) ---  (exit ${TRAIN_RC})"
+
+if [[ "${TRAIN_RC}" -ne 0 ]]; then
+    echo "[error] Training command failed. Skipping post-train hooks."
+    exit "${TRAIN_RC}"
+fi
+
+# ── Resolve OUT_DIR from training-side env vars (set by sh/submit.sh) ────────
+DOMAIN="${DOMAIN:-}"
+AECLASS="${AECLASS:-FirstOrderSAE}"
+U="${U:-}"; A="${A:-}"; P="${P:-}"
+CATEGORY="${CATEGORY:-}"
+RUN_TAG="${AECLASS}_U${U}_A${A}_P${P}"
+
+OUT_DIR=""
+case "${DOMAIN}" in
+    vidvrd)
+        if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" ]]; then
+            OUT_DIR="${PROJECT_DIR}/out/video-${CATEGORY}/${RUN_TAG}"
+        else
+            OUT_DIR="${PROJECT_DIR}/out/vidvrd/${RUN_TAG}"
+        fi
+        ;;
+    labeled_objects)
+        OUT_DIR="${PROJECT_DIR}/out/labeled_objects/${RUN_TAG}"
+        ;;
+esac
+
+# ── Post-train: extract_fol + visualize_fol if model was saved ───────────────
+echo ""
+echo "--- Post-train hooks ---"
+if [[ -z "${OUT_DIR}" ]]; then
+    echo "[skip] DOMAIN=${DOMAIN:-<unset>} not supported by post-train hooks. Manual:"
+    echo "       python3 extract_fol.py    <out_dir> --domain <domain>"
+    echo "       python3 visualize_fol.py  <out_dir> --domain <domain>"
+elif [[ ! -f "${OUT_DIR}/net0.h5" ]]; then
+    echo "[skip] ${OUT_DIR}/net0.h5 not found — training likely did not complete cleanly."
+else
+    echo "[info] Output dir: ${OUT_DIR}"
+    CAT_FLAG=()
+    if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" ]]; then
+        CAT_FLAG=(--category "${CATEGORY}")
+    fi
+
+    if [[ "${EXTRACT_FOL:-1}" == "1" ]]; then
+        echo "[run]  extract_fol.py"
+        python3 extract_fol.py "${OUT_DIR}" --domain "${DOMAIN}" "${CAT_FLAG[@]}" \
+            || echo "[warn] extract_fol failed (non-fatal)"
+    else
+        echo "[skip] EXTRACT_FOL=0"
+    fi
+
+    if [[ "${VISUALIZE:-1}" == "1" ]]; then
+        echo "[run]  visualize_fol.py --num ${VIS_NUM:-6}"
+        python3 visualize_fol.py "${OUT_DIR}" --domain "${DOMAIN}" \
+            --num "${VIS_NUM:-6}" "${CAT_FLAG[@]}" \
+            || echo "[warn] visualize_fol failed (non-fatal)"
+    else
+        echo "[skip] VISUALIZE=0"
+    fi
+fi
 
 # ── Summarise output ──────────────────────────────────────────────────────────
 echo ""
 echo "--- Output files ---"
-ls -lhR "${PROJECT_DIR}/out" 2>/dev/null | head -40
+if [[ -n "${OUT_DIR}" && -d "${OUT_DIR}" ]]; then
+    ls -lh "${OUT_DIR}/" | head -30
+else
+    ls -lhR "${PROJECT_DIR}/out" 2>/dev/null | head -40
+fi
 echo "================================================================"

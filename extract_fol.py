@@ -157,6 +157,19 @@ def load_vidvrd_data(model_dir, annotations_dir=None, frames_dir=None,
     from strips import bboxes_to_onehot
     import numpy as np
 
+    # Manifest mismatch guard — refuse to render frames from a different
+    # category than the model was trained on.
+    manifest_path = os.path.join(model_dir, "loaded_videos.json")
+    if os.path.isfile(manifest_path):
+        with open(manifest_path) as _f:
+            _m = json.load(_f)
+        _trained_cat = _m.get("category_filter")
+        if _trained_cat != category:
+            raise SystemExit(
+                f"ERROR: model_dir was trained with category={_trained_cat!r} "
+                f"but --category={category!r} was passed. Either drop --category "
+                f"or point at the matching out/video-{_trained_cat}/... model_dir.")
+
     images, bboxes, per_state_names, frame_ids = build_dataset(
         annotations_dir=annotations_dir, frames_dir=frames_dir,
         category_filter=category)

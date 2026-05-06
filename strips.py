@@ -482,6 +482,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
            epoch=5000, max_videos=None, batch_size=None,
            fps=3, category=None):
     """Train FOSAE on ImageNet-VidVRD. Download first: bash sh/download_vidvrd.sh"""
+    from latplan.puzzles import puzzle_vidvrd as _pv
     from latplan.puzzles.puzzle_vidvrd import build_dataset, build_transitions, PICSIZE, MAX_OBJECTS
     from latplan.puzzles.util import preprocess
     import json as _json
@@ -553,8 +554,16 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
 
     names_path = os.path.join(out_path, "object_names.json")
     with open(names_path, "w") as f:
-        _json.dump({"frame_ids": frame_ids, "object_names": all_object_names}, f, indent=2)
+        _json.dump({"frame_ids": frame_ids, "object_names": all_object_names,
+                    "category_filter": category}, f, indent=2)
     print(f"Object names saved to {names_path}")
+
+    manifest_path = os.path.join(out_path, "loaded_videos.json")
+    manifest = dict(_pv.last_load_metadata)
+    manifest.update({"fps": fps, "transition_mode": transition_mode})
+    with open(manifest_path, "w") as f:
+        _json.dump(manifest, f, indent=2)
+    print(f"Loaded-videos manifest saved to {manifest_path}")
 
 
 def main():

@@ -33,6 +33,7 @@ module load "${GCC_MODULE}"
 module load "${PYTHON_MODULE}"
 module load "${CUDA_MODULE}"
 module load "${CUDNN_MODULE}"
+module load ffmpeg
 
 echo "      Python: $(python3 --version)"
 echo "      nvcc:   $(nvcc --version 2>/dev/null | tail -1 || echo 'NOT FOUND')"

@@ -15,6 +15,22 @@ DATA_DIR="${PROJECT_DIR}/data/vidvrd"
 RAW_DIR="${DATA_DIR}/raw"
 ANN_DIR="${DATA_DIR}/annotations"
 FPS="${FPS:-1}"
+if (( FPS < 1 )); then
+    echo "ERROR: FPS must be >= 1. Got FPS=${FPS}." >&2
+    exit 2
+fi
+if (( FPS > 30 )); then
+    echo "WARN: FPS=${FPS} > typical source fps (25-30). Many duplicate frames expected." >&2
+fi
+
+# Parallelism + staging area. On Sherlock the Lustre/GPFS $SCRATCH is slow at
+# many-small-file create(). Stage to fast local NVMe ($L_SCRATCH or $TMPDIR),
+# then mv the per-video dir into FRAMES_DIR at the end.
+JOBS="${JOBS:-${SLURM_CPUS_PER_TASK:-$(nproc 2>/dev/null || echo 4)}}"
+STAGE_BASE="${STAGE_DIR:-${L_SCRATCH:-${TMPDIR:-/tmp}}}"
+STAGE_DIR="${STAGE_BASE}/vidvrd_extract_$$"
+mkdir -p "${STAGE_DIR}"
+trap 'rm -rf "${STAGE_DIR}"' EXIT
 if [[ "${FPS}" == "1" ]]; then
     FRAMES_DIR="${DATA_DIR}/frames"
 else
@@ -88,11 +104,15 @@ done
 FAILED_LOG="${RAW_DIR}/failed_videos.txt"
 > "${FAILED_LOG}"
 
-echo "[2] Extracting frames at ${FPS}fps..."
-find "${TMPVID}" -name "*.mp4" -print0 | while IFS= read -r -d '' VID; do
-    VID_ID="$(basename "${VID}" .mp4)"
+echo "[2] Extracting frames at ${FPS}fps using ${JOBS} parallel ffmpeg jobs..."
+echo "    Stage dir: ${STAGE_DIR}"
+echo "    Final dir: ${FRAMES_DIR}"
 
-    # Check if this video belongs to train or test
+extract_one() {
+    local VID="$1"
+    local VID_ID SPLIT_DIR OUT STAGE_OUT SKIP
+    VID_ID="$(basename -- "${VID}" .mp4)"
+
     if [[ -f "${ANN_DIR}/train/${VID_ID}.json" ]]; then
         SPLIT_DIR="${FRAMES_DIR}/train"
     elif [[ -f "${ANN_DIR}/test/${VID_ID}.json" ]]; then
@@ -100,23 +120,36 @@ find "${TMPVID}" -name "*.mp4" -print0 | while IFS= read -r -d '' VID; do
     else
         SPLIT_DIR="${FRAMES_DIR}"
     fi
-
     OUT="${SPLIT_DIR}/${VID_ID}"
-    # Skip if frames already exist for this video
-    if [[ -d "${OUT}" && -n "$(ls -A ${OUT} 2>/dev/null)" ]]; then
+
+    if [[ -d "${OUT}" && -n "$(ls -A "${OUT}" 2>/dev/null)" ]]; then
         echo "  [skip] ${VID_ID}"
-        continue
+        return 0
     fi
-    mkdir -p "${OUT}"
+
+    STAGE_OUT="${STAGE_DIR}/${VID_ID}"
+    mkdir -p "${STAGE_OUT}" "${SPLIT_DIR}"
     SKIP=$((30 / FPS))
-    if ffmpeg -i "${VID}" -vf "select='not(mod(n,${SKIP}))'" -vsync vfr -frame_pts true -q:v 2 "${OUT}/%06d.jpg" -loglevel error 2>/dev/null; then
+    (( SKIP < 1 )) && SKIP=1   # FPS > 30: keep every source frame
+
+    if ffmpeg -i "${VID}" -vf "select='not(mod(n,${SKIP}))'" \
+              -vsync vfr -frame_pts true -q:v 2 \
+              "${STAGE_OUT}/%06d.jpg" -loglevel error 2>/dev/null; then
+        # Move from local fast NVMe to final FRAMES_DIR (one mv per video,
+        # not per jpg → minimises Lustre metadata ops).
+        mv "${STAGE_OUT}" "${OUT}"
         echo "  [done] ${VID_ID}"
     else
         echo "  [fail] ${VID_ID}" >&2
         echo "${VID_ID}" >> "${FAILED_LOG}"
-        rm -rf "${OUT}"
+        rm -rf "${STAGE_OUT}" "${OUT}"
     fi
-done
+}
+export -f extract_one
+export FPS ANN_DIR FRAMES_DIR STAGE_DIR FAILED_LOG
+
+find "${TMPVID}" -name "*.mp4" -print0 \
+    | xargs -0 -n1 -P "${JOBS}" -I{} bash -c 'extract_one "$@"' _ {}
 
 VIDEO_COUNT=$(find "${FRAMES_DIR}" -mindepth 2 -maxdepth 2 -type d 2>/dev/null | wc -l)
 FAIL_COUNT=$(wc -l < "${FAILED_LOG}" 2>/dev/null || echo 0)
