@@ -146,155 +146,167 @@ def plot_attention_heatmap(ax, attention_matrix, title="", object_names=None):
 
 def visualize_single_state(ae, state, render_fn, object_names, state_idx,
                            output_dir, confidence_threshold=0.5):
-    """Create a single visualization for one state.
+    """Per-state figures — SPEC §V6 / D2-D4: ONE concept per PNG, w/ caption.md.
 
-    Layout:
-    - Left: original rendered image + reconstruction
-    - Middle: attention heatmaps per predicate unit
-    - Right: FOL predicate text
-    """
+    Emits (per state i, given U predicate units):
+      recon_<i>_original.png
+      recon_<i>_reconstruction.png
+      recon_<i>_diff.png
+      latent_<i>.png
+      attention_<i>_unit<u>.png   (× U)
+      fol_<i>.png
+    Each is accompanied by a `<name>.caption.md` sidecar."""
+    from viz.io import save_with_caption
+    from latplan.util.fol import extract_fol_from_model
+
     U = ae.parameters['U']
     P = ae.parameters['P']
     A = ae.parameters['A']
-    num_objs = state.shape[0]
 
-    x = state[np.newaxis]  # (1, num_objs, num_features)
+    x         = state[np.newaxis]            # (1, num_objs, F)
+    attention = ae.encode_attention(x)[0]    # (U, A, num_objs)
+    latent    = ae.encode(x)[0]              # (U*P,)
+    recon     = ae.autoencode(x)             # (1, num_objs, F)
 
-    # Get model outputs
-    attention = ae.encode_attention(x)[0]  # (U, A, num_objs)
-    latent = ae.encode(x)[0]               # (U*P,)
-    recon = ae.autoencode(x)               # (1, num_objs, num_features)
-
-    # Render images
     x_rendered = render_fn(x)[0]
     y_rendered = render_fn(recon)[0]
 
-    # Extract FOL
-    from latplan.util.fol import extract_fol_from_model
-    results = extract_fol_from_model(ae, x, object_names=object_names,
-                                     confidence_threshold=confidence_threshold)
-    fol_text = format_fol_state(results[0], show_negated=False, show_confidence=False)
+    # D2.1 — original
+    fig, ax = plt.subplots(figsize=(4, 3))
+    if x_rendered.ndim == 2: ax.imshow(x_rendered, cmap='gray')
+    else:                    ax.imshow(np.clip(x_rendered, 0, 1))
+    ax.axis('off'); ax.set_title(f"State {state_idx}: input scene")
+    save_with_caption(fig, os.path.join(output_dir, f"recon_{state_idx}_original"),
+        what=f"Object patches placed on the FOSAE canvas at their ground-truth bbox positions for input state #{state_idx}.",
+        why="Side-by-side with the reconstruction this is the most direct evidence FOSAE 'sees' the world: did the autoencoder preserve spatial layout and per-object appearance?",
+        how_to_read="If your domain is image-based each tracked object's silhouette should be recognisable; the canvas margin is the decoded-bbox geometry, NOT the original photo background.")
 
-    # --- Figure layout ---
-    # --- Image 1: Reconstruction, Original, Difference, Latent Code ---
-    fig1 = plt.figure(figsize=(8, 4))
-    gs1 = gridspec.GridSpec(2, 2, width_ratios=[1, 1])
+    # D2.2 — reconstruction
+    fig, ax = plt.subplots(figsize=(4, 3))
+    if y_rendered.ndim == 2: ax.imshow(y_rendered, cmap='gray')
+    else:                    ax.imshow(np.clip(y_rendered, 0, 1))
+    ax.axis('off'); ax.set_title(f"State {state_idx}: decoded reconstruction")
+    save_with_caption(fig, os.path.join(output_dir, f"recon_{state_idx}_reconstruction"),
+        what=f"Reconstruction of state #{state_idx} after a full encode → decode pass through FOSAE.",
+        why="If reconstruction visibly degrades (blur, object loss, ghosting) the bottleneck isn't carrying enough information — usually fixed by raising U×P or the preencoder dim (cf. V10).",
+        how_to_read=f"Compare against `recon_{state_idx}_original.png`. Look for: all objects present? colours/shapes recognisable? positions roughly correct?")
 
-    # Original
-    ax_orig = fig1.add_subplot(gs1[0, 0])
-    if x_rendered.ndim == 2:
-        ax_orig.imshow(x_rendered, cmap='gray')
-    else:
-        ax_orig.imshow(np.clip(x_rendered, 0, 1))
-    ax_orig.set_title("Original", fontsize=9)
-    ax_orig.axis('off')
-
-    # Reconstruction
-    ax_recon = fig1.add_subplot(gs1[1, 0])
-    if y_rendered.ndim == 2:
-        ax_recon.imshow(y_rendered, cmap='gray')
-    else:
-        ax_recon.imshow(np.clip(y_rendered, 0, 1))
-    ax_recon.set_title("Reconstruction", fontsize=9)
-    ax_recon.axis('off')
-
-    # Difference
-    ax_diff = fig1.add_subplot(gs1[0, 1])
+    # D2.3 — diff
+    fig, ax = plt.subplots(figsize=(4, 3))
     diff = np.abs(y_rendered - x_rendered)
-    if diff.ndim == 2:
-        ax_diff.imshow(diff, cmap='hot')
-    else:
-        ax_diff.imshow(np.clip(diff, 0, 1))
-    ax_diff.set_title("Difference", fontsize=9)
-    ax_diff.axis('off')
+    if diff.ndim == 2: ax.imshow(diff, cmap='hot')
+    else:              ax.imshow(np.clip(diff, 0, 1))
+    ax.axis('off'); ax.set_title(f"State {state_idx}: |original - reconstruction|")
+    save_with_caption(fig, os.path.join(output_dir, f"recon_{state_idx}_diff"),
+        what=f"Per-pixel absolute difference between the input scene and the reconstruction for state #{state_idx}.",
+        why="Bright regions = pixels the autoencoder is losing. Edge hotspots → bbox decoding errors; uniform background brightness → global appearance drift.",
+        how_to_read="Hotter colour = larger reconstruction error. Mostly-dark image = good reconstruction.")
 
-    # Latent code
-    ax_latent = fig1.add_subplot(gs1[1, 1])
+    # D2.4 — latent code (U × P heatmap)
+    fig, ax = plt.subplots(figsize=(4, 3))
     latent_2d = latent.round().reshape(U, P)
-    ax_latent.imshow(latent_2d, cmap='Greys', vmin=0, vmax=1, aspect='auto')
-    ax_latent.set_xlabel("Predicates (P)", fontsize=7)
-    ax_latent.set_ylabel("Units (U)", fontsize=7)
-    ax_latent.set_title("Latent Code", fontsize=9)
-    ax_latent.tick_params(labelsize=6)
+    ax.imshow(latent_2d, cmap='Greys', vmin=0, vmax=1, aspect='auto')
+    ax.set_xlabel("Predicates (P)"); ax.set_ylabel("Units (U)")
+    ax.set_title(f"State {state_idx}: latent code (U×P bits)")
+    save_with_caption(fig, os.path.join(output_dir, f"latent_{state_idx}"),
+        what=f"Binarised (Gumbel-Softmax rounded) U×P latent code for state #{state_idx}. Each cell = one symbolic proposition.",
+        why="The latent code IS the symbolic state. Visually-similar states should produce similar codes; structurally-different states should differ in many cells.",
+        how_to_read="Black = predicate fires (True), white = doesn't fire (False). Diff adjacent states (e.g. `latent_0` vs `latent_1`) to see which predicates encode the transition.")
 
-    fig1.suptitle(f"FOSAE Reconstruction  - State {state_idx}", fontsize=11, y=0.98)
-    fig1.tight_layout(rect=[0, 0, 1, 0.95])
-    filepath1 = os.path.join(output_dir, f"fol_state_{state_idx}_recon.png")
-    fig1.savefig(filepath1, dpi=150, bbox_inches='tight')
-    plt.close(fig1)
-    print(f"  Saved {filepath1}")
-
-    # --- Image 2: Attention Maps ---
-    n_attention_cols = min(U, 5)
-    fig2 = plt.figure(figsize=(2.5 * n_attention_cols, 4))
-    gs2 = gridspec.GridSpec(1, n_attention_cols)
-    for u_idx in range(n_attention_cols):
-        ax = fig2.add_subplot(gs2[0, u_idx])
-        att = attention[u_idx]
+    # D3 — per-unit attention
+    for u in range(U):
+        att      = attention[u]
         bindings = np.argmax(att, axis=-1)
-        preds = latent.round().reshape(U, P)[u_idx]
-        plot_attention_heatmap(
-            ax, att,
-            title=f"Unit {u_idx}\nbinds: {list(bindings)}\npreds: {preds.astype(int).tolist()}",
-            object_names=object_names)
-    fig2.suptitle(f"FOSAE Attention Maps  - State {state_idx}", fontsize=11, y=0.98)
-    fig2.tight_layout(rect=[0, 0, 1, 0.95])
-    filepath2 = os.path.join(output_dir, f"fol_state_{state_idx}_attention.png")
-    fig2.savefig(filepath2, dpi=150, bbox_inches='tight')
-    plt.close(fig2)
-    print(f"  Saved {filepath2}")
+        preds    = latent_2d[u]
+        fig, ax  = plt.subplots(figsize=(4, 3))
+        ax.imshow(att, cmap='Blues', vmin=0, vmax=1, aspect='auto')
+        ax.set_yticks(range(A)); ax.set_yticklabels([f"arg_{a}" for a in range(A)])
+        if object_names:
+            ax.set_xticks(range(len(object_names)))
+            ax.set_xticklabels(object_names, fontsize=7, rotation=45, ha='right')
+        ax.set_title(f"State {state_idx}: unit {u} attention")
+        save_with_caption(fig, os.path.join(output_dir, f"attention_{state_idx}_unit{u}"),
+            what=f"Per-argument attention weights for predicate unit #{u} on state #{state_idx}. Rows = arity slots `arg_0..arg_{A-1}`; columns = candidate objects.",
+            why=f"This is the predicate's grounding — which objects unit #{u} reads. Stable bindings across states ⇒ a learnt referent; thrashing bindings ⇒ unstable / collapsing predicate.",
+            how_to_read=f"Deeper blue = higher attention. Argmax bindings this state: {list(bindings)}; firing pattern this state: {preds.astype(int).tolist()}. A meaningful predicate should pick out 1-2 objects per argument.")
 
-    # --- Image 3: FOL Predicate List ---
-    fig3 = plt.figure(figsize=(6, 4))
-    ax_fol = fig3.add_subplot(111)
-    ax_fol.axis('off')
-    ax_fol.text(
-        0.0, 1.0, fol_text,
-        transform=ax_fol.transAxes,
-        fontsize=6, verticalalignment='top', fontfamily='monospace',
-        bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
-    fig3.suptitle(f"FOSAE FOL Predicates  - State {state_idx}", fontsize=11, y=0.98)
-    fig3.tight_layout(rect=[0, 0, 1, 0.95])
-    filepath3 = os.path.join(output_dir, f"fol_state_{state_idx}_predicates.png")
-    fig3.savefig(filepath3, dpi=150, bbox_inches='tight')
-    plt.close(fig3)
-    print(f"  Saved {filepath3}")
+    # D4 — FOL text card
+    results  = extract_fol_from_model(ae, x, object_names=object_names,
+                                      confidence_threshold=confidence_threshold)
+    fol_text = format_fol_state(results[0], show_negated=False, show_confidence=False)
+    fig, ax  = plt.subplots(figsize=(6, 4))
+    ax.axis('off')
+    ax.text(0.0, 1.0, fol_text, transform=ax.transAxes, fontsize=7,
+            verticalalignment='top', fontfamily='monospace',
+            bbox=dict(boxstyle='round', facecolor='lightyellow', alpha=0.8))
+    ax.set_title(f"State {state_idx}: extracted FOL predicates")
+    save_with_caption(fig, os.path.join(output_dir, f"fol_{state_idx}"),
+        what=f"Human-readable first-order-logic transcript of the predicates firing on state #{state_idx} above the {confidence_threshold:.2f} confidence threshold.",
+        why="This is the symbolic interpretation of the state. Empty cards or near-identical cards across distinct states ⇒ the FOSAE collapsed to a near-constant code (V10 P-budget too tight).",
+        how_to_read="Each line `predX(obj_a, obj_b, …)` + confidence score. Compare across adjacent states to see which predicates encode the transition.")
 
 
 def visualize_attention_overview(ae, data, object_names, output_dir, num_states=10):
-    """Create an overview plot of all attention patterns across states."""
+    """Per-domain summaries — SPEC §V6 / D4-D5.
+
+    Emits:
+      attention_avg_unit<u>.png      (× U)   — replaces legacy multi-panel grid
+      summary_recon_mse.png
+      summary_latent_entropy.png
+    """
+    from viz.io import save_with_caption
+
     U = ae.parameters['U']
     P = ae.parameters['P']
     A = ae.parameters['A']
 
-    attention = ae.encode_attention(data[:num_states])  # (N, U, A, num_objs)
-    latent = ae.encode(data[:num_states])                # (N, U*P)
+    attention = ae.encode_attention(data[:num_states])      # (N, U, A, num_objs)
+    avg_att   = attention.mean(axis=0)                      # (U, A, num_objs)
 
-    # Average attention across states
-    avg_attention = attention.mean(axis=0)  # (U, A, num_objs)
-
-    fig, axes = plt.subplots(2, (U+1)//2, figsize=(3*(U+1)//2, 6))
-    axes = axes.flatten()
-
+    # D5 — one figure per unit (replaces attention_overview.png grid)
     for u in range(U):
-        ax = axes[u]
-        im = ax.imshow(avg_attention[u], cmap='Blues', vmin=0, vmax=1, aspect='auto')
-        ax.set_title(f"Unit {u}", fontsize=9)
-        ax.set_yticks(range(A))
-        ax.set_yticklabels([f"a{a}" for a in range(A)], fontsize=7)
-        ax.set_xticks(range(len(object_names)))
-        ax.set_xticklabels(object_names, fontsize=5, rotation=45, ha='right')
+        fig, ax = plt.subplots(figsize=(4, 3))
+        ax.imshow(avg_att[u], cmap='Blues', vmin=0, vmax=1, aspect='auto')
+        ax.set_yticks(range(A)); ax.set_yticklabels([f"arg_{a}" for a in range(A)])
+        if object_names:
+            ax.set_xticks(range(len(object_names)))
+            ax.set_xticklabels(object_names, fontsize=7, rotation=45, ha='right')
+        ax.set_title(f"Unit {u}: mean attention over {num_states} states")
+        save_with_caption(fig, os.path.join(output_dir, f"attention_avg_unit{u}"),
+            what=f"Mean attention weights for predicate unit #{u} averaged across the first {num_states} test states.",
+            why=f"Per-state attention can drift; averaging reveals whether unit #{u} has a stable referent. Concentrated column ⇒ a learnt object binding; uniform ⇒ unit unused / collapsed.",
+            how_to_read="Look for one or two columns that dominate per row — that's the predicate's referent. Diffuse ⇒ raise P or refine the data.")
 
-    # Hide extra axes
-    for idx in range(U, len(axes)):
-        axes[idx].axis('off')
+    # D4.1 — per-frame reconstruction MSE
+    recon  = ae.autoencode(data[:num_states])
+    diff   = (recon - data[:num_states]) ** 2
+    while diff.ndim > 1:
+        diff = diff.mean(axis=-1)
+    fig, ax = plt.subplots(figsize=(6, 3))
+    ax.plot(diff, marker='o', linewidth=1)
+    ax.set_xlabel("test-state index"); ax.set_ylabel("MSE")
+    ax.set_title(f"Per-frame reconstruction MSE (first {num_states} test states)")
+    ax.grid(True, alpha=0.3)
+    save_with_caption(fig, os.path.join(output_dir, "summary_recon_mse"),
+        what=f"Per-frame reconstruction MSE across the first {num_states} test states.",
+        why="A flat low line is the success signal for the experimental thesis (FOSAE reconstructs the video world). Spikes localise failure cases; an upward trend ⇒ drift.",
+        how_to_read="Y-axis = feature-space MSE. < 0.05 is good for our realistic-image domains; > 0.2 ⇒ collapse / under-training.")
 
-    fig.suptitle(f"Average Attention Patterns (over {num_states} states)", fontsize=11)
-    fig.tight_layout(rect=[0, 0, 1, 0.95])
-    filepath = os.path.join(output_dir, "attention_overview.png")
-    fig.savefig(filepath, dpi=150, bbox_inches='tight')
-    plt.close(fig)
-    print(f"  Saved {filepath}")
+    # D4.2 — per-unit latent binarisation entropy
+    latent     = ae.encode(data[:num_states]).round().reshape((num_states, U, P))
+    p_one      = latent.mean(axis=0)                                                # (U, P)
+    eps        = 1e-8
+    entropy    = -(p_one * np.log2(p_one + eps) + (1 - p_one) * np.log2(1 - p_one + eps))
+    per_unit_H = entropy.mean(axis=1)
+    fig, ax    = plt.subplots(figsize=(6, 3))
+    ax.bar(range(U), per_unit_H)
+    ax.set_xlabel("Predicate unit index (U)"); ax.set_ylabel("Mean binarisation entropy (bits)")
+    ax.set_title(f"Per-unit latent entropy across {num_states} test states")
+    ax.set_ylim(0, 1)
+    save_with_caption(fig, os.path.join(output_dir, "summary_latent_entropy"),
+        what=f"Binarisation entropy of each predicate unit across {num_states} test states, averaged over the P propositions in that unit.",
+        why="Entropy 0 ⇒ the predicate always returns the same value (dead / collapsed unit). Entropy near 1 ⇒ healthy ~50/50 firing. A bar chart full of near-zeros is the V10 P-budget collapse signal.",
+        how_to_read="Tall bars = informative units; short bars = dead. Aim for the majority of bars in [0.4, 0.9]. If most < 0.1, raise P or lower regularisation.")
 
 
 def load_vidvrd_data_and_renderer(ae, model_dir, num=10,
