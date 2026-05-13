@@ -1,0 +1,53 @@
+# Generated datasets (reproducible via setup-dataset.py / sh/download_vidvrd.sh)
+data/*.npz
+data/*.npy
+data/blocks-*/
+data/blocks-*.npz
+data/vidvrd/raw/
+data/vidvrd/frames_*fps/
+data/vidvrd/videos_tmp/
+data/vidvrd/failed_videos.txt
+data/gen/annotated_images/
+notebooks/fiftyone_data/
+latplan/puzzles/*.npz
+latplan/puzzles/*.npy
+data/*
+# Training outputs (reproducible by training)
+out/*
+!out/.gitkeep
+samples/
+original-repo/
+blocks-4-4/
+blocks-5-3/
+logs/
+
+# Keras / TensorFlow / SLURM artefacts
+**/events.out.tfevents.*
+**/lock
+slurm-*.out
+
+# Virtual env + Keras config (kept inside project, not pushed)
+venv/
+.keras/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+.claude/
+AUDIT.md
+CHANGES.md
+CLAUDE.md
+GUIDE.md
+SPEC.md
