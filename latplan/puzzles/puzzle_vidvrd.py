@@ -22,8 +22,8 @@ from PIL import Image
 from latplan.puzzles.puzzle_labeled_objects import (
     _crop_object, _scale_bbox_to_canvas, PATCH_SIZE, MAX_OBJECTS, CANVAS_H, CANVAS_W, PICSIZE)
 
-_DEFAULT_ANN_DIR    = os.path.join(os.path.dirname(__file__), "..", "..", "data", "vidvrd", "annotations")
-_DEFAULT_FRAMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "vidvrd", "frames_3fps")
+_DEFAULT_ANN_DIR    = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd", "annotations")
+_DEFAULT_FRAMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd", "frames_3fps")
 
 # Sidecar populated by build_dataset() so callers (strips.py, extract_fol.py,
 # visualize_fol.py) can audit which videos were actually loaded without

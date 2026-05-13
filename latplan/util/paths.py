@@ -18,7 +18,8 @@ def find_dataset(filename):
         Absolute path to the dataset file.
     """
     import latplan
-    p = os.path.join(DATA_DIR, filename)
-    if os.path.exists(p):
-        return p
+    for p in (os.path.join(DATA_DIR, "npz", filename),
+              os.path.join(DATA_DIR, filename)):
+        if os.path.exists(p):
+            return p
     return os.path.join(latplan.__path__[0], "puzzles", filename)

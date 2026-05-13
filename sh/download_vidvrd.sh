@@ -11,7 +11,7 @@
 
 set -eo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DATA_DIR="${PROJECT_DIR}/data/vidvrd"
+DATA_DIR="${PROJECT_DIR}/data/video/vidvrd"
 RAW_DIR="${DATA_DIR}/raw"
 ANN_DIR="${DATA_DIR}/annotations"
 FPS="${FPS:-1}"

@@ -49,7 +49,10 @@ fi
 # ── SLURM-side params ────────────────────────────────────────────────────────
 JOB_TAG="${DOMAIN}"
 [[ "${CATEGORY}" != "None" && -n "${CATEGORY}" ]] && JOB_TAG="${DOMAIN}-${CATEGORY}"
-JOB_NAME="${JOB_NAME:-fosae-${JOB_TAG}}"
+# Unique per submission so concurrent jobs never collide in squeue / logs.
+# Override with JOB_NAME=... or set JOB_SUFFIX="" to disable the suffix.
+JOB_SUFFIX="${JOB_SUFFIX-$(date +%Y%m%d-%H%M%S)-$$}"
+JOB_NAME="${JOB_NAME:-fosae-${JOB_TAG}${JOB_SUFFIX:+-${JOB_SUFFIX}}}"
 PARTITION="${PARTITION:-gpu}"
 
 # Auto-estimate MEM/TIME/CONSTRAINT from dataset size (vidvrd only).

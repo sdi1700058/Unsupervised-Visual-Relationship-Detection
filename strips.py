@@ -501,7 +501,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
         default_parameters["batch_size"] = batch_size
 
     if frames_dir is None:
-        frames_dir = os.path.join(DATA_DIR, "vidvrd", f"frames_{fps}fps", "train")
+        frames_dir = os.path.join(DATA_DIR, "video", "vidvrd", f"frames_{fps}fps", "train")
 
     print("Loading VidVRD dataset...")
     images, bboxes, all_object_names, frame_ids = build_dataset(

@@ -19,7 +19,7 @@ def main():
     p.add_argument("--head", type=int, default=10)
     args = p.parse_args()
 
-    root = os.path.join(os.path.dirname(__file__), "data", "vidvrd")
+    root = os.path.join(os.path.dirname(__file__), "data", "video", "vidvrd")
     build_dataset(
         annotations_dir=os.path.join(root, "annotations", args.split),
         frames_dir=os.path.join(root, f"frames_{args.fps}fps", args.split),

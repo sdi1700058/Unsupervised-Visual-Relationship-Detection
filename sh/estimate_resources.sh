@@ -90,8 +90,8 @@ fi
 
 # ── Mode 2: heuristic from vidvrd dataset size ──────────────────────────────
 if [[ "${DOMAIN}" == "vidvrd" ]]; then
-    ANN_DIR="${PROJECT_DIR}/data/vidvrd/annotations/train"
-    FRAMES_DIR="${PROJECT_DIR}/data/vidvrd/frames_${FPS}fps/train"
+    ANN_DIR="${PROJECT_DIR}/data/video/vidvrd/annotations/train"
+    FRAMES_DIR="${PROJECT_DIR}/data/video/vidvrd/frames_${FPS}fps/train"
     if [[ -d "${ANN_DIR}" && -d "${FRAMES_DIR}" ]]; then
         CAT_ARG=()
         [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" ]] && CAT_ARG=(--category "${CATEGORY}")
