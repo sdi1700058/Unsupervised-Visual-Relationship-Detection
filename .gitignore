@@ -1,30 +1,3 @@
-# Generated datasets (reproducible via setup-dataset.py / sh/download_vidvrd.sh / sh/extract_ag_frames.sh)
-data/*.npz
-data/*.npy
-data/*
-notebooks/fiftyone_data/
-latplan/puzzles/*.npz
-latplan/puzzles/*.npy
-
-
-# Training outputs (reproducible by training)
-out/*
-!out/.gitkeep
-samples/
-original-repo/
-blocks-4-4/
-blocks-5-3/
-logs/
-
-# Keras / TensorFlow / SLURM artefacts
-**/events.out.tfevents.*
-**/lock
-slurm-*.out
-
-# Virtual env + Keras config (kept inside project, not pushed)
-venv/
-.keras/
-
 # Python
 __pycache__/
 *.pyc
@@ -40,4 +13,22 @@ build/
 Thumbs.db
 .vscode/
 .idea/
+
+# MY IGNORES
+out/*
+samples/
+original-repo/
+blocks-4-4/
+blocks-5-3/
+logs/
+data/*
+notebooks/fiftyone_data/
+latplan/puzzles/*.npz
+latplan/puzzles/*.npy
 .claude/
+
+venv/
+.keras/
+**/events.out.tfevents.*
+**/lock
+slurm-*.out

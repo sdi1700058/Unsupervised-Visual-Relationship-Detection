@@ -19,8 +19,8 @@ float_formatter = lambda x: "%.5f" % x
 import sys
 np.set_printoptions(threshold=sys.maxsize,formatter={'float_kind':float_formatter})
 
-# ── Canonical data directory ───────────────────────────────────────────
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+# ── Canonical data directory (npz cache root per SPEC §I6) ─────────────
+DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "npz")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 def _save_and_symlink(data_path, filename):
