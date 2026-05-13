@@ -47,7 +47,8 @@ python3 -c "
 import time, importlib
 p = importlib.import_module('${MOD}')
 t = time.time()
-p.build_dataset(category_filter='${CATEGORY}', fps=${FPS}, split='${SPLIT}')
+# fps quoted so 'native' (AG) doesn't trip NameError; downstream f-string casts work for both str + int
+p.build_dataset(category_filter='${CATEGORY}', fps='${FPS}', split='${SPLIT}')
 print('elapsed', round(time.time()-t, 2))
 "
 
