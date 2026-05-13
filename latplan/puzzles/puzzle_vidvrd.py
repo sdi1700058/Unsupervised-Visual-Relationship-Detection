@@ -23,8 +23,10 @@ from latplan.puzzles.puzzle_labeled_objects import (
     _crop_object, _scale_bbox_to_canvas, PATCH_SIZE, MAX_OBJECTS, CANVAS_H, CANVAS_W, PICSIZE)
 from latplan.util.cache import npz_cache_path, load_cached, save_cache
 
-_DEFAULT_ANN_DIR    = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd", "annotations")
-_DEFAULT_FRAMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd", "frames_3fps")
+_DEFAULT_ROOT       = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd")
+_DEFAULT_ANN_DIR    = os.path.join(_DEFAULT_ROOT, "annotations")
+def _default_frames_dir(fps):
+    return os.path.join(_DEFAULT_ROOT, f"frames_{fps}fps")
 
 # Sidecar populated by build_dataset() so callers (strips.py, extract_fol.py,
 # visualize_fol.py) can audit which videos were actually loaded without
@@ -72,7 +74,7 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     if annotations_dir is None:
         annotations_dir = os.path.normpath(os.path.join(_DEFAULT_ANN_DIR, split))
     if frames_dir is None:
-        frames_dir = os.path.normpath(os.path.join(_DEFAULT_FRAMES_DIR, split))
+        frames_dir = os.path.normpath(os.path.join(_default_frames_dir(fps), split))
 
     # SPEC §V7-V9: per-category npz cache short-circuit (skipped when category_filter is None).
     cache_path = npz_cache_path("video", "vidvrd", category_filter, fps) if max_videos is None else None
