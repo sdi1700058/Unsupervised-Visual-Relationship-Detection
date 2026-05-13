@@ -566,6 +566,99 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     print(f"Loaded-videos manifest saved to {manifest_path}")
 
 
+def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
+                 annotations_dir=None, frames_dir=None,
+                 transition_mode="sequential",
+                 epoch=5000, max_videos=None, batch_size=None,
+                 fps="native", category=None):
+    """Train FOSAE on ActionGenome (Charades videos + AG bbox/relation annotations).
+
+    Mirrors `vidvrd()`: per-category sequential transitions, blocks_activation,
+    preencoder=256, lr=0.0001. Output dir `out/video/actiongenome/<class>/<run_tag>/`
+    per SPEC C15."""
+    from latplan.domains.video import actiongenome as _ag
+    from latplan.domains.video.actiongenome import build_dataset, build_transitions
+    from latplan.puzzles.puzzle_labeled_objects import PICSIZE, MAX_OBJECTS
+    from latplan.puzzles.util import preprocess
+    import json as _json
+
+    for name, value in dict(U=U, A=A, P=P).items():
+        if value is not None:
+            parameters[name] = [value]
+    default_parameters["aeclass"]    = aeclass
+    default_parameters["activation"] = "self.blocks_activation"
+    default_parameters["epoch"]      = epoch
+    parameters['preencoder_layers']            = [2]
+    parameters['preencoder_dimention']         = [256]
+    parameters['preencoder_output_activation'] = [("linear", "MSE")]
+    parameters['lr']                           = [0.0001]
+    if batch_size is not None:
+        default_parameters["batch_size"] = batch_size
+
+    print("Loading ActionGenome dataset...")
+    images, bboxes, all_object_names, frame_ids = build_dataset(
+        annotations_dir=annotations_dir, frames_dir=frames_dir,
+        max_videos=max_videos, category_filter=category, fps=fps)
+
+    num_states, num_objs = len(images), images.shape[1]
+    print(f"Loaded {num_states} frames, {num_objs} objects each")
+
+    picsize      = np.array(PICSIZE)
+    picsize_grid = (picsize // 5).astype(int)
+    Y, X         = picsize_grid[0], picsize_grid[1]
+    default_parameters["picsize_grid"] = list(map(int, picsize_grid))
+    default_parameters["picsize"]      = list(map(int, picsize))
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    all_states = np.concatenate(
+        (images.reshape((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))), axis=-1).astype(np.float32)
+    del images, bboxes_onehot
+
+    transitions = build_transitions(all_states, frame_ids, mode=transition_mode)
+    num_trans   = transitions.shape[1]
+    print(f"Built {num_trans} transitions (mode='{transition_mode}')")
+
+    states = transitions.reshape((num_trans * 2, num_objs, -1))
+    if num_states < 100:
+        train = val = test = all_states
+    else:
+        train = states[:int(len(states) * 0.9)]
+        val   = states[int(len(states) * 0.9):int(len(states) * 0.95)]
+        test  = states[int(len(states) * 0.95):]
+
+    _U = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    run_tag = f"{aeclass}_U{_U}_A{_A}_P{_P}"
+    # SPEC C15: out/<modality>/<dataset>/<category>/<run_tag>/ ; all-cat = `_all`
+    cat_seg  = (category or "_all").replace("/", "_")
+    out_path = os.path.join(OUT_DIR, "video", "actiongenome", cat_seg, run_tag)
+    os.makedirs(out_path, exist_ok=True)
+
+    ae = run(out_path, train, val, parameters)
+    show_summary(ae, train, test)
+    plot_autoencoding_image(ae, test, train, "blocks")
+
+    dump_states (ae, all_states)
+    dump_actions(ae, transitions)
+
+    names_path = os.path.join(out_path, "object_names.json")
+    with open(names_path, "w") as f:
+        _json.dump({"frame_ids": frame_ids, "object_names": all_object_names,
+                    "category_filter": category}, f, indent=2)
+    print(f"Object names saved to {names_path}")
+
+    manifest_path = os.path.join(out_path, "loaded_videos.json")
+    manifest = dict(_ag.last_load_metadata)
+    manifest.update({"fps": fps, "transition_mode": transition_mode})
+    with open(manifest_path, "w") as f:
+        _json.dump(manifest, f, indent=2)
+    print(f"Loaded-videos manifest saved to {manifest_path}")
+
+
 def main():
     global mode, sae_path
     import sys

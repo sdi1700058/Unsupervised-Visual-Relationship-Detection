@@ -25,6 +25,9 @@ python3 -c "from latplan.util.paths import DATA_DIR, OUT_DIR; print('  DATA_DIR:
 python3 -c "from latplan.puzzles.puzzle_vidvrd import PATCH_SIZE, MAX_OBJECTS, PICSIZE" \
     && ok "puzzle_vidvrd import" || fail "puzzle_vidvrd import"
 
+python3 -c "from latplan.domains.video.actiongenome import build_dataset; from latplan.util.cache import npz_cache_path" \
+    && ok "actiongenome + cache import" || fail "actiongenome + cache import"
+
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"
 [[ ${FAIL} -eq 0 ]] && exit 0 || exit 1
