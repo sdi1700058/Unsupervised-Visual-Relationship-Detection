@@ -1,19 +1,7 @@
 # Generated datasets (reproducible via setup-dataset.py / sh/download_vidvrd.sh / sh/extract_ag_frames.sh)
 data/*.npz
 data/*.npy
-data/npz/
-data/blocks-*/
-data/blocks-*.npz
-data/video/vidvrd/raw/
-data/video/vidvrd/frames_*fps/
-data/video/vidvrd/videos_tmp/
-data/video/vidvrd/failed_videos.txt
-data/video/actiongenome/charades_videos/
-data/video/actiongenome/frames_*fps/
-data/video/actiongenome/failed_videos.txt
-data/gen/annotated_images/
-data/gen/raw_images/
-data/gen/raw_images.tar.gz
+data/*
 notebooks/fiftyone_data/
 latplan/puzzles/*.npz
 latplan/puzzles/*.npy
