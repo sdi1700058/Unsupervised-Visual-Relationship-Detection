@@ -21,6 +21,7 @@ from PIL import Image
 
 from latplan.puzzles.puzzle_labeled_objects import (
     _crop_object, _scale_bbox_to_canvas, PATCH_SIZE, MAX_OBJECTS, CANVAS_H, CANVAS_W, PICSIZE)
+from latplan.util.cache import npz_cache_path, load_cached, save_cache
 
 _DEFAULT_ANN_DIR    = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd", "annotations")
 _DEFAULT_FRAMES_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd", "frames_3fps")
@@ -54,7 +55,7 @@ def _video_primary_category(ann):
 
 def build_dataset(annotations_dir=None, frames_dir=None,
                   num_objs=MAX_OBJECTS, max_videos=None, split="train",
-                  category_filter=None):
+                  category_filter=None, fps=3):
     """
     Load all annotated frames from VidVRD.
 
@@ -72,6 +73,18 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         annotations_dir = os.path.normpath(os.path.join(_DEFAULT_ANN_DIR, split))
     if frames_dir is None:
         frames_dir = os.path.normpath(os.path.join(_DEFAULT_FRAMES_DIR, split))
+
+    # SPEC §V7-V9: per-category npz cache short-circuit (skipped when category_filter is None).
+    cache_path = npz_cache_path("video", "vidvrd", category_filter, fps) if max_videos is None else None
+    if cache_path is not None:
+        hit = load_cached(cache_path)
+        if hit is not None:
+            images, bboxes, names, frame_ids, meta = hit
+            last_load_metadata.clear()
+            last_load_metadata.update(meta)
+            print(f"[vidvrd-loader] cache hit {cache_path} "
+                  f"({meta.get('num_videos','?')} videos, {meta.get('num_states','?')} states)")
+            return images, bboxes, names, frame_ids
 
     ann_files = sorted(glob.glob(os.path.join(annotations_dir, "*.json")))
     if not ann_files:
@@ -153,14 +166,20 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "primary_categories": loaded_primary,
         "num_videos": len(loaded_video_ids),
         "num_states": len(images_list),
+        "fps": fps,
     })
     print(f"[vidvrd-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(ann_files)} videos, "
           f"{len(images_list)} states")
 
-    return (np.array(images_list, dtype=np.uint8),
-            np.array(bboxes_list, dtype=np.uint16),
-            all_names, frame_ids)
+    images_arr = np.array(images_list, dtype=np.uint8)
+    bboxes_arr = np.array(bboxes_list, dtype=np.uint16)
+
+    if cache_path is not None:
+        save_cache(cache_path, images_arr, bboxes_arr, all_names, frame_ids, dict(last_load_metadata))
+        print(f"[vidvrd-loader] cache write {cache_path}")
+
+    return images_arr, bboxes_arr, all_names, frame_ids
 
 
 def build_transitions(states, frame_ids, mode="sequential"):

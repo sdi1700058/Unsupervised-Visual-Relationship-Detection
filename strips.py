@@ -506,7 +506,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     print("Loading VidVRD dataset...")
     images, bboxes, all_object_names, frame_ids = build_dataset(
         annotations_dir=annotations_dir, frames_dir=frames_dir,
-        max_videos=max_videos, category_filter=category)
+        max_videos=max_videos, category_filter=category, fps=fps)
 
     num_states, num_objs = len(images), images.shape[1]
     print(f"Loaded {num_states} frames, {num_objs} objects each")
