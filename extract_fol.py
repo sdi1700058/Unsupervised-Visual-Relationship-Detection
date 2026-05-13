@@ -147,32 +147,44 @@ def load_labeled_objects_data(model_dir, dataset_path=None, images_dir=None,
 
 
 def load_vidvrd_data(model_dir, annotations_dir=None, frames_dir=None,
-                     num_examples=None, category=None):
+                     num_examples=None, category=None, fps=None):
     """Load VidVRD frames using the same blocks-domain encoding used in training.
 
     Reads object_names.json saved during training (uses 'frame_ids' key).
+    Auto-fills `category` and `fps` from `loaded_videos.json` manifest when
+    not specified — required so post-train hooks find the matching
+    `frames_<fps>fps/` directory.
     """
     from latplan.puzzles.puzzle_vidvrd import build_dataset, PICSIZE
     from latplan.puzzles.util import preprocess
     from strips import bboxes_to_onehot
     import numpy as np
 
-    # Manifest mismatch guard — refuse to render frames from a different
-    # category than the model was trained on.
+    # Manifest mismatch guard + auto-fill defaults from training manifest.
     manifest_path = os.path.join(model_dir, "loaded_videos.json")
     if os.path.isfile(manifest_path):
         with open(manifest_path) as _f:
             _m = json.load(_f)
         _trained_cat = _m.get("category_filter")
-        if _trained_cat != category:
+        _trained_fps = _m.get("fps")
+        if category is None and _trained_cat is not None:
+            category = _trained_cat
+            print(f"[extract_fol] auto-filled --category={_trained_cat!r} from manifest")
+        elif _trained_cat != category:
             raise SystemExit(
                 f"ERROR: model_dir was trained with category={_trained_cat!r} "
                 f"but --category={category!r} was passed. Either drop --category "
-                f"or point at the matching out/video-{_trained_cat}/... model_dir.")
+                f"or point at the matching out/.../{_trained_cat}/... model_dir.")
+        if fps is None and _trained_fps is not None:
+            fps = _trained_fps
+            print(f"[extract_fol] auto-filled --fps={_trained_fps!r} from manifest")
+
+    if fps is None:
+        fps = 3   # legacy default
 
     images, bboxes, per_state_names, frame_ids = build_dataset(
         annotations_dir=annotations_dir, frames_dir=frames_dir,
-        category_filter=category)
+        category_filter=category, fps=fps)
 
     names_path = os.path.join(model_dir, "object_names.json")
     if os.path.isfile(names_path):
@@ -203,8 +215,11 @@ def load_vidvrd_data(model_dir, annotations_dir=None, frames_dir=None,
 
 
 def load_actiongenome_data(model_dir, annotations_dir=None, frames_dir=None,
-                            num_examples=None, category=None):
-    """ActionGenome analogue of load_vidvrd_data (C6)."""
+                            num_examples=None, category=None, fps=None):
+    """ActionGenome analogue of load_vidvrd_data (C6).
+
+    Auto-fills `category` from `loaded_videos.json` when not specified.
+    """
     from latplan.domains.video.actiongenome import build_dataset
     from latplan.puzzles.puzzle_labeled_objects import PICSIZE
     from latplan.puzzles.util import preprocess
@@ -216,15 +231,23 @@ def load_actiongenome_data(model_dir, annotations_dir=None, frames_dir=None,
         with open(manifest_path) as _f:
             _m = json.load(_f)
         _trained_cat = _m.get("category_filter")
-        if _trained_cat != category:
+        _trained_fps = _m.get("fps")
+        if category is None and _trained_cat is not None:
+            category = _trained_cat
+            print(f"[extract_fol] auto-filled --category={_trained_cat!r} from manifest")
+        elif _trained_cat != category:
             raise SystemExit(
                 f"ERROR: model_dir trained with category={_trained_cat!r} "
                 f"but --category={category!r} was passed. Drop --category "
                 f"or point at out/video/actiongenome/{_trained_cat}/... model_dir.")
+        if fps is None and _trained_fps is not None:
+            fps = _trained_fps
+    if fps is None:
+        fps = "native"
 
     images, bboxes, per_state_names, frame_ids = build_dataset(
         annotations_dir=annotations_dir, frames_dir=frames_dir,
-        category_filter=category)
+        category_filter=category, fps=fps)
 
     names_path = os.path.join(model_dir, "object_names.json")
     if os.path.isfile(names_path):
