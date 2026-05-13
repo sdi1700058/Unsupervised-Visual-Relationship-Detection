@@ -24,7 +24,11 @@
 #SBATCH --error=logs/%x.%j.err
 
 set -eo pipefail
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# In sbatch, BASH_SOURCE points at a spool copy of the script (e.g.
+# /var/spool/slurmd/job.../slurm_script) — useless for resolving the project
+# root. Use SLURM_SUBMIT_DIR when present, else fall back to BASH_SOURCE for
+# interactive invocation.  (V12 / B13 fix.)
+PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "${PROJECT_DIR}"
 
 # venv only — V12, no `module purge`

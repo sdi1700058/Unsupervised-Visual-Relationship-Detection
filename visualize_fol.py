@@ -348,12 +348,64 @@ def load_vidvrd_data_and_renderer(ae, model_dir, num=10,
     return states, flat_names, render_fn, per_state_names
 
 
+def load_actiongenome_data_and_renderer(ae, model_dir, num=10,
+                                         annotations_dir=None, frames_dir=None,
+                                         category=None):
+    """ActionGenome analogue of load_vidvrd_data_and_renderer (C6)."""
+    from latplan.domains.video.actiongenome import build_dataset
+    from latplan.puzzles.puzzle_labeled_objects import PICSIZE
+    from latplan.puzzles.util import preprocess
+    from strips import bboxes_to_onehot
+    import json as _json
+
+    manifest_path = os.path.join(model_dir, "loaded_videos.json")
+    if os.path.isfile(manifest_path):
+        with open(manifest_path) as _f:
+            _m = _json.load(_f)
+        _trained_cat = _m.get("category_filter")
+        if _trained_cat != category:
+            raise SystemExit(
+                f"ERROR: model_dir trained with category={_trained_cat!r} "
+                f"but --category={category!r} was passed. Drop --category "
+                f"or point at out/video/actiongenome/{_trained_cat}/... model_dir.")
+
+    images, bboxes, per_state_names, frame_ids = build_dataset(
+        annotations_dir=annotations_dir, frames_dir=frames_dir,
+        category_filter=category)
+
+    names_path = os.path.join(model_dir, "object_names.json")
+    if os.path.isfile(names_path):
+        with open(names_path) as f:
+            saved = _json.load(f)
+        per_state_names = saved["object_names"]
+        frame_ids       = saved.get("frame_ids", saved.get("image_ids", frame_ids))
+
+    picsize_grid = (np.array(PICSIZE) // 5).astype(int)
+    Y, X = picsize_grid[0], picsize_grid[1]
+    num_states, num_objs = images.shape[0], images.shape[1]
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    states = np.concatenate(
+        (images.reshape   ((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))),
+        axis=-1)
+
+    states          = states[:num]
+    per_state_names = per_state_names[:num]
+    flat_names      = per_state_names[0] if per_state_names else []
+
+    render_fn, _ = ae.blocks_renderer()
+    return states, flat_names, render_fn, per_state_names
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Visualize FOL predicates from trained FOSAE")
     parser.add_argument("model_dir", help="Path to trained model directory")
     parser.add_argument("--domain", default="puzzle",
-                        choices=["puzzle", "blocks", "labeled_objects", "vidvrd"])
+                        choices=["puzzle", "blocks", "labeled_objects", "vidvrd", "actiongenome"])
     parser.add_argument("--type", default="mnist", help="Puzzle type (default: mnist)")
     parser.add_argument("--width", type=int, default=3)
     parser.add_argument("--height", type=int, default=3)
@@ -401,6 +453,13 @@ def main():
     elif args.domain == "vidvrd":
         data, obj_names, render_fn, per_state_names = \
             load_vidvrd_data_and_renderer(
+                ae, args.model_dir, args.num,
+                annotations_dir=args.annotations_dir,
+                frames_dir=args.frames_dir,
+                category=args.category)
+    elif args.domain == "actiongenome":
+        data, obj_names, render_fn, per_state_names = \
+            load_actiongenome_data_and_renderer(
                 ae, args.model_dir, args.num,
                 annotations_dir=args.annotations_dir,
                 frames_dir=args.frames_dir,

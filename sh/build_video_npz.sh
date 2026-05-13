@@ -20,11 +20,15 @@
 #SBATCH --error=logs/%x.%j.err
 
 set -eo pipefail
-PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# B13 fix: sbatch puts the script in /var/spool — BASH_SOURCE is the spool
+# copy. Prefer SLURM_SUBMIT_DIR.
+PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "${PROJECT_DIR}"
 
-# shellcheck disable=SC1091
-source "${PROJECT_DIR}/sh/sherlock_env.sh"
+# V12: activate the venv directly. sherlock_env.sh calls `module purge` which
+# breaks under non-login sbatch shells. We don't need cuda/cudnn modules for a
+# pure-CPU npz build — pillow + numpy are in the venv.
+source venv/bin/activate
 
 : "${DATASET:?DATASET env var required (vidvrd | actiongenome)}"
 : "${CATEGORY:?CATEGORY env var required}"
