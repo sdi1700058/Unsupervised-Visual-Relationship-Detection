@@ -541,8 +541,9 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
     _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
     run_tag    = f"{aeclass}_U{_U}_A{_A}_P{_P}"
-    domain_tag = f"video-{category}" if category else "vidvrd"
-    out_path   = os.path.join(OUT_DIR, domain_tag, run_tag)
+    # SPEC C15 hierarchical naming: out/<modality>/<dataset>/<category>/<run_tag>/
+    cat_seg  = (category or "_all").replace("/", "_")
+    out_path = os.path.join(OUT_DIR, "video", "vidvrd", cat_seg, run_tag)
     os.makedirs(out_path, exist_ok=True)
 
     ae = run(out_path, train, val, parameters)
