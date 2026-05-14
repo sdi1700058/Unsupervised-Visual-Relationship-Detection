@@ -37,7 +37,7 @@ os.makedirs(OUT_DIR, exist_ok=True)
 
 # default values
 default_parameters = {
-    'epoch'           : 1000,
+    'epoch'           : int(os.environ.get("EPOCH", 1000)),
     'batch_size'      : 1000,
     'optimizer'       : "radam",
     'max_temperature' : 5.0,
