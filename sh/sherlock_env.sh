@@ -12,6 +12,11 @@
 #
 # Everything lives inside the project directory.
 
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "ERROR: source this script, do not execute it:  source sh/sherlock_env.sh" >&2
+    exit 1
+fi
+
 # ── Load shared config (module versions + paths) ─────────────────────────────
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sherlock_config.sh"
 
@@ -54,21 +59,24 @@ fi
 export PYTHONUNBUFFERED=1
 export TF_CPP_MIN_LOG_LEVEL=2
 
-# ── GPU sanity check (loud) ──────────────────────────────────────────────────
-# Loudly warn if TF cannot see the GPU — otherwise users silently fall back to
-# CPU and wonder why training crawls. CUDA 10 + cuDNN 7 are required by TF 1.15.
+# ── GPU sanity check (honest — prints TF's real device list) ─────────────────
+# A boolean "OK" hides the truth and gave false confidence. Print exactly what
+# TF sees, in THIS shell, and do NOT swallow the libcudart/libcudnn dlopen
+# errors — those W-lines are the actual diagnostic. TF 1.15 needs CUDA 10.0
+# (libcudart.so.10.0) + cuDNN 7.x (libcudnn.so.7) — see sh/sherlock_config.sh.
 if command -v nvidia-smi &>/dev/null && nvidia-smi -L &>/dev/null; then
     _gpu_name="$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
-    echo "[sherlock_env] GPU detected: ${_gpu_name}"
-    _tf_gpu="$(python3 -c 'import os; os.environ["TF_CPP_MIN_LOG_LEVEL"]="3"; from tensorflow.python.client import device_lib; print(any("GPU" in d.name for d in device_lib.list_local_devices()))' 2>/dev/null)"
-    if [[ "${_tf_gpu}" == "True" ]]; then
-        echo "[sherlock_env] TF GPU support: OK"
-    else
-        echo "[sherlock_env] WARNING: TF cannot use the GPU (CUDA/cuDNN mismatch)."
-        echo "               TF 1.15 requires CUDA 10.0–10.2 + cuDNN 7.x."
-        echo "               Loaded modules: CUDA=${CUDA_MODULE} cuDNN=${CUDNN_MODULE}"
-        echo "               Check 'ml list' / 'ml av cuda' to confirm versions."
-    fi
+    echo "[sherlock_env] GPU on node (driver): ${_gpu_name}"
+    TF_CPP_MIN_LOG_LEVEL=1 python3 - <<'PYEOF'
+from tensorflow.python.client import device_lib
+gpus = [d.name for d in device_lib.list_local_devices() if d.device_type == "GPU"]
+if gpus:
+    print("[sherlock_env] TF sees GPU:", gpus)
+else:
+    print("[sherlock_env] WARNING: TF sees NO GPU -> training WILL run on CPU.")
+    print("               Look above for 'Could not load libcudart.so.10.0' etc.")
+    print("               TF 1.15 needs CUDA 10.0 + cuDNN 7.x; check 'ml list'.")
+PYEOF
 else
     echo "[sherlock_env] (no GPU on this node — login or CPU partition)"
 fi

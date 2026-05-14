@@ -9,6 +9,11 @@
 #
 # Equivalent to:  source sh/sherlock_env.sh
 
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    echo "ERROR: source this script, do not execute it:  source ./activate.sh" >&2
+    exit 1
+fi
+
 _HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${_HERE}/sh/sherlock_env.sh"
