@@ -16,7 +16,7 @@ PROJECT_ROOT="${PROJECT_ROOT:-$(cd "${_CFG_DIR}/.." && pwd)}"
 # Defaults reflect older toolchain compatible with TF 1.15 + Python 3.6.
 # Newer Sherlock images may have replaced these — re-check with `ml av`.
 PYTHON_MODULE="${PYTHON_MODULE:-python/3.6.1}"
-CUDA_MODULE="${CUDA_MODULE:-cuda/10.2.89}"
+CUDA_MODULE="${CUDA_MODULE:-cuda/10.0.130}"
 CUDNN_MODULE="${CUDNN_MODULE:-cudnn/7.6.5}"
 GCC_MODULE="${GCC_MODULE:-gcc/8.1.0}"
 
