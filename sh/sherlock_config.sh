@@ -27,4 +27,6 @@ LOG_DIR="${LOG_DIR:-${PROJECT_ROOT}/logs}"
 OUT_DIR="${OUT_DIR:-${PROJECT_ROOT}/out}"
 
 export PROJECT_ROOT VENV_DIR KERAS_HOME LOG_DIR OUT_DIR
-export PYTHON_MODULE CUDA_MODULE CUDNN_MODULE GCC_MODULE
+# Module vars deliberately NOT exported: exporting them makes the `:-` defaults
+# above sticky across re-sources in the same shell, so a changed default in this
+# file would be silently ignored. Scripts that need them re-source this file.
