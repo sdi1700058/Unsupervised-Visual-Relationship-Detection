@@ -101,6 +101,17 @@ def stream_read_json(fn):
 # single iteration of NN training
 def nn_task(network, path, train_in, train_out, val_in, val_out, parameters):
     net = network(path,parameters=parameters)
+    # B17: write a plain-CSV training history next to net0.h5 so timed-out /
+    # interrupted runs still leave a learning curve on disk.  Uses Keras's
+    # standard CSVLogger; appended to net.callbacks before train() runs.
+    try:
+        import keras.callbacks
+        os.makedirs(path, exist_ok=True)
+        net.callbacks.append(
+            keras.callbacks.CSVLogger(os.path.join(path, "training_history.csv"),
+                                      append=True))
+    except Exception as _csv_err:
+        print(f"[nn_task] WARNING: CSVLogger setup failed: {_csv_err!r}")
     try:
         net.train(train_in,
                   val_data=val_in,

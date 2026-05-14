@@ -84,19 +84,22 @@ def main():
     picsize_grid = (np.array(PICSIZE) // 5).astype(int)
     Y, X = picsize_grid[0], picsize_grid[1]
     num_states, num_objs = images.shape[0], images.shape[1]
+    print(f"[recon] dataset has {num_states} states; sampling {args.num} BEFORE preprocess to keep RAM bounded")
 
-    images_f = (images.astype(np.float32) / 256)
-    images_f = preprocess(images_f)
-    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
-    states = np.concatenate(
-        (images_f.reshape((num_states, num_objs, -1)),
-         bboxes_onehot.reshape((num_states, num_objs, -1))),
-        axis=-1).astype(np.float32)
-
-    # --- evenly-spaced sample ---
+    # SAMPLE FIRST — preprocess only the N states we will show.  Otherwise the
+    # full-set preprocess + bbox-onehot allocs blow up login-node memory
+    # (>2 GB for >10 k states).
     N = min(args.num, num_states)
     idx = np.linspace(0, num_states - 1, N).astype(int)
-    sample = states[idx]
+    images_sub = images[idx]                            # (N, O, P, P, 3) uint8
+    bboxes_sub = bboxes[idx]                            # (N, O, 4) uint16
+
+    images_f      = preprocess(images_sub.astype(np.float32) / 256)
+    bboxes_onehot = bboxes_to_onehot(bboxes_sub, X, Y)
+    sample = np.concatenate(
+        (images_f.reshape((N, num_objs, -1)),
+         bboxes_onehot.reshape((N, num_objs, -1))),
+        axis=-1).astype(np.float32)
 
     render_fn, _ = ae.blocks_renderer()
     recon_feat   = ae.autoencode(sample)
