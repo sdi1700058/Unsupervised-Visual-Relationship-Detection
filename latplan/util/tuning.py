@@ -14,6 +14,12 @@ class SignalInterrupt(Exception):
         raise self
 
 signal.signal(signal.SIGUSR2,SignalInterrupt)
+# B16: also trap SIGINT (ssh ctrl+c on the compute node), SIGTERM (SLURM kill),
+# and SIGUSR1 (SLURM pre-timeout warning via #SBATCH --signal=B:USR1@<sec>) so
+# that nn_task gets a chance to save the partial model before the process dies.
+signal.signal(signal.SIGINT,  SignalInterrupt)
+signal.signal(signal.SIGTERM, SignalInterrupt)
+signal.signal(signal.SIGUSR1, SignalInterrupt)
 
 class InvalidHyperparameterError(Exception):
     """Raised when the hyperparameter is not valid"""
@@ -95,12 +101,22 @@ def stream_read_json(fn):
 # single iteration of NN training
 def nn_task(network, path, train_in, train_out, val_in, val_out, parameters):
     net = network(path,parameters=parameters)
-    net.train(train_in,
-              val_data=val_in,
-              train_data_to=train_out,
-              val_data_to=val_out,
-              save=True,
-              **parameters,)
+    try:
+        net.train(train_in,
+                  val_data=val_in,
+                  train_data_to=train_out,
+                  val_data_to=val_out,
+                  save=True,
+                  **parameters,)
+    except (SignalInterrupt, KeyboardInterrupt) as e:
+        # B16: save the partial net before the process dies.
+        print(f"[nn_task] interrupt received ({type(e).__name__}); saving partial model to {path}")
+        try:
+            net.save()
+            print(f"[nn_task] partial model saved.")
+        except Exception as save_err:
+            print(f"[nn_task] WARNING: save failed: {save_err!r}")
+        raise
     error = net.evaluate(val_in,val_out,batch_size=100,verbose=0)
     return net, error
 

@@ -25,6 +25,10 @@
 #SBATCH --time=24:00:00
 #SBATCH --output=logs/%x.%j.out
 #SBATCH --error=logs/%x.%j.err
+# B16: SLURM sends SIGUSR1 to the batch script 180s before walltime; we re-raise
+# it as SignalInterrupt in latplan/util/tuning.py so nn_task saves a partial
+# model before the process is killed by SIGKILL.
+#SBATCH --signal=B:USR1@180
 ##SBATCH --constraint="GPU_MEM:16GB"
 ##SBATCH --mail-type=BEGIN,END,FAIL
 ##SBATCH --mail-user=yourname@stanford.edu
