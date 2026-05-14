@@ -31,8 +31,14 @@ set -eo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "${PROJECT_DIR}"
 
-# venv only — V12, no `module purge`
-source venv/bin/activate
+# Prefer sherlock_env.sh (loads modules + venv consistently). Fallback to bare
+# venv activate so out-of-tree invocations still work.
+if [[ -f "${PROJECT_DIR}/sh/sherlock_env.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PROJECT_DIR}/sh/sherlock_env.sh"
+else
+    source "${PROJECT_DIR}/venv/bin/activate"
+fi
 
 # ensure ffmpeg available; tolerate either system PATH or Sherlock module
 if ! command -v ffmpeg >/dev/null 2>&1; then

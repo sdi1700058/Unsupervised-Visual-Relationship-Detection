@@ -25,10 +25,16 @@ set -eo pipefail
 PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 cd "${PROJECT_DIR}"
 
-# V12: activate the venv directly. sherlock_env.sh calls `module purge` which
-# breaks under non-login sbatch shells. We don't need cuda/cudnn modules for a
-# pure-CPU npz build — pillow + numpy are in the venv.
-source venv/bin/activate
+# Source sherlock_env.sh so modules (python, gcc, optionally ffmpeg) match the
+# Sherlock image we built the venv against.  CPU-only job so cuda/cudnn warnings
+# can be ignored, but having the correct python module avoids ABI surprises.
+# Fallback to bare venv activate if sherlock_env not present (out-of-tree run).
+if [[ -f "${PROJECT_DIR}/sh/sherlock_env.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PROJECT_DIR}/sh/sherlock_env.sh"
+else
+    source "${PROJECT_DIR}/venv/bin/activate"
+fi
 
 : "${DATASET:?DATASET env var required (vidvrd | actiongenome)}"
 : "${CATEGORY:?CATEGORY env var required}"

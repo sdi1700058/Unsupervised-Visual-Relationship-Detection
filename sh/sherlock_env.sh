@@ -54,6 +54,25 @@ fi
 export PYTHONUNBUFFERED=1
 export TF_CPP_MIN_LOG_LEVEL=2
 
+# ── GPU sanity check (loud) ──────────────────────────────────────────────────
+# Loudly warn if TF cannot see the GPU — otherwise users silently fall back to
+# CPU and wonder why training crawls. CUDA 10 + cuDNN 7 are required by TF 1.15.
+if command -v nvidia-smi &>/dev/null && nvidia-smi -L &>/dev/null; then
+    _gpu_name="$(nvidia-smi --query-gpu=name --format=csv,noheader | head -1)"
+    echo "[sherlock_env] GPU detected: ${_gpu_name}"
+    _tf_gpu="$(python3 -c 'import os; os.environ["TF_CPP_MIN_LOG_LEVEL"]="3"; from tensorflow.python.client import device_lib; print(any("GPU" in d.name for d in device_lib.list_local_devices()))' 2>/dev/null)"
+    if [[ "${_tf_gpu}" == "True" ]]; then
+        echo "[sherlock_env] TF GPU support: OK"
+    else
+        echo "[sherlock_env] WARNING: TF cannot use the GPU (CUDA/cuDNN mismatch)."
+        echo "               TF 1.15 requires CUDA 10.0–10.2 + cuDNN 7.x."
+        echo "               Loaded modules: CUDA=${CUDA_MODULE} cuDNN=${CUDNN_MODULE}"
+        echo "               Check 'ml list' / 'ml av cuda' to confirm versions."
+    fi
+else
+    echo "[sherlock_env] (no GPU on this node — login or CPU partition)"
+fi
+
 # ── Convenience aliases ───────────────────────────────────────────────────────
 alias py='python3'
 alias gpu-shell='salloc -p gpu --gpus 1 --mem 32G --time 4:00:00'
