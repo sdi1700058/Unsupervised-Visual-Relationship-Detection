@@ -32,33 +32,34 @@ def main():
     p.add_argument("model_dir")
     p.add_argument("--num", type=int, default=8)
     p.add_argument("--domain", default=None,
-                   help="vidvrd | actiongenome (auto-detected from model_dir path / manifest if omitted)")
+                   help="vidvrd | actiongenome | puzzle | blocks (auto-detected from model_dir path / manifest if omitted)")
+    p.add_argument("--type",  default="mnist", help="(puzzle domain) puzzle type")
+    p.add_argument("--width", type=int, default=3)
+    p.add_argument("--height", type=int, default=3)
+    p.add_argument("--track", default="blocks-5-3", help="(blocks domain) track name")
     args = p.parse_args()
-
-    # --- read manifest for category + fps ---
-    manifest_path = os.path.join(args.model_dir, "loaded_videos.json")
-    if not os.path.isfile(manifest_path):
-        sys.exit(f"ERROR: no loaded_videos.json in {args.model_dir}; cannot determine training subset.")
-    with open(manifest_path) as f:
-        manifest = json.load(f)
-    category = manifest.get("category_filter")
-    fps      = manifest.get("fps", 3)
-    print(f"[recon] category={category!r}  fps={fps!r}")
 
     # --- domain dispatch ---
     if args.domain is None:
-        args.domain = "actiongenome" if "actiongenome" in args.model_dir else "vidvrd"
+        if   "actiongenome" in args.model_dir: args.domain = "actiongenome"
+        elif "vidvrd"        in args.model_dir: args.domain = "vidvrd"
+        elif "blocks"        in args.model_dir: args.domain = "blocks"
+        else:                                   args.domain = "puzzle"
 
-    if args.domain == "vidvrd":
-        from latplan.puzzles.puzzle_vidvrd import build_dataset
-    elif args.domain == "actiongenome":
-        from latplan.domains.video.actiongenome import build_dataset
-    else:
-        sys.exit(f"ERROR: unknown --domain {args.domain!r}")
+    # video-world domains need a manifest (loaded_videos.json) to know category + fps
+    is_video = args.domain in ("vidvrd", "actiongenome")
+    category, fps = None, None
+    if is_video:
+        manifest_path = os.path.join(args.model_dir, "loaded_videos.json")
+        if not os.path.isfile(manifest_path):
+            sys.exit(f"ERROR: no loaded_videos.json in {args.model_dir}; cannot determine training subset.")
+        with open(manifest_path) as f:
+            manifest = json.load(f)
+        category = manifest.get("category_filter")
+        fps      = manifest.get("fps", 3)
+        print(f"[recon] category={category!r}  fps={fps!r}")
 
-    from latplan.puzzles.puzzle_labeled_objects import PICSIZE
     from latplan.puzzles.util import preprocess
-    from strips import bboxes_to_onehot
     from viz.io import save_with_caption
 
     # --- model load ---
@@ -77,35 +78,78 @@ def main():
     P = ae.parameters['P']
     print(f"[recon] model loaded — U={U} P={P} A={ae.parameters['A']}")
 
-    # --- load arrays (cache hit if available) ---
-    print(f"[recon] loading {args.domain} cache for category={category!r}")
-    images, bboxes, per_state_names, frame_ids = build_dataset(category_filter=category, fps=fps)
+    # --- load arrays + build the (N, num_objs, feature_dim) sample tensor ---
+    if args.domain == "puzzle":
+        # puzzle domain — paper's 8-puzzle. Tiles, not bboxed objects.
+        from latplan.util.paths import find_dataset
+        import importlib
+        p_mod = importlib.import_module(f"latplan.puzzles.puzzle_{args.type}")
+        p_mod.setup()
+        path = find_dataset(f"puzzle-{args.type}-{args.width}-{args.height}.npz")
+        with np.load(path) as data:
+            configs = data["pres"]
+        all_objects = p_mod.to_objects(configs, args.width, args.height, False)  # (N_all, n_tiles, 15)
+        N = min(args.num, all_objects.shape[0])
+        idx = np.linspace(0, all_objects.shape[0] - 1, N).astype(int)
+        sample = all_objects[idx].astype(np.float32)
+        render_fn, _ = ae.puzzle_renderer()
 
-    picsize_grid = (np.array(PICSIZE) // 5).astype(int)
-    Y, X = picsize_grid[0], picsize_grid[1]
-    num_states, num_objs = images.shape[0], images.shape[1]
-    print(f"[recon] dataset has {num_states} states; sampling {args.num} BEFORE preprocess to keep RAM bounded")
+    elif args.domain == "blocks":
+        # blocksworld — uses the same encoding as video-world domains.
+        from latplan.util.paths import find_dataset
+        from strips import bboxes_to_onehot
+        path = find_dataset(args.track + ".npz")
+        with np.load(path) as data:
+            images_all = data["images"].astype(np.float32) / 256
+            bboxes_all = data["bboxes"]
+            picsize    = data["picsize"]
+        picsize_grid = (picsize // 5).astype(int)
+        Y, X = picsize_grid[0], picsize_grid[1]
+        N = min(args.num, images_all.shape[0])
+        idx = np.linspace(0, images_all.shape[0] - 1, N).astype(int)
+        images_sub = images_all[idx]
+        bboxes_sub = bboxes_all[idx]
+        images_f      = preprocess(images_sub)
+        bboxes_onehot = bboxes_to_onehot(bboxes_sub, X, Y)
+        sample = np.concatenate(
+            (images_f.reshape((N, images_f.shape[1], -1)),
+             bboxes_onehot.reshape((N, images_f.shape[1], -1))),
+            axis=-1).astype(np.float32)
+        render_fn, _ = ae.blocks_renderer()
 
-    # SAMPLE FIRST — preprocess only the N states we will show.  Otherwise the
-    # full-set preprocess + bbox-onehot allocs blow up login-node memory
-    # (>2 GB for >10 k states).
-    N = min(args.num, num_states)
-    idx = np.linspace(0, num_states - 1, N).astype(int)
-    images_sub = images[idx]                            # (N, O, P, P, 3) uint8
-    bboxes_sub = bboxes[idx]                            # (N, O, 4) uint16
+    else:
+        # video-world (vidvrd / actiongenome) — load via the domain build_dataset.
+        if args.domain == "vidvrd":
+            from latplan.puzzles.puzzle_vidvrd import build_dataset
+        elif args.domain == "actiongenome":
+            from latplan.domains.video.actiongenome import build_dataset
+        else:
+            sys.exit(f"ERROR: unknown --domain {args.domain!r}")
+        from latplan.puzzles.puzzle_labeled_objects import PICSIZE
+        from strips import bboxes_to_onehot
 
-    images_f      = preprocess(images_sub.astype(np.float32) / 256)
-    bboxes_onehot = bboxes_to_onehot(bboxes_sub, X, Y)
-    sample = np.concatenate(
-        (images_f.reshape((N, num_objs, -1)),
-         bboxes_onehot.reshape((N, num_objs, -1))),
-        axis=-1).astype(np.float32)
+        print(f"[recon] loading {args.domain} cache for category={category!r}")
+        images, bboxes, per_state_names, frame_ids = build_dataset(category_filter=category, fps=fps)
+        picsize_grid = (np.array(PICSIZE) // 5).astype(int)
+        Y, X = picsize_grid[0], picsize_grid[1]
+        num_states, num_objs = images.shape[0], images.shape[1]
+        print(f"[recon] dataset has {num_states} states; sampling {args.num} BEFORE preprocess to keep RAM bounded")
+        N = min(args.num, num_states)
+        idx = np.linspace(0, num_states - 1, N).astype(int)
+        images_sub = images[idx]
+        bboxes_sub = bboxes[idx]
+        images_f      = preprocess(images_sub.astype(np.float32) / 256)
+        bboxes_onehot = bboxes_to_onehot(bboxes_sub, X, Y)
+        sample = np.concatenate(
+            (images_f.reshape((N, num_objs, -1)),
+             bboxes_onehot.reshape((N, num_objs, -1))),
+            axis=-1).astype(np.float32)
+        render_fn, _ = ae.blocks_renderer()
 
-    render_fn, _ = ae.blocks_renderer()
-    recon_feat   = ae.autoencode(sample)
-    inputs       = render_fn(sample)
-    recons       = render_fn(recon_feat)
-    diffs        = np.abs(inputs - recons)
+    recon_feat    = ae.autoencode(sample)
+    inputs        = render_fn(sample)
+    recons        = render_fn(recon_feat)
+    diffs         = np.abs(inputs - recons)
     per_state_mse = ((recon_feat - sample) ** 2).mean(axis=(1, 2))
 
     # --- grid figure (3 rows × N cols) ---
