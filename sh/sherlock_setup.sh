@@ -27,13 +27,15 @@ if [[ "${SLURM_JOB_PARTITION:-}" != *"gpu"* && -z "${SLURMD_NODENAME:-}" ]]; the
 fi
 
 # ── Load modules ──────────────────────────────────────────────────────────────
+# cudnn pulls cuda/10.2.89 as its dep; load CUDA_MODULE LAST so it swaps that out
+# for cuda/10.0.130 (TF 1.15 needs libcudart.so.10.0). Persist the working set as
+# the `fosae` collection — sherlock_env.sh restores it on every source.
 echo "[1/6] Loading Sherlock modules..."
 module purge
-module load "${GCC_MODULE}"
-module load "${PYTHON_MODULE}"
+module load "${GCC_MODULE}" "${PYTHON_MODULE}" "${CUDNN_MODULE}"
 module load "${CUDA_MODULE}"
-module load "${CUDNN_MODULE}"
 module load ffmpeg
+module save fosae
 
 echo "      Python: $(python3 --version)"
 echo "      nvcc:   $(nvcc --version 2>/dev/null | tail -1 || echo 'NOT FOUND')"

@@ -5,7 +5,10 @@ import os
 # Resolve project root relative to this file: latplan/util/paths.py -> project root
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DATA_DIR = os.path.join(PROJECT_ROOT, "data")
-OUT_DIR  = os.path.join(PROJECT_ROOT, "out")
+# OUT_DIR is env-overridable so concurrent runs can use separate output trees
+# (each gets its own out/grid_search.log — the tuning log is shared otherwise
+# and a single logged trial + limit=1 makes later runs short-circuit training).
+OUT_DIR  = os.environ.get("OUT_DIR") or os.path.join(PROJECT_ROOT, "out")
 
 
 def find_dataset(filename):

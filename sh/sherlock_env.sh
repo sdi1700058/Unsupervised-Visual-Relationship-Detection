@@ -27,13 +27,27 @@ LOAD_CLAUDE_CODE="${LOAD_CLAUDE_CODE:-0}"
 LOAD_COPILOT_CLI="${LOAD_COPILOT_CLI:-0}"
 
 # ── Load modules ──────────────────────────────────────────────────────────────
+# cudnn/7.6.5 declares cuda/10.2.89 as its dependency, so loading it pulls in the
+# wrong CUDA for TF 1.15 (which needs libcudart.so.10.0 = cuda/10.0.x). The fix:
+# load cudnn FIRST, then load CUDA_MODULE LAST so it swaps the dep cuda out for
+# cuda/10.0.130 — the two then coexist (verified: TF opens libcudart.so.10.0 AND
+# libcudnn.so.7). The saved `fosae` collection captures exactly this working set,
+# so prefer `module restore fosae`; fall back to the explicit sequence.
 if command -v module &>/dev/null; then
-    module purge
-
-    for _m in "${GCC_MODULE}" "${PYTHON_MODULE}" "${CUDA_MODULE}" "${CUDNN_MODULE}"; do
-        module load "${_m}" 2>/dev/null || \
-            echo "[sherlock_env] WARNING: could not load ${_m}"
-    done
+    if module restore fosae 2>/dev/null; then
+        echo "[sherlock_env] module collection 'fosae' restored"
+    else
+        echo "[sherlock_env] collection 'fosae' not found — loading modules explicitly"
+        module purge
+        module load "${GCC_MODULE}" "${PYTHON_MODULE}" "${CUDNN_MODULE}" 2>/dev/null || \
+            echo "[sherlock_env] WARNING: base module load failed"
+        # CUDA last: swaps the cuda that cudnn pulled in for ${CUDA_MODULE}.
+        module load "${CUDA_MODULE}" 2>/dev/null || \
+            echo "[sherlock_env] WARNING: could not load ${CUDA_MODULE}"
+        module load ffmpeg 2>/dev/null || true
+        module save fosae 2>/dev/null && \
+            echo "[sherlock_env] saved module collection 'fosae'"
+    fi
 
     if [[ "${LOAD_CLAUDE_CODE}" == "1" ]]; then
         module load claude-code 2>/dev/null || \
@@ -45,6 +59,11 @@ if command -v module &>/dev/null; then
             echo "[sherlock_env] WARNING: copilot-cli module not found"
     fi
 fi
+
+# Module vars are consumed above; unset them so a re-source in the SAME shell
+# re-derives the defaults from sherlock_config.sh instead of reusing the stale
+# value left in the shell scope by the previous source.
+unset GCC_MODULE PYTHON_MODULE CUDA_MODULE CUDNN_MODULE
 
 # ── Activate the venv ─────────────────────────────────────────────────────────
 if [[ -f "${VENV_DIR}/bin/activate" ]]; then
