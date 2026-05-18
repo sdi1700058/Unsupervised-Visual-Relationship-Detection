@@ -1004,3 +1004,143 @@ If you use this code, please cite the original FOSAE paper:
 Original repository: [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae)
 
 This fork (labeled-fosae) extends FOSAE with VLM-annotated COCO support. If you build on the labeled-objects domain, please also acknowledge this fork.
+
+---
+
+## Hyperparameter reference (2026-05-14)
+
+Distilled from the original FOSAE codebase ([guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae); local clone at `/home/panoslat/Dev/Thesis/FOSAE/latplan-fosae`) and the paper [Unsupervised Grounding of Plannable First-Order Logic Representation from Images (Asai 2019, arXiv:1902.08093)](https://arxiv.org/abs/1902.08093). Use this section as the source of truth when configuring a run.
+
+### Original defaults — `default_parameters` (`strips.py:39-52`, byte-identical to upstream)
+
+These are the values that apply to **every** parameter not over-ridden by the tuning grid or CLI args.
+
+| Key | Value | Role |
+|-----|-------|------|
+| `epoch` | `int(os.environ.get("EPOCH", 1000))` | training epochs (env-overridable, this fork) |
+| `batch_size` | `1000` | minibatch size |
+| `optimizer` | `"radam"` | Rectified Adam |
+| `max_temperature` | `5.0` | Gumbel-softmax initial temperature |
+| `min_temperature` | `0.7` | Gumbel-softmax final temperature |
+| `N` | `None` | per-PU output length (resolved later as `U*A`) |
+| `M` | `2` | binary latent vocabulary (=2 → boolean propositions) |
+| `train_gumbel` | `True` | inject Gumbel noise during training |
+| `train_softmax` | `True` | continuous latent during training |
+| `test_gumbel` | `False` | deterministic latent at inference |
+| `test_softmax` | `False` | discrete (rounded) latent at inference |
+| `dropout_z` | `False` | dropout on latent layer (paper kept off) |
+
+### Original tuning grid — `parameters` (`strips.py:75-95`, byte-identical to upstream after 2026-05-14)
+
+`simple_genetic_search` samples up to **`LIMIT`** configs from this Cartesian space. Upstream paper used **`LIMIT=300`** (`run()` in `latplan-fosae/strips.py:174`). This fork makes `LIMIT` env-overridable (default `LIMIT=1` for fast smokes).
+
+| Key | Search values | Note |
+|-----|---------------|------|
+| `beta` | `-0.3, -0.1, 0.0, 0.1, 0.3` | KL-style scalar coefficient |
+| `lr` | `0.1, 0.01, 0.001, 0.0001` | learning rate |
+| `U` | `20, 40, 80` | number of Predicate Units |
+| `A` | `2, 3, 4` | arity of every predicate |
+| `P` | `10, 20, 40, 80, 160, 320` | predicates per unit; total propositions = `U × P` |
+| `layer` | `50, 100, 400, 1000` | hidden dim of the FC encoder/decoder |
+| `dropout` | `0.3, 0.4, 0.5` | encoder/decoder dropout rate |
+| `noise` | `0.1, 0.2, 0.4` | additive input noise (denoising AE) |
+| `zerosuppress` | `0.0, 0.05, 0.1, 0.2, 0.5` | latent-sparsity penalty weight |
+| `zerosuppress_delay` | `0.05, 0.1, 0.2, 0.3, 0.5` | warm-up fraction before `zerosuppress` kicks in |
+| `preencoder_dimention` | `10, 25, 50, 100, 200, 400` | preencoder bottleneck width (note: paper's spelling is "dimention", typo preserved by upstream) |
+| `preencoder_layers` | `0, 1, 2` | Conv1D layers in the preencoder (0 = preencoder disabled) |
+| `preencoder_l1` | `0.0, 1e-5, 1e-4, 1e-3, 1e-2` | L1 regulariser on preencoder output |
+| `preencoder_delay` | `0.05, 0.1, 0.2, 0.3, 0.5` | warm-up fraction before preencoder loss is added |
+| `preencoder_output_activation` | `("relu","MSE"), ("linear","MSE"), ("sigmoid","MSE"), ("sigmoid","BCE")` | preencoder output activation + loss head |
+| `loss` | `"BCE"` | reconstruction loss head |
+| `eval` | `"MSE"` | validation metric |
+
+### Per-domain overrides (applied by the task function in `strips.py`)
+
+| Domain | Function `strips.py` | Override |
+|--------|----------------------|----------|
+| `puzzle` (mnist / mandrill / lenna / spider / digital) | `puzzle()` | `preencoder_dimension=0`, `preencoder_layers=0`, `preencoder_l1=0` — **preencoder disabled** (15-dim feature input is too small to benefit) |
+| `blocksworld` | `blocksworld()` | `picsize_grid`, `picsize` injected from npz; activation `self.blocks_activation` |
+| `labeled_objects` / `vidvrd` / `actiongenome` | (realistic-image domains) | `preencoder_layers=2`, `preencoder_dimention=256`, `preencoder_output_activation=("linear","MSE")`, `lr=0.0001` — paper-grade preencoder for 3272-dim feature input |
+
+### Paper-published "final picks" (Table 1, Fig 12 of 1902.08093)
+
+These are the **best** configs the paper reports after running the full grid above with `LIMIT=300`. They are **NOT defaults** — they are the *answers* to the grid search, useful as starting points for follow-up tuning.
+
+| Domain | `U` | `A` | `P` | propositions `U·P` | source |
+|--------|-----|-----|-----|---------------------|--------|
+| 8-puzzle (3×3, mnist) | **25** | **2** | **50** | 1 250 | paper §6, Table 1 |
+| 8-puzzle (3×3) Pareto minimum | 9 | 2 | 6 | 54 | paper §6, Fig 12 |
+| blocksworld (5 blocks × 3 stacks) | **10** | **2** | **100** | 1 000 | paper §6, Table 1; `train_all_blocks.sh` |
+| 8-puzzle extreme arity | 1 | 9 | up to 400 | up to 400 | `train_all_contour.sh` (Fig 8 contour study) |
+
+### Reasonable starting points for **new experiments** in this fork
+
+Pick a column by your data size, not by aesthetics. `propositions` is the discrete-capacity knob — too few starves the model, too many lets it memorise.
+
+| Use case | `U` | `A` | `P` | epoch | `lr` | preencoder | rationale |
+|----------|-----|-----|-----|-------|------|------------|-----------|
+| Paper-faithful 8-puzzle baseline | 25 | 2 | 50 | 1 000 | 0.001 | off | matches Table 1 |
+| Paper-faithful blocksworld baseline | 10 | 2 | 100 | 1 000 | 0.001 | off | matches Table 1 |
+| Cheap smoke (any domain) | 10 | 2 | 20 | 100 | 0.001 | off | converges in minutes; lets you confirm pipeline before paying for a full run |
+| Realistic-image domain (vidvrd / actiongenome / labeled_objects) | 40 | 2 | 20 | 2 000 | 0.0001 | layers=2 dim=256 act=("linear","MSE") | 3272-dim input → deeper preencoder + smaller lr |
+| Aggressive video search | 80 | 2 | 40 | 5 000 | 0.0001 | layers=2 dim=256 | 3 200 propositions; gives FOSAE room for many object/relation predicates |
+| Bigger-capacity safety net | 80 | 2 | 80 | 5 000 | 0.0001 | layers=2 dim=256 | 6 400 propositions; use when reconstruction stalls and you suspect bottleneck |
+
+For any of these: **add `LIMIT=20+` to actually search**, otherwise `simple_genetic_search` runs exactly one trial whose seed determines success.
+
+### Environment-variable knobs (this fork)
+
+| Env var | Default | Effect |
+|---------|---------|--------|
+| `EPOCH` | `1000` | overrides `default_parameters['epoch']` (`strips.py:40`) |
+| `LIMIT` | `1` | bounds `simple_genetic_search` trial count (`strips.py:221`) |
+| `OUT_DIR` | `<project>/out` | overrides output base; auto-joined with `<domain>/<type>/<run_tag>/` (`latplan/util/paths.py`) |
+| `VIDVRD_STRICT_CATEGORY` | `1` | strict primary-subject filter for VidVRD category training |
+| `AG_STRICT_CATEGORY` | `1` | same for ActionGenome |
+
+### Sherlock command templates
+
+Prereqs (fresh shell): `module restore fosae && source venv/bin/activate && cd $SCRATCH/panos/sgg-thesis && git pull`. Job submission via `sh/submit.sh`; each job's output lands in `OUT_DIR`.
+
+```bash
+# --- mnist puzzle paper baseline (LIMIT=300 trials, ~paper) ---
+LIMIT=300 EPOCH=1000 \
+  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-paper-puzzle-mnist \
+  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mnist 3 3 None None None 20000" \
+  TIME=72:00:00 \
+  bash sh/submit.sh
+
+# --- mnist puzzle fixed paper picks U=25 A=2 P=50, single trial ---
+EPOCH=1000 \
+  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-fixed-puzzle-mnist \
+  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mnist 3 3 25 2 50 20000" \
+  bash sh/submit.sh
+
+# --- mandrill puzzle (same hyperparams) ---
+EPOCH=1000 \
+  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-fixed-puzzle-mandrill \
+  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mandrill 3 3 25 2 50 20000" \
+  bash sh/submit.sh
+
+# --- blocksworld paper baseline (reproduce_plot replays best from grid_search.log) ---
+MEM=64G EPOCH=1000 \
+  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-paper-blocks-5-3 \
+  TRAIN_CMD="python3 strips.py reproduce_plot blocksworld FirstOrderSAE blocks-5-3 None None None 10000 BCE5" \
+  TIME=72:00:00 \
+  bash sh/submit.sh
+
+# --- blocksworld fixed paper picks U=10 A=2 P=100, single trial ---
+MEM=64G EPOCH=1000 \
+  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-fixed-blocks-5-3 \
+  TRAIN_CMD="python3 strips.py learn_plot blocksworld FirstOrderAE blocks-5-3 10 2 100 6500" \
+  bash sh/submit.sh
+
+# --- modest search (LIMIT=20 trials, ~2-4 h on v100; populates grid_search.log) ---
+LIMIT=20 EPOCH=1000 \
+  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/search-puzzle-mnist \
+  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mnist 3 3 None None None 20000" \
+  TIME=8:00:00 \
+  bash sh/submit.sh
+```
+
+Mode `learn_plot` writes `autoencoding_{test,train}{,_shuffled}.png` + `render_{test,train}{,_shuffled}.png` + `booleans_test.png` + `test*.pdf/.gv` decision-tree at the end. Mode `reproduce_plot` does the same after picking the best entry from a pre-existing `grid_search.log` (i.e. requires a prior `learn` / `learn_plot` job in the same `OUT_DIR`). Mode `learn` skips the plotting.

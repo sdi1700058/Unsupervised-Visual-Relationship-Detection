@@ -72,23 +72,28 @@ default_parameters = {
 }
 """
 """
-# 2 options for each parameter: 1) specify a list of values for tuning, 2) specify a single value to fix it
+# Hyperparameter tuning grid — VERBATIM from upstream latplan-fosae/strips.py:50-68
+# (the paper's published search space — see .claude/docs/SOURCES.md, 1902.08093).
+# simple_genetic_search samples up to LIMIT configs from this grid;
+# set `LIMIT` env-var to bound trial count. Default LIMIT=1 (single trial; fast smoke).
+# Pass U/A/P as CLI args to puzzle()/blocksworld() to FIX those knobs and search only
+# over the remainder.
 parameters = {
-    'beta'       :[0.0,0.1],
-    'lr'         :[0.001,0.0001],
-    'U'          :[40,80],
-    'P'          :[20,40],
-    'A'          :[2,3],
-    'layer'      :[200,400],
-    'dropout'    :[0.3,0.5],
-    'noise'      :[0.2,0.4],
-    'zerosuppress'       :[0.0,0.05],
-    'zerosuppress_delay' :[0.1,0.2],
-    'preencoder_dimention':[50,100],
-    'preencoder_layers':[0,1],
-    'preencoder_l1':[0.0, 0.0001, 0.001],
-    'preencoder_delay':[0.1,0.2],
-    'preencoder_output_activation':[("relu","MSE"),("linear","MSE")],
+    'beta'       :[-0.3,-0.1,0.0,0.1,0.3],
+    'lr'         :[0.1,0.01,0.001,0.0001],
+    'U'          :[20,40,80],
+    'A'          :[2,3,4],
+    'P'          :[10,20,40,80,160,320],
+    'layer'      :[50,100,400,1000],
+    'dropout'    :[0.3,0.4,0.5],
+    'noise'      :[0.1,0.2,0.4],
+    'zerosuppress'       :[0.0,0.05,0.1,0.2,0.5],
+    'zerosuppress_delay' :[0.05,0.1,0.2,0.3,0.5],
+    'preencoder_dimention':[10,25,50,100,200,400],
+    'preencoder_layers':[0,1,2],
+    'preencoder_l1':[0.0, 0.00001, 0.0001, 0.001, 0.01],
+    'preencoder_delay':[0.05,0.1,0.2,0.3,0.5],
+    'preencoder_output_activation':[("relu","MSE"),("linear","MSE"),("sigmoid","MSE"),("sigmoid","BCE")],
     'loss':["BCE"],
     'eval':["MSE"],
 }
@@ -101,8 +106,8 @@ parameters = {
     'P'          :[20],
     'A'          :[2],
     'layer'      :[200],
-    'dropout'    :[0.5],
-    'noise'      :[0.4],
+    'dropout'    :[0.0],
+    'noise'      :[0.0],
     'zerosuppress'       :[0.05],
     'zerosuppress_delay' :[0.2],
     'preencoder_dimention':[150],
@@ -218,7 +223,7 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
             default_parameters,
             parameters,
             path,
-            limit=1,
+            limit=int(os.environ.get("LIMIT", 1)),
             report_best= lambda net: net.save(),
         )
         if ae is None:
@@ -237,7 +242,7 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
             default_parameters,
             parameters,
             path,
-            limit=1,
+            limit=int(os.environ.get("LIMIT", 1)),
             report_best= lambda net: net.save(),
         )
         ae.save()
