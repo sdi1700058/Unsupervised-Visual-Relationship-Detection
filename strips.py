@@ -200,6 +200,8 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
             parameters,
             path,
             limit=int(os.environ.get("LIMIT", 1)),
+            initial_population=int(os.environ.get("INIT_POP", 20)),
+            population=int(os.environ.get("POPULATION", 10)),
             report_best= lambda net: net.save(),
         )
         if ae is None:
