@@ -69,14 +69,14 @@ parameters = {
     'P'          :[20],
     'A'          :[2],
     'layer'      :[200],
-    'dropout'    :[0.3],
-    'noise'      :[0.2],
-    'zerosuppress'       :[0.0],
-    'zerosuppress_delay' :[0.1],
+    'dropout'    :[0.05],      # was 0.3 — overfit OK
+    'noise'      :[0.05],      # was 0.2 — overfit OK
+    'zerosuppress'       :[0.05],   # was 0.0 — try user's idea
+    'zerosuppress_delay' :[0.05],   # was 0.1 — kick in earlier
     'preencoder_dimention':[50],
     'preencoder_layers':[0],
     'preencoder_l1':[0.0],
-    'preencoder_delay':[0.1],
+    'preencoder_delay':[0.9],       # was 0.1 — push EarlyStopMixin's max_delay to 0.9 → earlystop_delay = 1.0 → never fires
     'preencoder_output_activation':[("relu","MSE")],
     'loss':["BCE"],
     'eval':["MSE"],
@@ -108,6 +108,16 @@ def select(data,num):
 
 def plot_autoencoding_image(ae,test,train,plotmode):
     if 'plot' not in mode:
+        return
+    # simple_genetic_search returns None when grid_search.log already has limit-many
+    # entries (short-circuit). Saved model is on disk at trial_t<N>/net0.h5 — skip
+    # auto-plot here and instruct user to invoke `tools/replot.py` against the
+    # saved model_dir manually. Avoids crashing the whole pipeline post-train.
+    if ae is None:
+        print("[plot_autoencoding_image] ae is None (likely a search short-circuit). "
+              "Saved model(s) live under trial_t*/ in the output dir. "
+              "Run `python3 tools/replot.py <model_dir> --domain puzzle/blocks/...` "
+              "to render reconstructions manually.")
         return
 
     # plot the latent states
