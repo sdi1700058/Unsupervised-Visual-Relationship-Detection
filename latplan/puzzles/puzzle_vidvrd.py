@@ -9,8 +9,8 @@ strips.py can reuse the same preprocessing pipeline (blocks_activation, bboxes_t
 Download data first:  bash sh/download_vidvrd.sh
 
 Directory layout expected:
-  data/vidvrd/annotations/<video_id>.json
-  data/vidvrd/frames/<video_id>/<000001>.jpg   (extracted at 1fps)
+  data/video/vidvrd/annotations/{train,test}/<video_id>.json
+  data/video/vidvrd/frames_<N>fps/{train,test}/<video_id>/<NNNNNN>.jpg
 """
 
 import os
@@ -22,8 +22,9 @@ from PIL import Image
 from latplan.puzzles.puzzle_labeled_objects import (
     _crop_object, _scale_bbox_to_canvas, PATCH_SIZE, MAX_OBJECTS, CANVAS_H, CANVAS_W, PICSIZE)
 from latplan.util.cache import npz_cache_path, load_cached, save_cache
+from latplan.util.paths  import DATA_DIR
 
-_DEFAULT_ROOT       = os.path.join(os.path.dirname(__file__), "..", "..", "data", "video", "vidvrd")
+_DEFAULT_ROOT       = os.path.join(DATA_DIR, "video", "vidvrd")
 _DEFAULT_ANN_DIR    = os.path.join(_DEFAULT_ROOT, "annotations")
 def _default_frames_dir(fps):
     return os.path.join(_DEFAULT_ROOT, f"frames_{fps}fps")

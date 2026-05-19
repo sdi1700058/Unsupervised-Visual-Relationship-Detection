@@ -1,68 +1,156 @@
 #!/usr/bin/env bash
-# submit.sh — Convenience wrapper to launch a SLURM training job on Sherlock.
+# submit.sh — Launch a SLURM training job on Sherlock.
 #
-# All experiment knobs are env-var overridable. Defaults run an all-categories
-# vidvrd training job at fps=3 with U=40 A=2 P=20.
+# Composes the canonical hierarchical output dir
+#   out/<domain>/<category>/<run_tag>/        (SPEC §C15, §V13)
+# via the shared python helper (latplan.util.paths.resolved_out_dir) so
+# strips.py + run_training.sh + this script all see the SAME path.
+#
+# Env knobs (defaults shown):
+#   DOMAIN=vidvrd            puzzle | blocks | vidvrd | actiongenome | labeled_objects
+#   AECLASS=FirstOrderSAE    model class
+#   U=40 A=2 P=20            FOSAE hyperparams
+#   EPOCH=5000               training epochs
+#   BATCH=None               batch size override (None = strips.py default)
+#   FPS=3                    frame-rate (video domains only)
+#   CATEGORY=bicycle         video class filter (None = all)
+#   TRANSITION_MODE=sequential
+#   MAX_VIDEOS=None
+#   PUZZLE_TYPE=mnist WIDTH=3 HEIGHT=3   (puzzle only)
+#   TRACK=blocks-5-3                      (blocks only)
 #
 # Examples
-# --------
-#   bash sh/submit.sh                                   # default vidvrd run
-#   CATEGORY=person bash sh/submit.sh                   # per-category
-#   FPS=5 EPOCH=8000 bash sh/submit.sh                  # 5fps, longer training
-#   DOMAIN=labeled_objects ARGS_TAIL="None sequential 5000 5000 9000" \
-#       bash sh/submit.sh                               # different domain
-#   GPUS=2 MEM=64G TIME=48:00:00 bash sh/submit.sh      # bigger SLURM ask
+#   DOMAIN=puzzle PUZZLE_TYPE=mnist WIDTH=3 HEIGHT=3 EPOCH=1000 bash sh/submit.sh
+#   DOMAIN=blocks TRACK=blocks-5-3 EPOCH=1000 MEM=64G bash sh/submit.sh
+#   DOMAIN=vidvrd CATEGORY=bicycle FPS=30 bash sh/submit.sh
+#   DOMAIN=actiongenome CATEGORY=chair bash sh/submit.sh
+#   DOMAIN=labeled_objects MAX_IMAGES=5000 bash sh/submit.sh
 #
-# Custom raw command (bypasses the vidvrd template):
-#   TRAIN_CMD="python3 strips.py learn puzzle mnist 3 3 100" bash sh/submit.sh
-#
-# All paths and outputs stay inside the project directory.
+# Override TRAIN_CMD to bypass the per-domain template entirely:
+#   TRAIN_CMD="python3 strips.py learn puzzle FirstOrderAE mnist 3 3" bash sh/submit.sh
 
 set -eo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# ── Training-side params (used to build TRAIN_CMD if not supplied) ───────────
+# ── Training-side params ─────────────────────────────────────────────────────
 DOMAIN="${DOMAIN:-vidvrd}"
 AECLASS="${AECLASS:-FirstOrderSAE}"
 U="${U:-40}"
 A="${A:-2}"
 P="${P:-20}"
 EPOCH="${EPOCH:-5000}"
-MAX_VIDEOS="${MAX_VIDEOS:-None}"
 BATCH="${BATCH:-None}"
-FPS="${FPS:-30}"
-CATEGORY="${CATEGORY:-bicycle}"
 TRANSITION_MODE="${TRANSITION_MODE:-sequential}"
+MAX_VIDEOS="${MAX_VIDEOS:-None}"
+MAX_IMAGES="${MAX_IMAGES:-None}"
 
-# Build the default vidvrd training command.
-# Positional: aeclass U A P ann_dir frames_dir transition_mode epoch max_videos batch_size fps category
-DEFAULT_VIDVRD_CMD="python3 strips.py learn ${DOMAIN} ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY}"
+# Video-only knobs
+FPS="${FPS:-3}"
+CATEGORY="${CATEGORY:-bicycle}"
 
-# Allow callers to provide TRAIN_CMD directly (overrides the template) or
-# ARGS_TAIL to append/replace tail of the strips.py call (advanced).
+# Puzzle-only knobs
+PUZZLE_TYPE="${PUZZLE_TYPE:-mnist}"
+WIDTH="${WIDTH:-3}"
+HEIGHT="${HEIGHT:-3}"
+NUM_EXAMPLES="${NUM_EXAMPLES:-20000}"
+
+# Blocks-only knobs
+TRACK="${TRACK:-blocks-5-3}"
+NUM_TRANSITIONS="${NUM_TRANSITIONS:-6500}"
+
+# ── Per-domain TRAIN_CMD template (only used if TRAIN_CMD unset) ─────────────
+# Positional signatures (from strips.py):
+#   puzzle(aeclass, type, width, height, U, A, P, num_examples)
+#   blocksworld(aeclass, track, U, A, P, num_examples)
+#   labeled_objects(aeclass, U, A, P, num_objects, comment, dataset_path,
+#                   images_dir, transition_mode, epoch, max_images, batch_size)
+#   vidvrd(aeclass, U, A, P, annotations_dir, frames_dir, transition_mode,
+#          epoch, max_videos, batch_size, fps, category)
+#   actiongenome(aeclass, U, A, P, annotations_dir, frames_dir, transition_mode,
+#                epoch, max_videos, batch_size, fps, category)
+build_default_cmd() {
+    case "${DOMAIN}" in
+        puzzle)
+            echo "python3 strips.py learn puzzle ${AECLASS} ${PUZZLE_TYPE} ${WIDTH} ${HEIGHT} ${U} ${A} ${P} ${NUM_EXAMPLES}"
+            ;;
+        blocks|blocksworld)
+            echo "python3 strips.py learn blocksworld ${AECLASS} ${TRACK} ${U} ${A} ${P} ${NUM_TRANSITIONS}"
+            ;;
+        labeled_objects)
+            echo "python3 strips.py learn labeled_objects ${AECLASS} ${U} ${A} ${P} None None None None ${TRANSITION_MODE} ${EPOCH} ${MAX_IMAGES} ${BATCH}"
+            ;;
+        vidvrd)
+            echo "python3 strips.py learn vidvrd ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY}"
+            ;;
+        actiongenome)
+            echo "python3 strips.py learn actiongenome ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY}"
+            ;;
+        *)
+            echo "[submit] unknown DOMAIN=${DOMAIN}" >&2
+            exit 2
+            ;;
+    esac
+}
+
 if [[ -n "${ARGS_TAIL:-}" ]]; then
     TRAIN_CMD="${TRAIN_CMD:-python3 strips.py learn ${DOMAIN} ${AECLASS} ${U} ${A} ${P} ${ARGS_TAIL}}"
 else
-    TRAIN_CMD="${TRAIN_CMD:-${DEFAULT_VIDVRD_CMD}}"
+    TRAIN_CMD="${TRAIN_CMD:-$(build_default_cmd)}"
 fi
 
+# ── Compose canonical JOB_OUT_DIR via shared helper (SPEC §C15, §V13) ────────
+# Pass FULL parameters dict so the sha1 suffix differentiates lr/preencoder/etc.
+JOB_OUT_DIR="$(
+PYTHONPATH="${PROJECT_DIR}:${PYTHONPATH:-}" python3 - <<PY
+import os, importlib.util
+spec = importlib.util.spec_from_file_location("paths", "${PROJECT_DIR}/latplan/util/paths.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+params = {
+    "U":[${U}], "A":[${A}], "P":[${P}],
+    "epoch":[${EPOCH}], "batch":["${BATCH}"],
+    "transition_mode":["${TRANSITION_MODE}"],
+    "max_videos":["${MAX_VIDEOS}"], "max_images":["${MAX_IMAGES}"],
+    "fps":[${FPS}], "category":["${CATEGORY}"],
+    "puzzle_type":["${PUZZLE_TYPE}"], "width":[${WIDTH}], "height":[${HEIGHT}],
+    "track":["${TRACK}"], "aeclass":["${AECLASS}"],
+}
+dom_kw = dict(type="${PUZZLE_TYPE}", width=${WIDTH}, height=${HEIGHT}, track="${TRACK}")
+vc  = "${CATEGORY}"
+vc  = vc if vc not in ("", "None", "none") else "_all"
+fps = ${FPS}
+print(m.resolved_out_dir("${DOMAIN}", params, "${AECLASS}",
+                         ${U}, ${A}, ${P},
+                         video_category=vc, fps=fps,
+                         base=os.environ.get("OUT_DIR") or os.path.join("${PROJECT_DIR}", "out"),
+                         **dom_kw))
+PY
+)"
+
+if [[ -z "${JOB_OUT_DIR}" ]]; then
+    echo "[submit] FATAL: could not compose JOB_OUT_DIR" >&2
+    exit 3
+fi
+
+# Make sure strips.py / grid_search.log (V13) point at the per-job dir too.
+export JOB_OUT_DIR
+export OUT_DIR="${JOB_OUT_DIR}"
+
 # ── SLURM-side params ────────────────────────────────────────────────────────
+# JOB_TAG = <domain>-<category> per SPEC §C15. Suffix with timestamp+PID so
+# squeue / log filenames stay unique across concurrent launches.
 JOB_TAG="${DOMAIN}"
-[[ "${CATEGORY}" != "None" && -n "${CATEGORY}" ]] && JOB_TAG="${DOMAIN}-${CATEGORY}"
-# Unique per submission so concurrent jobs never collide in squeue / logs.
-# Override with JOB_NAME=... or set JOB_SUFFIX="" to disable the suffix.
+[[ "${CATEGORY}" != "None" && -n "${CATEGORY}" && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]] \
+    && JOB_TAG="${DOMAIN}-${CATEGORY}"
 JOB_SUFFIX="${JOB_SUFFIX-$(date +%Y%m%d-%H%M%S)-$$}"
 JOB_NAME="${JOB_NAME:-fosae-${JOB_TAG}${JOB_SUFFIX:+-${JOB_SUFFIX}}}"
 PARTITION="${PARTITION:-gpu}"
 
-# Auto-estimate MEM/TIME/CONSTRAINT from dataset size (vidvrd only).
-# Set AUTO_RESOURCES=0 to disable. Any explicitly-set var is preserved.
+# Auto-estimate resources for vidvrd (sacct-driven). Other domains: caller sets.
 if [[ "${AUTO_RESOURCES:-1}" == "1" && "${DOMAIN}" == "vidvrd" ]]; then
     if _EST="$(DOMAIN="${DOMAIN}" CATEGORY="${CATEGORY}" FPS="${FPS}" \
                 EPOCH="${EPOCH}" \
                 BATCH="${BATCH/None/1000}" \
                 FORMAT=env bash "${PROJECT_DIR}/sh/estimate_resources.sh" 2>/dev/null)"; then
-        # Apply only when caller didn't override.
         eval "_${_EST}"
         : "${MEM:=${_MEM:-}}"
         : "${TIME:=${_TIME:-}}"
@@ -83,18 +171,17 @@ MAIL_USER="${MAIL_USER:-}"
 
 mkdir -p "${PROJECT_DIR}/logs" "${PROJECT_DIR}/out"
 
-# Auto-promote QoS to "long" when TIME implies > 2 days (Sherlock default cap).
 QOS="${QOS:-}"
 if [[ -z "${QOS}" ]]; then
     case "${TIME}" in
-        [3-9]-*|[1-9][0-9]-*) QOS="long" ;;   # >= 3-00:00:00
+        [3-9]-*|[1-9][0-9]-*) QOS="long" ;;
     esac
 fi
 
-# Pass training-side params through to run_training.sh so post-train hooks
-# (extract_fol + visualize_fol) can resolve OUT_DIR.
+# Pass training-side env vars through to run_training.sh (post-train hooks).
 EXPORT_VARS="ALL"
 EXPORT_VARS+=",TRAIN_CMD=${TRAIN_CMD}"
+EXPORT_VARS+=",JOB_OUT_DIR=${JOB_OUT_DIR},OUT_DIR=${JOB_OUT_DIR}"
 EXPORT_VARS+=",DOMAIN=${DOMAIN},AECLASS=${AECLASS}"
 EXPORT_VARS+=",U=${U},A=${A},P=${P}"
 EXPORT_VARS+=",CATEGORY=${CATEGORY}"
@@ -119,11 +206,14 @@ SBATCH_ARGS=(
 
 echo "[submit] Job name : ${JOB_NAME}"
 echo "[submit] Partition: ${PARTITION}  GPUs=${GPUS}  Mem=${MEM}  Time=${TIME}  QoS=${QOS:-default}"
+_CAT_DISP="<n/a>"
+[[ "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]] && _CAT_DISP="${CATEGORY:-_all}"
+echo "[submit] Domain   : ${DOMAIN}  Category: ${_CAT_DISP}"
+echo "[submit] OUT_DIR  : ${JOB_OUT_DIR}"
 echo "[submit] Cmd      : ${TRAIN_CMD}"
 echo "[submit] Hooks    : EXTRACT_FOL=${EXTRACT_FOL:-1}  VISUALIZE=${VISUALIZE:-1}"
 echo "[submit] Logs     : ${PROJECT_DIR}/logs/${JOB_NAME}.<JOBID>.{out,err}"
 
-# Dry-run mode: print sbatch invocation without submitting.
 if [[ "${DRY_RUN:-0}" == "1" ]]; then
     echo "[submit] DRY_RUN=1 — would run:"
     echo "  sbatch ${SBATCH_ARGS[*]} ${PROJECT_DIR}/run_training.sh"

@@ -90,32 +90,19 @@ if [[ "${TRAIN_RC}" -ne 0 ]]; then
     exit "${TRAIN_RC}"
 fi
 
-# ── Resolve OUT_DIR from training-side env vars (set by sh/submit.sh) ────────
+# ── Resolve OUT_DIR ─────────────────────────────────────────────────────────
+# Single source of truth: JOB_OUT_DIR composed by sh/submit.sh via
+# latplan/util/paths.py::resolved_out_dir. strips.py wrote there during the
+# train step (SPEC §C15, §V13). No flat-path reconstruction.
 DOMAIN="${DOMAIN:-}"
-AECLASS="${AECLASS:-FirstOrderSAE}"
-U="${U:-}"; A="${A:-}"; P="${P:-}"
 CATEGORY="${CATEGORY:-}"
-RUN_TAG="${AECLASS}_U${U}_A${A}_P${P}"
-
-OUT_DIR=""
-case "${DOMAIN}" in
-    vidvrd)
-        if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" ]]; then
-            OUT_DIR="${PROJECT_DIR}/out/video-${CATEGORY}/${RUN_TAG}"
-        else
-            OUT_DIR="${PROJECT_DIR}/out/vidvrd/${RUN_TAG}"
-        fi
-        ;;
-    labeled_objects)
-        OUT_DIR="${PROJECT_DIR}/out/labeled_objects/${RUN_TAG}"
-        ;;
-esac
+OUT_DIR="${JOB_OUT_DIR:-${OUT_DIR:-}}"
 
 # ── Post-train: extract_fol + visualize_fol if model was saved ───────────────
 echo ""
 echo "--- Post-train hooks ---"
 if [[ -z "${OUT_DIR}" ]]; then
-    echo "[skip] DOMAIN=${DOMAIN:-<unset>} not supported by post-train hooks. Manual:"
+    echo "[skip] JOB_OUT_DIR / OUT_DIR not set (sh/submit.sh did not compose). Manual:"
     echo "       python3 extract_fol.py    <out_dir> --domain <domain>"
     echo "       python3 visualize_fol.py  <out_dir> --domain <domain>"
 elif [[ ! -f "${OUT_DIR}/net0.h5" ]]; then
@@ -123,7 +110,7 @@ elif [[ ! -f "${OUT_DIR}/net0.h5" ]]; then
 else
     echo "[info] Output dir: ${OUT_DIR}"
     CAT_FLAG=()
-    if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" ]]; then
+    if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]]; then
         CAT_FLAG=(--category "${CATEGORY}")
     fi
 

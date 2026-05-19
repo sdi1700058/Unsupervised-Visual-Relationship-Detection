@@ -32,7 +32,11 @@ setattr(keras.optimizers,"radam", RAdam)
 setattr(keras.optimizers,"adabound", AdaBound)
 
 # ── Canonical directories ──────────────────────────────────────────────
-from latplan.util.paths import PROJECT_ROOT, DATA_DIR, OUT_DIR, find_dataset as _find_dataset
+from latplan.util.paths import (
+    PROJECT_ROOT, DATA_DIR, OUT_DIR,
+    find_dataset as _find_dataset,
+    resolved_out_dir as _resolved_out_dir,
+)
 os.makedirs(OUT_DIR, exist_ok=True)
 
 # default values
@@ -280,13 +284,17 @@ def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=
     val   = objects[int(len(objects)*0.9):int(len(objects)*0.95)]
     test  = objects[int(len(objects)*0.95):]
 
-    # SPEC C15 hierarchical: out/puzzle/<type>/<run_tag>/
-    _U = parameters.get('U', [default_parameters.get('U', 'x')])[0]
-    _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
-    _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    # SPEC C15: out/<domain>/<category>/<run_tag>/ — submit.sh may pre-compose
+    # the per-job dir into JOB_OUT_DIR; else we compose via paths.helpers.
+    _U  = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A  = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P  = parameters.get('P', [default_parameters.get('P', 'x')])[0]
     _ae = parameters.get('aeclass', [aeclass])[0]
-    run_tag = f"{_ae}_U{_U}_A{_A}_P{_P}"
-    ae = run(os.path.join(OUT_DIR, "puzzle", type, run_tag), train, val, parameters)
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "puzzle", parameters, _ae, _U, _A, _P,
+        type=type, width=width, height=height)
+    os.makedirs(out_path, exist_ok=True)
+    ae = run(out_path, train, val, parameters)
     show_summary(ae, train, test)
     plot_autoencoding_image(ae,test,train,"puzzle")
 
@@ -358,13 +366,14 @@ def blocksworld(aeclass="FirstOrderAE",track="blocks-5-3",U=None,A=None,P=None,n
 
     print("checkpoint")
 
-    # SPEC C15 hierarchical: out/blocks/<track>/<run_tag>/
-    _U = parameters.get('U', [default_parameters.get('U', 'x')])[0]
-    _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
-    _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    _U  = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A  = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P  = parameters.get('P', [default_parameters.get('P', 'x')])[0]
     _ae = parameters.get('aeclass', [aeclass])[0]
-    run_tag = f"{_ae}_U{_U}_A{_A}_P{_P}"
-    ae = run(os.path.join(OUT_DIR, "blocks", track, run_tag), train, val, parameters)
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "blocks", parameters, _ae, _U, _A, _P, track=track)
+    os.makedirs(out_path, exist_ok=True)
+    ae = run(out_path, train, val, parameters)
     show_summary(ae, train, test)
 
     plot_autoencoding_image(ae,test,train,"blocks")
@@ -465,15 +474,11 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
         val   = states[int(len(states) * 0.9):int(len(states) * 0.95)]
         test  = states[int(len(states) * 0.95):]
 
-    # Encode key hyperparameters in the directory name so concurrent runs
-    # with different settings don't overwrite each other.
     _U_val = parameters.get('U', [default_parameters.get('U', 'x')])[0]
     _A_val = parameters.get('A', [default_parameters.get('A', 'x')])[0]
     _P_val = parameters.get('P', [default_parameters.get('P', 'x')])[0]
-    run_tag = f"{aeclass}_U{_U_val}_A{_A_val}_P{_P_val}"
-    if max_images is not None:
-        run_tag += f"_n{max_images}"
-    out_path = os.path.join(OUT_DIR, "labeled_objects", run_tag)
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "labeled_objects", parameters, aeclass, _U_val, _A_val, _P_val)
     os.makedirs(out_path, exist_ok=True)
 
     ae = run(out_path, train, val, parameters)
@@ -554,10 +559,9 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     _U = parameters.get('U', [default_parameters.get('U', 'x')])[0]
     _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
     _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
-    run_tag    = f"{aeclass}_U{_U}_A{_A}_P{_P}"
-    # SPEC C15 hierarchical naming: out/<modality>/<dataset>/<category>/<run_tag>/
-    cat_seg  = (category or "_all").replace("/", "_")
-    out_path = os.path.join(OUT_DIR, "video", "vidvrd", cat_seg, run_tag)
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "vidvrd", parameters, aeclass, _U, _A, _P,
+        video_category=(category or "_all"), fps=fps)
     os.makedirs(out_path, exist_ok=True)
 
     ae = run(out_path, train, val, parameters)
@@ -647,10 +651,9 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     _U = parameters.get('U', [default_parameters.get('U', 'x')])[0]
     _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
     _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
-    run_tag = f"{aeclass}_U{_U}_A{_A}_P{_P}"
-    # SPEC C15: out/<modality>/<dataset>/<category>/<run_tag>/ ; all-cat = `_all`
-    cat_seg  = (category or "_all").replace("/", "_")
-    out_path = os.path.join(OUT_DIR, "video", "actiongenome", cat_seg, run_tag)
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "actiongenome", parameters, aeclass, _U, _A, _P,
+        video_category=(category or "_all"), fps=fps)
     os.makedirs(out_path, exist_ok=True)
 
     ae = run(out_path, train, val, parameters)
