@@ -26,7 +26,7 @@ notebooks/fiftyone_data/
 latplan/puzzles/*.npz
 latplan/puzzles/*.npy
 .claude/
-
+old_working_strips.py
 venv/
 .keras/
 **/events.out.tfevents.*

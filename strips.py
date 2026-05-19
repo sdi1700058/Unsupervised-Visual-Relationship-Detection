@@ -50,30 +50,58 @@ default_parameters = {
     'test_softmax'    : False,   # if true, latent output is continuous
     'dropout_z'       : False,
 }
-# Hyperparameter tuning grid — VERBATIM from upstream latplan-fosae/strips.py:50-68
-# (paper's published search space, see .claude/docs/SOURCES.md 1902.08093).
-# simple_genetic_search samples up to LIMIT configs from this Cartesian product;
-# set `LIMIT` env-var (default 1 = single trial smoke; 300 = paper-grade search).
-# Pass U/A/P/etc as CLI args to puzzle()/blocksworld() to FIX those knobs.
+# Active `parameters` block. Two modes — toggle by uncommenting only ONE block:
+#
+#   (1) Single-trial FIXED paper-faithful values (default; KNOWN WORKING per
+#       old_working_strips.py). Use this for paper-spec reproducibility with
+#       LIMIT=1 (default). Matches Asai 2019 §6 8-puzzle paper picks.
+#   (2) Full upstream grid (commented below). Use with LIMIT=300 INIT_POP=20
+#       POPULATION=10 to reproduce the paper's full grid search.
+#
+# Override individual knobs via CLI args (U,A,P) in puzzle()/blocksworld() —
+# locals() loop replaces the matching keys regardless of which block is active.
+
+# ── (1) FIXED single-trial — paper baseline ────────────────────────────────
 parameters = {
-    'beta'       :[-0.3,-0.1,0.0,0.1,0.3],
-    'lr'         :[0.1,0.01,0.001,0.0001],
-    'U'          :[20,40,80],
-    'A'          :[2,3,4],
-    'P'          :[10,20,40,80,160,320],
-    'layer'      :[50,100,400,1000],
-    'dropout'    :[0.3,0.4,0.5],
-    'noise'      :[0.1,0.2,0.4],
-    'zerosuppress'       :[0.0,0.05,0.1,0.2,0.5],
-    'zerosuppress_delay' :[0.05,0.1,0.2,0.3,0.5],
-    'preencoder_dimention':[10,25,50,100,200,400],
-    'preencoder_layers':[0,1,2],
-    'preencoder_l1':[0.0, 0.00001, 0.0001, 0.001, 0.01],
-    'preencoder_delay':[0.05,0.1,0.2,0.3,0.5],
-    'preencoder_output_activation':[("relu","MSE"),("linear","MSE"),("sigmoid","MSE"),("sigmoid","BCE")],
+    'beta'       :[0.0],
+    'lr'         :[0.001],
+    'U'          :[40],
+    'P'          :[20],
+    'A'          :[2],
+    'layer'      :[200],
+    'dropout'    :[0.3],
+    'noise'      :[0.2],
+    'zerosuppress'       :[0.0],
+    'zerosuppress_delay' :[0.1],
+    'preencoder_dimention':[50],
+    'preencoder_layers':[0],
+    'preencoder_l1':[0.0],
+    'preencoder_delay':[0.1],
+    'preencoder_output_activation':[("relu","MSE")],
     'loss':["BCE"],
     'eval':["MSE"],
 }
+
+# ── (2) FULL upstream search grid — uncomment + comment block (1) above ───
+# parameters = {
+#     'beta'       :[-0.3,-0.1,0.0,0.1,0.3],
+#     'lr'         :[0.1,0.01,0.001,0.0001],
+#     'U'          :[20,40,80],
+#     'A'          :[2,3,4],
+#     'P'          :[10,20,40,80,160,320],
+#     'layer'      :[50,100,400,1000],
+#     'dropout'    :[0.3,0.4,0.5],
+#     'noise'      :[0.1,0.2,0.4],
+#     'zerosuppress'       :[0.0,0.05,0.1,0.2,0.5],
+#     'zerosuppress_delay' :[0.05,0.1,0.2,0.3,0.5],
+#     'preencoder_dimention':[10,25,50,100,200,400],
+#     'preencoder_layers':[0,1,2],
+#     'preencoder_l1':[0.0, 0.00001, 0.0001, 0.001, 0.01],
+#     'preencoder_delay':[0.05,0.1,0.2,0.3,0.5],
+#     'preencoder_output_activation':[("relu","MSE"),("linear","MSE"),("sigmoid","MSE"),("sigmoid","BCE")],
+#     'loss':["BCE"],
+#     'eval':["MSE"],
+# }
 
 def select(data,num):
     return data[random.randint(0,data.shape[0],num)]
