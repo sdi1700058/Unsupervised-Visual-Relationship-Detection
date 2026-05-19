@@ -76,7 +76,8 @@ parameters = {
     'preencoder_dimention':[50],
     'preencoder_layers':[0],
     'preencoder_l1':[0.0],
-    'preencoder_delay':[0.9],       # was 0.1 — push EarlyStopMixin's max_delay to 0.9 → earlystop_delay = 1.0 → never fires
+    'preencoder_delay':[0.1],       # 0.1 default — earlystop fires @ epoch 200; previous 0.9 caused ZeroDivisionError in LinearEarlyStopping (epoch_end - epoch_start = 0)
+    'max_temperature':[1.0],        # was default 5.0 — lower start temp keeps Gumbel latent near-discrete from epoch 1; high temp early was the suspected reason for non-learning
     'preencoder_output_activation':[("relu","MSE")],
     'loss':["BCE"],
     'eval':["MSE"],
