@@ -70,14 +70,11 @@ default_parameters = {
     'loss':["BCE"],
     'eval':["MSE"],
 }
-"""
-"""
 # Hyperparameter tuning grid — VERBATIM from upstream latplan-fosae/strips.py:50-68
-# (the paper's published search space — see .claude/docs/SOURCES.md, 1902.08093).
-# simple_genetic_search samples up to LIMIT configs from this grid;
-# set `LIMIT` env-var to bound trial count. Default LIMIT=1 (single trial; fast smoke).
-# Pass U/A/P as CLI args to puzzle()/blocksworld() to FIX those knobs and search only
-# over the remainder.
+# (paper's published search space, see .claude/docs/SOURCES.md 1902.08093).
+# simple_genetic_search samples up to LIMIT configs from this Cartesian product;
+# set `LIMIT` env-var (default 1 = single trial smoke; 300 = paper-grade search).
+# Pass U/A/P/etc as CLI args to puzzle()/blocksworld() to FIX those knobs.
 parameters = {
     'beta'       :[-0.3,-0.1,0.0,0.1,0.3],
     'lr'         :[0.1,0.01,0.001,0.0001],
@@ -94,27 +91,6 @@ parameters = {
     'preencoder_l1':[0.0, 0.00001, 0.0001, 0.001, 0.01],
     'preencoder_delay':[0.05,0.1,0.2,0.3,0.5],
     'preencoder_output_activation':[("relu","MSE"),("linear","MSE"),("sigmoid","MSE"),("sigmoid","BCE")],
-    'loss':["BCE"],
-    'eval':["MSE"],
-}
-"""
-# fixed parameters (not tuned) --> Make limi=1 in generic_search() if you use this
-parameters = {
-    'beta'       :[0.0],
-    'lr'         :[0.0001],
-    'U'          :[40],
-    'P'          :[20],
-    'A'          :[2],
-    'layer'      :[200],
-    'dropout'    :[0.0],
-    'noise'      :[0.0],
-    'zerosuppress'       :[0.05],
-    'zerosuppress_delay' :[0.2],
-    'preencoder_dimention':[150],
-    'preencoder_layers':[50],
-    'preencoder_l1':[0.0001],
-    'preencoder_delay':[0.2],
-    'preencoder_output_activation':[("relu","MSE")],
     'loss':["BCE"],
     'eval':["MSE"],
 }
