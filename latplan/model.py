@@ -5,6 +5,7 @@ Model classes for latplan.
 """
 
 import json
+import os
 import numpy as np
 from keras.layers import *
 from keras.layers.normalization import BatchNormalization as BN
@@ -802,6 +803,13 @@ class EarlyStopMixin:
             if "delay" in key:
                 max_delay = max(max_delay, self.parameters[key])
         self.parameters["earlystop_delay"] = max_delay + 0.1
+
+        # Escape hatch: set env var NO_EARLYSTOP=1 to skip the early-stopping
+        # callbacks entirely (lets training run the full `epoch` count for
+        # diagnostic / overfit-baseline purposes).
+        if os.environ.get("NO_EARLYSTOP") == "1":
+            print("[EarlyStopMixin] NO_EARLYSTOP=1 — skipping ChangeEarlyStopping + LinearEarlyStopping callbacks")
+            return
 
         self.callbacks.append(
             ChangeEarlyStopping(
