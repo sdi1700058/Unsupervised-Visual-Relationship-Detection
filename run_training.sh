@@ -98,43 +98,60 @@ DOMAIN="${DOMAIN:-}"
 CATEGORY="${CATEGORY:-}"
 OUT_DIR="${JOB_OUT_DIR:-${OUT_DIR:-}}"
 
-# ── Post-train: extract_fol + visualize_fol if model was saved ───────────────
+# ── Post-train hooks — three artefacts, each fails non-fatally ───────────────
+#   1) tools/replot.py            → original-author PNG suite (render_*, booleans_*)
+#   2) viz/recon.py               → single-glance bulk reconstruction grid
+#   3) tools/plot_training_curve  → training/val loss curve from CSV
+#
+# extract_fol.py (FOL predicate extraction) opt-in via EXTRACT_FOL=1 — it's
+# slow + noisy. visualize_fol.py is DEPRECATED from the auto-hook (still
+# callable manually); user feedback was that its per-unit/per-state PNG dump
+# was overwhelming. Enable with FOL_VIZ=1 if needed.
 echo ""
 echo "--- Post-train hooks ---"
 if [[ -z "${OUT_DIR}" ]]; then
     echo "[skip] JOB_OUT_DIR / OUT_DIR not set (sh/submit.sh did not compose). Manual:"
-    echo "       python3 extract_fol.py    <out_dir> --domain <domain>"
-    echo "       python3 visualize_fol.py  <out_dir> --domain <domain>"
+    echo "       python3 tools/replot.py            <out_dir>"
+    echo "       python3 viz/recon.py               <out_dir>"
+    echo "       python3 tools/plot_training_curve  <out_dir>"
 elif [[ ! -f "${OUT_DIR}/net0.h5" ]]; then
     echo "[skip] ${OUT_DIR}/net0.h5 not found — training likely did not complete cleanly."
 else
     echo "[info] Output dir: ${OUT_DIR}"
+
+    echo "[run]  tools/replot.py (original-author plot suite)"
+    python3 tools/replot.py "${OUT_DIR}" --num "${REPLOT_NUM:-200}" \
+        || echo "[warn] tools/replot.py failed (non-fatal)"
+
+    echo "[run]  viz/recon.py (bulk reconstruction grid)"
+    python3 viz/recon.py "${OUT_DIR}" --num "${RECON_NUM:-8}" \
+        || echo "[warn] viz/recon.py failed (non-fatal)"
+
+    echo "[run]  tools/plot_training_curve.py (loss curve)"
+    python3 tools/plot_training_curve.py "${OUT_DIR}" \
+        || echo "[warn] tools/plot_training_curve.py failed (non-fatal)"
+
+    # FOL extraction — opt-in, slow.
     CAT_FLAG=()
-    # When NPZ_PATH is set, the actual trained category lives in
-    # ${OUT_DIR}/loaded_videos.json — the submit.sh-supplied CATEGORY env
-    # is a default-bicycle leftover that would mismatch. Let extract_fol /
-    # visualize_fol auto-detect from the manifest by omitting --category.
     if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" \
           && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ \
           && ( -z "${NPZ_PATH}" || "${NPZ_PATH}" == "None" ) ]]; then
         CAT_FLAG=(--category "${CATEGORY}")
     fi
-
-    if [[ "${EXTRACT_FOL:-1}" == "1" ]]; then
-        echo "[run]  extract_fol.py"
+    if [[ "${EXTRACT_FOL:-0}" == "1" ]]; then
+        echo "[run]  extract_fol.py (FOL atom CSV)"
         python3 extract_fol.py "${OUT_DIR}" --domain "${DOMAIN}" "${CAT_FLAG[@]}" \
             || echo "[warn] extract_fol failed (non-fatal)"
     else
-        echo "[skip] EXTRACT_FOL=0"
+        echo "[skip] extract_fol.py (set EXTRACT_FOL=1 to enable)"
     fi
 
-    if [[ "${VISUALIZE:-1}" == "1" ]]; then
-        echo "[run]  visualize_fol.py --num ${VIS_NUM:-6}"
+    # Legacy per-unit attention dump — user-deprecated; opt-in.
+    if [[ "${FOL_VIZ:-0}" == "1" ]]; then
+        echo "[run]  visualize_fol.py --num ${VIS_NUM:-6} (legacy per-unit dump)"
         python3 visualize_fol.py "${OUT_DIR}" --domain "${DOMAIN}" \
             --num "${VIS_NUM:-6}" "${CAT_FLAG[@]}" \
             || echo "[warn] visualize_fol failed (non-fatal)"
-    else
-        echo "[skip] VISUALIZE=0"
     fi
 fi
 

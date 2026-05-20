@@ -35,6 +35,10 @@ setattr(keras.optimizers, "adabound", AdaBound)
 import latplan
 import latplan.model
 from latplan.puzzles.util import preprocess
+import strips as _strips
+# plot_autoencoding_image short-circuits unless `strips.mode` contains "plot"
+# (upstream gating). Force it on so this replot script does its job.
+_strips.mode = "plot"
 from strips import bboxes_to_onehot, plot_autoencoding_image, show_summary
 
 
