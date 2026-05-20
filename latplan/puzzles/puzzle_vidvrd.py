@@ -132,14 +132,24 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
         vid_frames_dir = os.path.join(frames_dir, vid_id)
 
-        # `fill_annotations=True` carries the previous non-empty trajectory
-        # forward into subsequent empty entries so the model gets dense per-frame
-        # supervision even when the annotator left gaps. The IMAGE for each
-        # filled frame is still the real source-PTS jpeg; only the bbox/class
-        # list is reused. Valid when the tracked objects are continuously
-        # visible (dog-frisbee, sheep, etc).
+        trajectories = ann.get("trajectories", [])
+
+        # `fill_annotations=True`: backward-fill leading empties from the first
+        # non-empty entry, then forward-fill mid-stream empties from the last
+        # non-empty entry. Gives dense per-frame supervision even when the
+        # annotator only marked a sub-range. The IMAGE per filled frame is the
+        # real source-PTS jpeg; only the bbox/class list is reused. Valid when
+        # tracked objects are continuously visible (dog-frisbee, sheep, etc).
+        if fill_annotations:
+            first_idx = next((i for i, t in enumerate(trajectories) if t), None)
+            if first_idx is not None and first_idx > 0:
+                first_objs   = trajectories[first_idx]
+                trajectories = list(trajectories)
+                for i in range(first_idx):
+                    trajectories[i] = first_objs
+
         _last_objs = None
-        for fid, frame_objs in enumerate(ann.get("trajectories", [])):
+        for fid, frame_objs in enumerate(trajectories):
             if not frame_objs:
                 if fill_annotations and _last_objs is not None:
                     frame_objs = _last_objs
