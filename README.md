@@ -513,6 +513,127 @@ python strips.py learn vidvrd FirstOrderSAE 40 2 20
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
+### 5.1. Video → Model: how a frame becomes a sample
+
+The video pipeline (`vidvrd` / `actiongenome`) confused users in earlier iterations.
+This section explains exactly what the model sees per training step and how the
+temporal structure does (and does NOT) flow into training.
+
+**Step 1 — annotation-driven frame loading**
+
+`build_dataset(video_id_filter=..., fps=30)` reads the annotation JSON, then for
+*each annotated frame* (one entry per source-PTS index in `trajectories`):
+
+```
+images:     (N, num_objs=10, PATCH_SIZE=32, 32, 3)  uint8
+bboxes:     (N, num_objs=10, 4)                     uint16 (in 200×300 canvas)
+frame_ids:  list[str]  '<video_id>/<NNNNNN>'        — preserves video order
+```
+
+N = the count of annotated frames present on disk. For a 30 fps VidVRD video
+with 100 annotated frames, N = 100.
+
+**Step 2 — per-object feature build** (`strips.py::vidvrd()` / `actiongenome()`)
+
+```
+images   → float32/256 + preprocess()              → (N, 10, 32, 32, 3)
+bboxes   → bboxes_to_onehot(bboxes, X=60, Y=40)    → (N, 10, 200)
+        concat                                       → (N, 10, 3272)
+```
+
+3072 pixel features per slot + 200 one-hot bbox features = **3272-dim per-object
+feature vector**. One *state* = `(10, 3272)` = the whole annotated frame
+represented as ten object slots (some may be zero-padded if the frame has < 10
+visible objects).
+
+**Step 3 — transition pairing** (`build_transitions(mode='sequential')`)
+
+For every consecutive pair of states from the **same video** (i.e. `frame_ids[i]`
+and `frame_ids[i+1]` share the `<video_id>` prefix):
+
+```
+pres.append(all_states[i])
+sucs.append(all_states[i+1])
+
+transitions = np.array([pres, sucs])    # shape (2, M, 10, 3272)
+```
+
+M = number of sequential transitions. For N=100 annotated frames in **one**
+video, M = 99 (every frame except the first contributes a pre→suc pair).
+
+**Step 4 — flatten back to a state pool** (here's the surprise)
+
+```python
+states = transitions.reshape((M * 2, num_objs, -1))   # (198, 10, 3272)
+```
+
+The 99 transition pairs are flattened into 198 individual states. The 90/5/5
+split then runs over this **flat pool**.
+
+> **⚠ Critical clarification.** From the model's point of view, a *sample* is a
+> single state of shape `(num_objs, feature_dim)` — **NOT** a sequence of frames.
+> `transition_mode` controls which states end up in the training pool, not how
+> many frames the model sees at once. There is no temporal recurrence.
+
+**Step 5 — per-state autoencoder training**
+
+The encoder maps `(10, 3272) → (U, P)` latent predicate codes via per-unit
+object attention. The decoder reconstructs the same state. The loss is purely
+reconstruction (BCE on patch pixels + per-component MSE on bbox one-hot) plus
+the `zerosuppress` L1 regularizer on the latent. **No action label, no temporal
+loss, no validation of action accuracy.**
+
+**Step 6 — action emerges post-training**
+
+Only after the autoencoder is trained do transition pairs come back into play:
+
+```python
+z_pre = encoder(pres)
+z_suc = encoder(sucs)
+action_latent = z_suc - z_pre          # used by dump_actions / extract_fol
+```
+
+This is where temporal coherence matters. Sequential pairs encode real
+frame-to-frame change. Random `all_pairs` pairs encode fictitious transitions
+and the extracted "action" is meaningless.
+
+**What this means in practice**
+
+- For the smallest "can FOSAE learn from video frames?" overfit test, only
+  `transition_mode='sequential'` is needed. `all_pairs` is **not** a comparison
+  experiment at the model-training level — both modes produce the same kind of
+  per-state autoencoder loss; they differ only in which states populate the
+  pool and in the post-hoc action extraction.
+- The `< 100 states` branch in `strips.py` short-circuits to
+  `train = val = test = all_states` — for tiny single-video subsets this means
+  `transition_mode` has **zero** effect on training (the flattened pool is
+  ignored; the model trains directly on the N raw states).
+- To make 2a-vs-2b a meaningful TRAINING comparison would require ≥100 source
+  states (or removing the short-circuit). To meaningfully compare the
+  *action-extraction* output (post-train), tiny N is fine.
+
+**Reproducing the smallest test**
+
+```bash
+# Bake one sheep video at 30 fps (100 annotated frames → 100 states)
+python3 setup-dataset.py video_vidvrd sheep \
+    --video-id ILSVRC2015_train_00256010 \
+    --fps 30 \
+    --out-name sheep-ILSVRC2015_train_00256010-30fps
+
+# Train sequential overfit (NO_EARLYSTOP=1 so full 1000 epochs run)
+NPZ_PATH=data/npz/video/vidvrd/overfit/sheep-ILSVRC2015_train_00256010-30fps.npz \
+DOMAIN=vidvrd \
+TRANSITION_MODE=sequential \
+EPOCH=1000 NO_EARLYSTOP=1 \
+bash sh/submit.sh
+```
+
+The training history CSV (`<out_dir>/training_history.csv`) should show
+`val_loss` decreasing monotonically (with `NO_EARLYSTOP=1` set) and the
+reconstruction PNGs in `<out_dir>` should look visually close to the input
+frames if the model truly learned.
+
 ---
 
 ## 6. Installation
