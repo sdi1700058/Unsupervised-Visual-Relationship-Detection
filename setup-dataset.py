@@ -23,6 +23,11 @@ np.set_printoptions(threshold=sys.maxsize,formatter={'float_kind':float_formatte
 DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "npz")
 os.makedirs(DATA_DIR, exist_ok=True)
 
+# Video overfit npz keyspace — separate from default per-category cache
+# (data/npz/video/<ds>/<cat>-<fps>fps.npz) so single-video / sub-sample
+# experiments don't clobber the canonical cache.
+_VIDEO_OVERFIT_SUBDIR = "overfit"
+
 def _save_and_symlink(data_path, filename):
     """Create a backward-compat relative symlink in latplan/puzzles/ pointing to data/."""
     legacy_path = os.path.join(latplan.__path__[0], "puzzles", filename)
@@ -159,6 +164,128 @@ def _print_blocksworld_info(path):
         print(f"  (could not read: {e})")
 
 
+################################################################
+# ── Video overfit npz baking ───────────────────────────────────────────
+#
+# Writes a self-describing raw-arrays npz at
+#   data/npz/video/<dataset>/overfit/<out_name>.npz
+# Same key schema as the default per-category cache (latplan/util/cache.py)
+# so strips.py can consume both via the new `npz_path=` kwarg (Phase V3).
+################################################################
+
+def _safe_name(s):
+    """Make a string safe for use as a file segment (no '/', no spaces)."""
+    return s.replace("/", "_").replace(" ", "_")
+
+
+def _video_out_path(dataset, out_name):
+    sub = os.path.join(DATA_DIR, "video", dataset, _VIDEO_OVERFIT_SUBDIR)
+    os.makedirs(sub, exist_ok=True)
+    if not out_name.endswith(".npz"):
+        out_name = out_name + ".npz"
+    return os.path.join(sub, out_name)
+
+
+def _default_video_out_name(category, video_id, fps, max_videos):
+    parts = [str(category)]
+    if video_id is not None:
+        parts.append(_safe_name(str(video_id)))
+    elif max_videos is not None:
+        parts.append(f"top{max_videos}")
+    parts.append(f"{fps}fps")
+    return "-".join(parts)
+
+
+def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
+                    max_videos, out_name, max_objects):
+    """Common path for video_ag / video_vidvrd bakers.
+
+    Calls the loader's build_dataset(...) with video_id_filter set, then
+    writes the raw-array npz at the overfit/ keyspace.
+    """
+    from latplan.util.cache import save_cache
+
+    if out_name is None:
+        out_name = _default_video_out_name(category, video_id, fps, max_videos)
+    out_path = _video_out_path(dataset_name, out_name)
+
+    print(f"[bake] dataset={dataset_name}  category={category}  "
+          f"video_id={video_id}  fps={fps}  max_videos={max_videos}  "
+          f"max_objects={max_objects}")
+    print(f"[bake] writing  {out_path}")
+
+    kwargs = dict(category_filter=category, fps=fps, num_objs=max_objects)
+    if video_id is not None:
+        kwargs["video_id_filter"] = video_id
+    if max_videos is not None:
+        kwargs["max_videos"] = max_videos
+
+    images, bboxes, names, frame_ids = loader_module.build_dataset(**kwargs)
+    meta = dict(loader_module.last_load_metadata)
+    meta.update({
+        "dataset":      dataset_name,
+        "category":     category,
+        "video_id":     video_id,
+        "fps":          fps,
+        "max_videos":   max_videos,
+        "max_objects":  max_objects,
+        "out_name":     out_name,
+        "schema":       "raw_v1",   # versioning hook for future migrations
+    })
+    save_cache(out_path, images, bboxes, names, frame_ids, meta)
+    print(f"[bake] OK — {len(images)} states, {len(meta.get('video_ids', []))} videos")
+    print(f"[bake] use with: NPZ_PATH={out_path} DOMAIN={dataset_name} bash sh/submit.sh")
+    return out_path
+
+
+def video_ag(category=None, video_id=None, fps="native",
+             max_videos=None, out_name=None, max_objects=10):
+    """Bake an ActionGenome overfit npz for one video / category subset.
+
+    Examples:
+      python3 setup-dataset.py video_ag chair --video-id 001YG.mp4
+      python3 setup-dataset.py video_ag chair --max-videos 3
+    """
+    if category is None:
+        raise SystemExit("video_ag: --category is required (e.g. chair, table, food)")
+    from latplan.domains.video import actiongenome as _ag
+    return _bake_video_npz(_ag, "actiongenome", category, video_id, fps,
+                           max_videos, out_name, max_objects)
+
+
+def video_vidvrd(category=None, video_id=None, fps=3,
+                 max_videos=None, out_name=None, max_objects=10):
+    """Bake a VidVRD overfit npz for one video / category subset.
+
+    Examples:
+      python3 setup-dataset.py video_vidvrd bicycle --video-id ILSVRC2015_train_00010001
+      python3 setup-dataset.py video_vidvrd dog --max-videos 5 --fps 3
+    """
+    if category is None:
+        raise SystemExit("video_vidvrd: --category is required (e.g. bicycle, dog, person)")
+    from latplan.puzzles import puzzle_vidvrd as _vv
+    return _bake_video_npz(_vv, "vidvrd", category, video_id, fps,
+                           max_videos, out_name, max_objects)
+
+
+def _parse_video_args(argv):
+    """Lightweight argparse for the two video subcommands. Returns kwargs dict."""
+    import argparse
+    p = argparse.ArgumentParser(prog="setup-dataset.py video_ag|video_vidvrd")
+    p.add_argument("category", help="Primary category (e.g. chair, bicycle)")
+    p.add_argument("--video-id", default=None,
+                   help="Restrict to one video-id (AG: '<vid>.mp4'; VidVRD: 'ILSVRC2015_…')")
+    p.add_argument("--fps",        default=None, help="fps key (AG default: native, VidVRD default: 3)")
+    p.add_argument("--max-videos", default=None, type=int)
+    p.add_argument("--max-objects", default=10,  type=int)
+    p.add_argument("--out-name",   default=None,
+                   help="Output stem (no .npz). Default: <cat>-<video_id?>-<fps>fps")
+    ns = p.parse_args(argv)
+    return ns
+
+
+################################################################
+
 def list_datasets():
     """List all available datasets in data/."""
     print(f"Datasets in {DATA_DIR}/:")
@@ -196,6 +323,14 @@ def main():
         print("    Downloads from GitHub releases if not present locally.")
         print("    Example: python setup-dataset.py blocksworld blocks-5-3")
         print()
+        print("  video_ag <category> [--video-id ID] [--fps native] [--max-videos N] [--max-objects N] [--out-name STR]")
+        print("    Bake an ActionGenome overfit npz at data/npz/video/actiongenome/overfit/.")
+        print("    Example: python setup-dataset.py video_ag chair --video-id 001YG.mp4")
+        print()
+        print("  video_vidvrd <category> [--video-id ID] [--fps 3] [--max-videos N] [--max-objects N] [--out-name STR]")
+        print("    Bake a VidVRD overfit npz at data/npz/video/vidvrd/overfit/.")
+        print("    Example: python setup-dataset.py video_vidvrd bicycle --video-id ILSVRC2015_train_00010001")
+        print()
         print("  list")
         print("    List all datasets in data/")
         return
@@ -208,12 +343,26 @@ def main():
             list_datasets()
             return
 
+        # Video subcommands use argparse (named flags); puzzle/blocks/hanoi/
+        # lightsout keep the legacy positional `eval` dispatch.
+        if task in ("video_ag", "video_vidvrd"):
+            ns = _parse_video_args(sys.argv)
+            kw = dict(category=ns.category, video_id=ns.video_id,
+                      max_videos=ns.max_videos, max_objects=ns.max_objects,
+                      out_name=ns.out_name)
+            if ns.fps is not None:
+                # myeval-style coercion so '3' becomes int but 'native' stays str
+                try:    kw["fps"] = int(ns.fps)
+                except: kw["fps"] = ns.fps
+            globals()[task](**kw)
+            return
+
         def myeval(str):
             try:
                 return eval(str)
             except:
                 return str
-        
+
         globals()[task](*map(myeval,sys.argv))
     
 if __name__ == '__main__':

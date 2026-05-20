@@ -499,11 +499,18 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
            annotations_dir=None, frames_dir=None,
            transition_mode="sequential",
            epoch=5000, max_videos=None, batch_size=None,
-           fps=3, category=None):
-    """Train FOSAE on ImageNet-VidVRD. Download first: bash sh/download_vidvrd.sh"""
+           fps=3, category=None, npz_path=None):
+    """Train FOSAE on ImageNet-VidVRD. Download first: bash sh/download_vidvrd.sh
+
+    npz_path : str | None
+        When set, skip on-the-fly build_dataset() and load the raw-array npz
+        baked by ``setup-dataset.py video_vidvrd``. Useful for the
+        smallest-overfit pipeline (one video, no rebuild on every train).
+    """
     from latplan.puzzles import puzzle_vidvrd as _pv
     from latplan.puzzles.puzzle_vidvrd import build_dataset, build_transitions, PICSIZE, MAX_OBJECTS
-    from latplan.puzzles.util import preprocess
+    from latplan.puzzles.util  import preprocess
+    from latplan.util.cache    import load_cached
     import json as _json
 
     for name, value in dict(U=U, A=A, P=P).items():
@@ -519,13 +526,23 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
-    if frames_dir is None:
-        frames_dir = os.path.join(DATA_DIR, "video", "vidvrd", f"frames_{fps}fps", "train")
-
-    print("Loading VidVRD dataset...")
-    images, bboxes, all_object_names, frame_ids = build_dataset(
-        annotations_dir=annotations_dir, frames_dir=frames_dir,
-        max_videos=max_videos, category_filter=category, fps=fps)
+    if npz_path is not None and npz_path not in ("None", "none", ""):
+        print(f"Loading VidVRD overfit npz: {npz_path}")
+        hit = load_cached(npz_path)
+        if hit is None:
+            raise SystemExit(f"vidvrd: npz_path {npz_path!r} not found or unreadable")
+        images, bboxes, all_object_names, frame_ids, meta = hit
+        _pv.last_load_metadata.clear()
+        _pv.last_load_metadata.update(meta)
+        if category is None:
+            category = meta.get("category")
+    else:
+        if frames_dir is None:
+            frames_dir = os.path.join(DATA_DIR, "video", "vidvrd", f"frames_{fps}fps", "train")
+        print("Loading VidVRD dataset...")
+        images, bboxes, all_object_names, frame_ids = build_dataset(
+            annotations_dir=annotations_dir, frames_dir=frames_dir,
+            max_videos=max_videos, category_filter=category, fps=fps)
 
     num_states, num_objs = len(images), images.shape[1]
     print(f"Loaded {num_states} frames, {num_objs} objects each")
@@ -589,7 +606,7 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
                  annotations_dir=None, frames_dir=None,
                  transition_mode="sequential",
                  epoch=5000, max_videos=None, batch_size=None,
-                 fps="native", category=None):
+                 fps="native", category=None, npz_path=None):
     """Train FOSAE on ActionGenome (Charades videos + AG bbox/relation annotations).
 
     Mirrors `vidvrd()`: per-category sequential transitions, blocks_activation,
@@ -599,6 +616,7 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     from latplan.domains.video.actiongenome import build_dataset, build_transitions
     from latplan.puzzles.puzzle_labeled_objects import PICSIZE, MAX_OBJECTS
     from latplan.puzzles.util import preprocess
+    from latplan.util.cache   import load_cached
     import json as _json
 
     for name, value in dict(U=U, A=A, P=P).items():
@@ -614,10 +632,21 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
-    print("Loading ActionGenome dataset...")
-    images, bboxes, all_object_names, frame_ids = build_dataset(
-        annotations_dir=annotations_dir, frames_dir=frames_dir,
-        max_videos=max_videos, category_filter=category, fps=fps)
+    if npz_path is not None and npz_path not in ("None", "none", ""):
+        print(f"Loading ActionGenome overfit npz: {npz_path}")
+        hit = load_cached(npz_path)
+        if hit is None:
+            raise SystemExit(f"actiongenome: npz_path {npz_path!r} not found or unreadable")
+        images, bboxes, all_object_names, frame_ids, meta = hit
+        _ag.last_load_metadata.clear()
+        _ag.last_load_metadata.update(meta)
+        if category is None:
+            category = meta.get("category")
+    else:
+        print("Loading ActionGenome dataset...")
+        images, bboxes, all_object_names, frame_ids = build_dataset(
+            annotations_dir=annotations_dir, frames_dir=frames_dir,
+            max_videos=max_videos, category_filter=category, fps=fps)
 
     num_states, num_objs = len(images), images.shape[1]
     print(f"Loaded {num_states} frames, {num_objs} objects each")

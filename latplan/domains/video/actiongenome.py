@@ -59,7 +59,8 @@ def _video_primary_object_category(frames_of_vid, obj_anno):
 
 def build_dataset(annotations_dir=None, frames_dir=None,
                   num_objs=MAX_OBJECTS, max_videos=None, split="train",
-                  category_filter=None, fps="native"):
+                  category_filter=None, fps="native",
+                  video_id_filter=None):
     """Load AG annotated frames; return (images, bboxes, names, frame_ids).
 
     Parameters mirror `puzzle_vidvrd.build_dataset` for consistency.
@@ -67,13 +68,20 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     fps : str | int
         Cache-key suffix only (AG frames are extracted at the video's native
         FPS; downsampling is not configurable upstream). Default `'native'`.
+
+    video_id_filter : str | list[str] | None
+        Restrict loading to one or more exact video-id directories (e.g.
+        ``'001YG.mp4'``). Used by the smallest-overfit pipeline. When set,
+        the default per-category cache is bypassed (keyspace would collide).
     """
     if annotations_dir is None: annotations_dir = _DEFAULT_ANN_DIR
     if frames_dir is None:      frames_dir      = _DEFAULT_FRAMES
 
-    # SPEC §V7-V9: per-category npz cache (skipped when category_filter is None).
+    # SPEC §V7-V9: per-category npz cache. Skipped when max_videos or
+    # video_id_filter are set (both would otherwise contaminate the shared
+    # per-category cache).
     cache_path = npz_cache_path("video", "actiongenome", category_filter, fps) \
-        if max_videos is None else None
+        if (max_videos is None and video_id_filter is None) else None
     if cache_path is not None:
         hit = load_cached(cache_path)
         if hit is not None:
@@ -110,6 +118,11 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
     strict = os.environ.get("AG_STRICT_CATEGORY", "1") == "1"
     video_ids = sorted(vid_to_frames.keys())
+    if video_id_filter is not None:
+        wanted = {video_id_filter} if isinstance(video_id_filter, str) else set(video_id_filter)
+        video_ids = [v for v in video_ids if v in wanted]
+        if not video_ids:
+            raise RuntimeError(f"video_id_filter {video_id_filter!r} matched 0 videos")
     if max_videos is not None:
         video_ids = video_ids[:max_videos]
 
@@ -197,6 +210,7 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     last_load_metadata.clear()
     last_load_metadata.update({
         "category_filter":    category_filter,
+        "video_id_filter":    list(video_id_filter) if isinstance(video_id_filter, (list,tuple,set)) else video_id_filter,
         "strict":             strict,
         "video_ids":          loaded_video_ids,
         "primary_categories": loaded_primary,

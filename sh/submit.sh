@@ -47,6 +47,10 @@ MAX_IMAGES="${MAX_IMAGES:-None}"
 # Video-only knobs
 FPS="${FPS:-3}"
 CATEGORY="${CATEGORY:-bicycle}"
+# NPZ_PATH (video only): pre-baked overfit npz produced by `setup-dataset.py
+# video_ag|video_vidvrd`. When set, strips.py skips on-the-fly build_dataset()
+# and consumes the npz directly. Default `None` keeps legacy behaviour.
+NPZ_PATH="${NPZ_PATH:-None}"
 
 # Puzzle-only knobs
 PUZZLE_TYPE="${PUZZLE_TYPE:-mnist}"
@@ -80,10 +84,10 @@ build_default_cmd() {
             echo "python3 strips.py learn labeled_objects ${AECLASS} ${U} ${A} ${P} None None None None ${TRANSITION_MODE} ${EPOCH} ${MAX_IMAGES} ${BATCH}"
             ;;
         vidvrd)
-            echo "python3 strips.py learn vidvrd ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY}"
+            echo "python3 strips.py learn vidvrd ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY} ${NPZ_PATH}"
             ;;
         actiongenome)
-            echo "python3 strips.py learn actiongenome ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY}"
+            echo "python3 strips.py learn actiongenome ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY} ${NPZ_PATH}"
             ;;
         *)
             echo "[submit] unknown DOMAIN=${DOMAIN}" >&2
@@ -113,10 +117,19 @@ params = {
     "fps":[${FPS}], "category":["${CATEGORY}"],
     "puzzle_type":["${PUZZLE_TYPE}"], "width":[${WIDTH}], "height":[${HEIGHT}],
     "track":["${TRACK}"], "aeclass":["${AECLASS}"],
+    "npz_path":["${NPZ_PATH}"],
 }
 dom_kw = dict(type="${PUZZLE_TYPE}", width=${WIDTH}, height=${HEIGHT}, track="${TRACK}")
-vc  = "${CATEGORY}"
-vc  = vc if vc not in ("", "None", "none") else "_all"
+# When loading a pre-baked overfit npz, anchor the run_tag to the npz stem
+# (the meaningful identifier of which slice is being trained on) instead of
+# the default-CATEGORY env. Hash still includes npz_path for full uniqueness.
+_npz = "${NPZ_PATH}"
+if _npz in ("", "None", "none"):
+    vc  = "${CATEGORY}"
+    vc  = vc if vc not in ("", "None", "none") else "_all"
+else:
+    import os.path as _osp
+    vc  = _osp.splitext(_osp.basename(_npz))[0]
 fps = ${FPS}
 print(m.resolved_out_dir("${DOMAIN}", params, "${AECLASS}",
                          ${U}, ${A}, ${P},
@@ -139,8 +152,12 @@ export OUT_DIR="${JOB_OUT_DIR}"
 # JOB_TAG = <domain>-<category> per SPEC §C15. Suffix with timestamp+PID so
 # squeue / log filenames stay unique across concurrent launches.
 JOB_TAG="${DOMAIN}"
-[[ "${CATEGORY}" != "None" && -n "${CATEGORY}" && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]] \
-    && JOB_TAG="${DOMAIN}-${CATEGORY}"
+if [[ "${NPZ_PATH}" != "None" && -n "${NPZ_PATH}" && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]]; then
+    _NPZ_STEM="$(basename "${NPZ_PATH}" .npz)"
+    JOB_TAG="${DOMAIN}-${_NPZ_STEM}"
+elif [[ "${CATEGORY}" != "None" && -n "${CATEGORY}" && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]]; then
+    JOB_TAG="${DOMAIN}-${CATEGORY}"
+fi
 JOB_SUFFIX="${JOB_SUFFIX-$(date +%Y%m%d-%H%M%S)-$$}"
 JOB_NAME="${JOB_NAME:-fosae-${JOB_TAG}${JOB_SUFFIX:+-${JOB_SUFFIX}}}"
 PARTITION="${PARTITION:-gpu}"
@@ -185,6 +202,7 @@ EXPORT_VARS+=",JOB_OUT_DIR=${JOB_OUT_DIR},OUT_DIR=${JOB_OUT_DIR}"
 EXPORT_VARS+=",DOMAIN=${DOMAIN},AECLASS=${AECLASS}"
 EXPORT_VARS+=",U=${U},A=${A},P=${P}"
 EXPORT_VARS+=",CATEGORY=${CATEGORY}"
+EXPORT_VARS+=",NPZ_PATH=${NPZ_PATH}"
 EXPORT_VARS+=",EXTRACT_FOL=${EXTRACT_FOL:-1},VISUALIZE=${VISUALIZE:-1},VIS_NUM=${VIS_NUM:-6}"
 
 SBATCH_ARGS=(
@@ -210,6 +228,7 @@ _CAT_DISP="<n/a>"
 [[ "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]] && _CAT_DISP="${CATEGORY:-_all}"
 echo "[submit] Domain   : ${DOMAIN}  Category: ${_CAT_DISP}"
 echo "[submit] OUT_DIR  : ${JOB_OUT_DIR}"
+[[ "${NPZ_PATH}" != "None" ]] && echo "[submit] NPZ_PATH : ${NPZ_PATH}"
 echo "[submit] Cmd      : ${TRAIN_CMD}"
 echo "[submit] Hooks    : EXTRACT_FOL=${EXTRACT_FOL:-1}  VISUALIZE=${VISUALIZE:-1}"
 echo "[submit] Logs     : ${PROJECT_DIR}/logs/${JOB_NAME}.<JOBID>.{out,err}"
