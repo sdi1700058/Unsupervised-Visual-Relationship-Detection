@@ -519,10 +519,14 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     default_parameters["aeclass"]    = aeclass
     default_parameters["activation"] = "self.blocks_activation"
     default_parameters["epoch"]      = epoch
-    parameters['preencoder_layers']            = [2]
-    parameters['preencoder_dimention']         = [256]
+    # Env-overridable hyperparameters. Default = encoder-collapse-resistant
+    # settings tuned for full-dataset realistic-image domains (SPEC §C6).
+    # For tiny overfit datasets (one video), match the MNIST baseline:
+    #   LR=0.001 PREENC_LAYERS=0 — see README §5.1.
+    parameters['preencoder_layers']            = [int(os.environ.get('PREENC_LAYERS', 2))]
+    parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
     parameters['preencoder_output_activation'] = [("linear", "MSE")]
-    parameters['lr']                           = [0.0001]
+    parameters['lr']                           = [float(os.environ.get('LR', 0.0001))]
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
@@ -536,6 +540,8 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
         _pv.last_load_metadata.update(meta)
         if category is None:
             category = meta.get("category")
+        if meta.get("fps") is not None:
+            fps = meta.get("fps")
     else:
         if frames_dir is None:
             frames_dir = os.path.join(DATA_DIR, "video", "vidvrd", f"frames_{fps}fps", "train")
@@ -625,10 +631,10 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     default_parameters["aeclass"]    = aeclass
     default_parameters["activation"] = "self.blocks_activation"
     default_parameters["epoch"]      = epoch
-    parameters['preencoder_layers']            = [2]
-    parameters['preencoder_dimention']         = [256]
+    parameters['preencoder_layers']            = [int(os.environ.get('PREENC_LAYERS', 2))]
+    parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
     parameters['preencoder_output_activation'] = [("linear", "MSE")]
-    parameters['lr']                           = [0.0001]
+    parameters['lr']                           = [float(os.environ.get('LR', 0.0001))]
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
@@ -642,6 +648,8 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
         _ag.last_load_metadata.update(meta)
         if category is None:
             category = meta.get("category")
+        if meta.get("fps") is not None:
+            fps = meta.get("fps")
     else:
         print("Loading ActionGenome dataset...")
         images, bboxes, all_object_names, frame_ids = build_dataset(

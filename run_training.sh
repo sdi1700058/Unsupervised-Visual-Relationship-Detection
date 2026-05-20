@@ -110,7 +110,13 @@ elif [[ ! -f "${OUT_DIR}/net0.h5" ]]; then
 else
     echo "[info] Output dir: ${OUT_DIR}"
     CAT_FLAG=()
-    if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ ]]; then
+    # When NPZ_PATH is set, the actual trained category lives in
+    # ${OUT_DIR}/loaded_videos.json — the submit.sh-supplied CATEGORY env
+    # is a default-bicycle leftover that would mismatch. Let extract_fol /
+    # visualize_fol auto-detect from the manifest by omitting --category.
+    if [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" \
+          && "${DOMAIN}" =~ ^(vidvrd|actiongenome)$ \
+          && ( -z "${NPZ_PATH}" || "${NPZ_PATH}" == "None" ) ]]; then
         CAT_FLAG=(--category "${CATEGORY}")
     fi
 
