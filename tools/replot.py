@@ -55,11 +55,37 @@ def _load_video(model_dir, domain, num):
     else:
         from latplan.domains.video.actiongenome import build_dataset
     from latplan.puzzles.puzzle_labeled_objects import PICSIZE
+    from latplan.util.cache import load_cached
 
     manifest = json.load(open(os.path.join(model_dir, "loaded_videos.json")))
-    cat, fps = manifest["category_filter"], manifest.get("fps", 3)
-    print(f"[replot] {domain} category={cat!r} fps={fps!r}")
-    images, bboxes, names, frame_ids = build_dataset(category_filter=cat, fps=fps)
+    cat       = manifest.get("category_filter")
+    fps       = manifest.get("fps", 3)
+    vid_id    = manifest.get("video_id_filter") or manifest.get("video_id")
+    npz_path  = manifest.get("npz_path")
+    print(f"[replot] {domain} category={cat!r} fps={fps!r} video_id={vid_id!r}")
+
+    # 1) If an overfit npz was used at training time, read it directly so the
+    #    plot reflects EXACTLY the data the model saw (no other-video drift).
+    if npz_path and os.path.exists(npz_path):
+        print(f"[replot] loading overfit npz {npz_path}")
+        hit = load_cached(npz_path)
+        if hit is not None:
+            images, bboxes, names, frame_ids, _ = hit
+            print(f"[replot] npz states={len(images)}")
+        else:
+            images = bboxes = None
+    else:
+        images = bboxes = None
+
+    # 2) Otherwise rebuild via build_dataset, honouring video_id_filter so we
+    #    don't fall back to the full category cache (which would render frames
+    #    the model never saw).
+    if images is None:
+        kwargs = dict(category_filter=cat, fps=fps)
+        if vid_id:
+            kwargs["video_id_filter"] = vid_id
+        images, bboxes, names, frame_ids = build_dataset(**kwargs)
+        print(f"[replot] rebuilt {len(images)} states from build_dataset")
 
     N = min(num, images.shape[0])
     rng = np.random.RandomState(0)

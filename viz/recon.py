@@ -48,7 +48,7 @@ def main():
 
     # video-world domains need a manifest (loaded_videos.json) to know category + fps
     is_video = args.domain in ("vidvrd", "actiongenome")
-    category, fps = None, None
+    category, fps, vid_id, npz_path = None, None, None, None
     if is_video:
         manifest_path = os.path.join(args.model_dir, "loaded_videos.json")
         if not os.path.isfile(manifest_path):
@@ -57,7 +57,9 @@ def main():
             manifest = json.load(f)
         category = manifest.get("category_filter")
         fps      = manifest.get("fps", 3)
-        print(f"[recon] category={category!r}  fps={fps!r}")
+        vid_id   = manifest.get("video_id_filter") or manifest.get("video_id")
+        npz_path = manifest.get("npz_path")
+        print(f"[recon] category={category!r}  fps={fps!r}  video_id={vid_id!r}")
 
     from latplan.puzzles.util import preprocess
     from viz.io import save_with_caption
@@ -128,8 +130,22 @@ def main():
         from latplan.puzzles.puzzle_labeled_objects import PICSIZE
         from strips import bboxes_to_onehot
 
-        print(f"[recon] loading {args.domain} cache for category={category!r}")
-        images, bboxes, per_state_names, frame_ids = build_dataset(category_filter=category, fps=fps)
+        # Honour the manifest: load the overfit npz directly if available; else
+        # rebuild via build_dataset with video_id_filter so the recon grid shows
+        # the exact data the model trained on.
+        from latplan.util.cache import load_cached as _load_cached
+        if npz_path and os.path.exists(npz_path):
+            print(f"[recon] loading overfit npz {npz_path}")
+            hit = _load_cached(npz_path)
+            if hit is None:
+                sys.exit(f"ERROR: cannot read npz_path {npz_path!r}")
+            images, bboxes, per_state_names, frame_ids, _ = hit
+        else:
+            kw = dict(category_filter=category, fps=fps)
+            if vid_id:
+                kw["video_id_filter"] = vid_id
+            print(f"[recon] rebuild via build_dataset kwargs={kw}")
+            images, bboxes, per_state_names, frame_ids = build_dataset(**kw)
         picsize_grid = (np.array(PICSIZE) // 5).astype(int)
         Y, X = picsize_grid[0], picsize_grid[1]
         num_states, num_objs = images.shape[0], images.shape[1]

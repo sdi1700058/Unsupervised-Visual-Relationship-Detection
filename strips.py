@@ -602,7 +602,8 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
 
     manifest_path = os.path.join(out_path, "loaded_videos.json")
     manifest = dict(_pv.last_load_metadata)
-    manifest.update({"fps": fps, "transition_mode": transition_mode})
+    manifest.update({"fps": fps, "transition_mode": transition_mode,
+                     "npz_path": npz_path if npz_path not in (None, "None", "none", "") else None})
     with open(manifest_path, "w") as f:
         _json.dump(manifest, f, indent=2)
     print(f"Loaded-videos manifest saved to {manifest_path}")
@@ -708,7 +709,8 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
 
     manifest_path = os.path.join(out_path, "loaded_videos.json")
     manifest = dict(_ag.last_load_metadata)
-    manifest.update({"fps": fps, "transition_mode": transition_mode})
+    manifest.update({"fps": fps, "transition_mode": transition_mode,
+                     "npz_path": npz_path if npz_path not in (None, "None", "none", "") else None})
     with open(manifest_path, "w") as f:
         _json.dump(manifest, f, indent=2)
     print(f"Loaded-videos manifest saved to {manifest_path}")
