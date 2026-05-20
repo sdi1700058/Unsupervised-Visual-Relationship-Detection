@@ -197,7 +197,7 @@ def _default_video_out_name(category, video_id, fps, max_videos):
 
 
 def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
-                    max_videos, out_name, max_objects):
+                    max_videos, out_name, max_objects, fill_annotations=False):
     """Common path for video_ag / video_vidvrd bakers.
 
     Calls the loader's build_dataset(...) with video_id_filter set, then
@@ -219,18 +219,21 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
         kwargs["video_id_filter"] = video_id
     if max_videos is not None:
         kwargs["max_videos"] = max_videos
+    if fill_annotations and dataset_name == "vidvrd":
+        kwargs["fill_annotations"] = True
 
     images, bboxes, names, frame_ids = loader_module.build_dataset(**kwargs)
     meta = dict(loader_module.last_load_metadata)
     meta.update({
-        "dataset":      dataset_name,
-        "category":     category,
-        "video_id":     video_id,
-        "fps":          fps,
-        "max_videos":   max_videos,
-        "max_objects":  max_objects,
-        "out_name":     out_name,
-        "schema":       "raw_v1",   # versioning hook for future migrations
+        "dataset":        dataset_name,
+        "category":       category,
+        "video_id":       video_id,
+        "fps":            fps,
+        "max_videos":     max_videos,
+        "max_objects":    max_objects,
+        "fill_annotations": bool(fill_annotations),
+        "out_name":       out_name,
+        "schema":         "raw_v1",   # versioning hook for future migrations
     })
     save_cache(out_path, images, bboxes, names, frame_ids, meta)
     print(f"[bake] OK — {len(images)} states, {len(meta.get('video_ids', []))} videos")
@@ -239,33 +242,35 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
 
 
 def video_ag(category=None, video_id=None, fps="native",
-             max_videos=None, out_name=None, max_objects=10):
-    """Bake an ActionGenome overfit npz for one video / category subset.
-
-    Examples:
-      python3 setup-dataset.py video_ag chair --video-id 001YG.mp4
-      python3 setup-dataset.py video_ag chair --max-videos 3
-    """
+             max_videos=None, out_name=None, max_objects=10,
+             fill_annotations=False):
+    """Bake an ActionGenome overfit npz for one video / category subset."""
     if category is None:
         raise SystemExit("video_ag: --category is required (e.g. chair, table, food)")
     from latplan.domains.video import actiongenome as _ag
+    if fill_annotations:
+        print("[bake] note: --fill-annotations has no effect on ActionGenome (AG frame_list is dense already)")
     return _bake_video_npz(_ag, "actiongenome", category, video_id, fps,
-                           max_videos, out_name, max_objects)
+                           max_videos, out_name, max_objects,
+                           fill_annotations=False)
 
 
 def video_vidvrd(category=None, video_id=None, fps=3,
-                 max_videos=None, out_name=None, max_objects=10):
+                 max_videos=None, out_name=None, max_objects=10,
+                 fill_annotations=False):
     """Bake a VidVRD overfit npz for one video / category subset.
 
-    Examples:
-      python3 setup-dataset.py video_vidvrd bicycle --video-id ILSVRC2015_train_00010001
-      python3 setup-dataset.py video_vidvrd dog --max-videos 5 --fps 3
+    fill_annotations=True : carry forward last non-empty trajectory entry into
+        subsequent empty entries (annotations are sparse in VidVRD; ~13 fps for
+        most videos). Image stays from the real source-PTS jpeg; only the bbox
+        list is reused. Valid when tracked objects are continuously visible.
     """
     if category is None:
         raise SystemExit("video_vidvrd: --category is required (e.g. bicycle, dog, person)")
     from latplan.puzzles import puzzle_vidvrd as _vv
     return _bake_video_npz(_vv, "vidvrd", category, video_id, fps,
-                           max_videos, out_name, max_objects)
+                           max_videos, out_name, max_objects,
+                           fill_annotations=fill_annotations)
 
 
 def _parse_video_args(argv):
@@ -280,6 +285,8 @@ def _parse_video_args(argv):
     p.add_argument("--max-objects", default=10,  type=int)
     p.add_argument("--out-name",   default=None,
                    help="Output stem (no .npz). Default: <cat>-<video_id?>-<fps>fps")
+    p.add_argument("--fill-annotations", action="store_true",
+                   help="VidVRD only: carry last non-empty trajectory forward into empty entries (dense per-frame supervision)")
     ns = p.parse_args(argv)
     return ns
 
@@ -349,7 +356,8 @@ def main():
             ns = _parse_video_args(sys.argv)
             kw = dict(category=ns.category, video_id=ns.video_id,
                       max_videos=ns.max_videos, max_objects=ns.max_objects,
-                      out_name=ns.out_name)
+                      out_name=ns.out_name,
+                      fill_annotations=ns.fill_annotations)
             if ns.fps is not None:
                 # myeval-style coercion so '3' becomes int but 'native' stays str
                 try:    kw["fps"] = int(ns.fps)

@@ -58,7 +58,8 @@ def _video_primary_category(ann):
 
 def build_dataset(annotations_dir=None, frames_dir=None,
                   num_objs=MAX_OBJECTS, max_videos=None, split="train",
-                  category_filter=None, fps=3, video_id_filter=None):
+                  category_filter=None, fps=3, video_id_filter=None,
+                  fill_annotations=False):
     """
     Load all annotated frames from VidVRD.
 
@@ -131,9 +132,21 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
         vid_frames_dir = os.path.join(frames_dir, vid_id)
 
+        # `fill_annotations=True` carries the previous non-empty trajectory
+        # forward into subsequent empty entries so the model gets dense per-frame
+        # supervision even when the annotator left gaps. The IMAGE for each
+        # filled frame is still the real source-PTS jpeg; only the bbox/class
+        # list is reused. Valid when the tracked objects are continuously
+        # visible (dog-frisbee, sheep, etc).
+        _last_objs = None
         for fid, frame_objs in enumerate(ann.get("trajectories", [])):
             if not frame_objs:
-                continue
+                if fill_annotations and _last_objs is not None:
+                    frame_objs = _last_objs
+                else:
+                    continue
+            else:
+                _last_objs = frame_objs
             # ffmpeg `-frame_pts true` writes source-frame-index filenames (B5).
             frame_path = os.path.join(vid_frames_dir, f"{fid:06d}.jpg")
             if not os.path.exists(frame_path):
@@ -183,6 +196,7 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "num_videos": len(loaded_video_ids),
         "num_states": len(images_list),
         "fps": fps,
+        "fill_annotations": fill_annotations,
     })
     print(f"[vidvrd-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(ann_files)} videos, "

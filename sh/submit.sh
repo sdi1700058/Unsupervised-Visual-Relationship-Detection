@@ -84,10 +84,15 @@ build_default_cmd() {
             echo "python3 strips.py learn labeled_objects ${AECLASS} ${U} ${A} ${P} None None None None ${TRANSITION_MODE} ${EPOCH} ${MAX_IMAGES} ${BATCH}"
             ;;
         vidvrd)
-            echo "python3 strips.py learn vidvrd ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY} ${NPZ_PATH}"
+            # NPZ_PATH overrides category — pass None so strips.py reads it from npz meta
+            local _cat="${CATEGORY}"
+            [[ -n "${NPZ_PATH}" && "${NPZ_PATH}" != "None" ]] && _cat="None"
+            echo "python3 strips.py learn vidvrd ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${_cat} ${NPZ_PATH}"
             ;;
         actiongenome)
-            echo "python3 strips.py learn actiongenome ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${CATEGORY} ${NPZ_PATH}"
+            local _cat="${CATEGORY}"
+            [[ -n "${NPZ_PATH}" && "${NPZ_PATH}" != "None" ]] && _cat="None"
+            echo "python3 strips.py learn actiongenome ${AECLASS} ${U} ${A} ${P} None None ${TRANSITION_MODE} ${EPOCH} ${MAX_VIDEOS} ${BATCH} ${FPS} ${_cat} ${NPZ_PATH}"
             ;;
         *)
             echo "[submit] unknown DOMAIN=${DOMAIN}" >&2
