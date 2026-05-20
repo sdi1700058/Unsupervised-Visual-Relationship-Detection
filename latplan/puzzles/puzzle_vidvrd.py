@@ -58,7 +58,7 @@ def _video_primary_category(ann):
 
 def build_dataset(annotations_dir=None, frames_dir=None,
                   num_objs=MAX_OBJECTS, max_videos=None, split="train",
-                  category_filter=None, fps=3):
+                  category_filter=None, fps=3, video_id_filter=None):
     """
     Load all annotated frames from VidVRD.
 
@@ -71,14 +71,20 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
     States are ordered: all frames of video_0, then video_1, ... so that
     build_transitions(..., mode='sequential') only pairs frames within the same video.
+
+    video_id_filter : str | list[str] | None
+        Restrict loading to one or more exact video-ids (e.g.
+        'ILSVRC2015_train_00010001'). Bypasses the default per-category cache.
     """
     if annotations_dir is None:
         annotations_dir = os.path.normpath(os.path.join(_DEFAULT_ANN_DIR, split))
     if frames_dir is None:
         frames_dir = os.path.normpath(os.path.join(_default_frames_dir(fps), split))
 
-    # SPEC §V7-V9: per-category npz cache short-circuit (skipped when category_filter is None).
-    cache_path = npz_cache_path("video", "vidvrd", category_filter, fps) if max_videos is None else None
+    # SPEC §V7-V9: per-category npz cache short-circuit. Bypassed when
+    # max_videos or video_id_filter is set (would contaminate shared cache).
+    cache_path = npz_cache_path("video", "vidvrd", category_filter, fps) \
+        if (max_videos is None and video_id_filter is None) else None
     if cache_path is not None:
         hit = load_cached(cache_path)
         if hit is not None:
@@ -92,6 +98,12 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     ann_files = sorted(glob.glob(os.path.join(annotations_dir, "*.json")))
     if not ann_files:
         raise FileNotFoundError(f"No annotation JSONs in {annotations_dir}. Run sh/download_vidvrd.sh first.")
+    if video_id_filter is not None:
+        wanted = {video_id_filter} if isinstance(video_id_filter, str) else set(video_id_filter)
+        ann_files = [f for f in ann_files
+                     if os.path.splitext(os.path.basename(f))[0] in wanted]
+        if not ann_files:
+            raise RuntimeError(f"video_id_filter {video_id_filter!r} matched 0 annotation JSONs in {annotations_dir}")
     if max_videos is not None:
         ann_files = ann_files[:max_videos]
 
@@ -164,6 +176,7 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     last_load_metadata.clear()
     last_load_metadata.update({
         "category_filter": category_filter,
+        "video_id_filter": list(video_id_filter) if isinstance(video_id_filter, (list, tuple, set)) else video_id_filter,
         "strict": strict,
         "video_ids": loaded_video_ids,
         "primary_categories": loaded_primary,
