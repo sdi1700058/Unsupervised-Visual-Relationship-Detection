@@ -158,15 +158,20 @@ def load_vidvrd_data(model_dir, annotations_dir=None, frames_dir=None,
     from latplan.puzzles.puzzle_vidvrd import build_dataset, PICSIZE
     from latplan.puzzles.util import preprocess
     from strips import bboxes_to_onehot
+    from latplan.util.cache import load_cached
     import numpy as np
 
     # Manifest mismatch guard + auto-fill defaults from training manifest.
     manifest_path = os.path.join(model_dir, "loaded_videos.json")
+    _npz_path = None
+    _vid_id   = None
     if os.path.isfile(manifest_path):
         with open(manifest_path) as _f:
             _m = json.load(_f)
         _trained_cat = _m.get("category_filter")
         _trained_fps = _m.get("fps")
+        _npz_path    = _m.get("npz_path")
+        _vid_id      = _m.get("video_id_filter") or _m.get("video_id")
         if category is None and _trained_cat is not None:
             category = _trained_cat
             print(f"[extract_fol] auto-filled --category={_trained_cat!r} from manifest")
@@ -182,9 +187,24 @@ def load_vidvrd_data(model_dir, annotations_dir=None, frames_dir=None,
     if fps is None:
         fps = 3   # legacy default
 
-    images, bboxes, per_state_names, frame_ids = build_dataset(
-        annotations_dir=annotations_dir, frames_dir=frames_dir,
-        category_filter=category, fps=fps)
+    # Prefer the overfit npz the model actually trained on. The shape of the
+    # encoder's `visualization_input` is fixed by num_objs at train time — if
+    # we load the full per-category cache (10 objs) into a model trained with
+    # num_objs=3, the predict_loop raises a shape ValueError.
+    images = bboxes = per_state_names = frame_ids = None
+    if _npz_path and os.path.exists(_npz_path):
+        hit = load_cached(_npz_path)
+        if hit is not None:
+            images, bboxes, per_state_names, frame_ids, _ = hit
+            print(f"[extract_fol] loaded overfit npz {_npz_path} ({len(images)} states, {images.shape[1]} obj slots)")
+
+    if images is None:
+        kw = dict(annotations_dir=annotations_dir, frames_dir=frames_dir,
+                  category_filter=category, fps=fps)
+        if _vid_id:
+            kw["video_id_filter"] = _vid_id
+            print(f"[extract_fol] rebuild with video_id_filter={_vid_id!r}")
+        images, bboxes, per_state_names, frame_ids = build_dataset(**kw)
 
     names_path = os.path.join(model_dir, "object_names.json")
     if os.path.isfile(names_path):
@@ -224,14 +244,19 @@ def load_actiongenome_data(model_dir, annotations_dir=None, frames_dir=None,
     from latplan.puzzles.puzzle_labeled_objects import PICSIZE
     from latplan.puzzles.util import preprocess
     from strips import bboxes_to_onehot
+    from latplan.util.cache import load_cached
     import numpy as np
 
     manifest_path = os.path.join(model_dir, "loaded_videos.json")
+    _npz_path = None
+    _vid_id   = None
     if os.path.isfile(manifest_path):
         with open(manifest_path) as _f:
             _m = json.load(_f)
         _trained_cat = _m.get("category_filter")
         _trained_fps = _m.get("fps")
+        _npz_path    = _m.get("npz_path")
+        _vid_id      = _m.get("video_id_filter") or _m.get("video_id")
         if category is None and _trained_cat is not None:
             category = _trained_cat
             print(f"[extract_fol] auto-filled --category={_trained_cat!r} from manifest")
@@ -245,9 +270,19 @@ def load_actiongenome_data(model_dir, annotations_dir=None, frames_dir=None,
     if fps is None:
         fps = "native"
 
-    images, bboxes, per_state_names, frame_ids = build_dataset(
-        annotations_dir=annotations_dir, frames_dir=frames_dir,
-        category_filter=category, fps=fps)
+    images = bboxes = per_state_names = frame_ids = None
+    if _npz_path and os.path.exists(_npz_path):
+        hit = load_cached(_npz_path)
+        if hit is not None:
+            images, bboxes, per_state_names, frame_ids, _ = hit
+            print(f"[extract_fol] loaded overfit npz {_npz_path} ({len(images)} states, {images.shape[1]} obj slots)")
+
+    if images is None:
+        kw = dict(annotations_dir=annotations_dir, frames_dir=frames_dir,
+                  category_filter=category, fps=fps)
+        if _vid_id:
+            kw["video_id_filter"] = _vid_id
+        images, bboxes, per_state_names, frame_ids = build_dataset(**kw)
 
     names_path = os.path.join(model_dir, "object_names.json")
     if os.path.isfile(names_path):

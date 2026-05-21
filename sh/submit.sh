@@ -45,6 +45,17 @@ MAX_VIDEOS="${MAX_VIDEOS:-None}"
 MAX_IMAGES="${MAX_IMAGES:-None}"
 
 # Video-only knobs
+# When NPZ_PATH points at a baked overfit npz, read fps from its meta so the
+# OUT_DIR tag reflects the actual data rather than the env-var default.
+if [[ -n "${NPZ_PATH:-}" && -f "${NPZ_PATH}" && -z "${FPS:-}" ]]; then
+    FPS="$(python3 -c "
+import numpy as np, json, sys
+d = np.load('${NPZ_PATH}', allow_pickle=True)
+m = d['meta'].item()
+m = json.loads(m.decode('utf-8') if isinstance(m, bytes) else m)
+print(m.get('fps', 3))
+" 2>/dev/null || echo 3)"
+fi
 FPS="${FPS:-3}"
 CATEGORY="${CATEGORY:-bicycle}"
 # NPZ_PATH (video only): pre-baked overfit npz produced by `setup-dataset.py

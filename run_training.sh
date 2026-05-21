@@ -156,11 +156,16 @@ else
 fi
 
 # ── Summarise output ──────────────────────────────────────────────────────────
+# `set -eo pipefail` makes `ls | head` exit 141 (SIGPIPE) when ls has more
+# output than head will consume, marking the whole job FAILED even though
+# everything actually succeeded. Disable pipefail just for this listing.
 echo ""
 echo "--- Output files ---"
+set +o pipefail
 if [[ -n "${OUT_DIR}" && -d "${OUT_DIR}" ]]; then
-    ls -lh "${OUT_DIR}/" | head -30
+    ls -lh "${OUT_DIR}/" | head -30 || true
 else
-    ls -lhR "${PROJECT_DIR}/out" 2>/dev/null | head -40
+    ls -lhR "${PROJECT_DIR}/out" 2>/dev/null | head -40 || true
 fi
+set -o pipefail
 echo "================================================================"
