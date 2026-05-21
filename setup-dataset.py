@@ -188,7 +188,15 @@ def _video_out_path(dataset, out_name):
 
 def _default_video_out_name(category, video_id, fps, max_videos):
     parts = [str(category)]
-    if video_id is not None:
+    if isinstance(video_id, (list, tuple, set)):
+        ids = sorted(video_id)
+        if len(ids) == 1:
+            parts.append(_safe_name(str(ids[0])))
+        else:
+            import hashlib
+            h = hashlib.sha1("|".join(ids).encode("utf-8")).hexdigest()[:6]
+            parts.append(f"{len(ids)}vids-{h}")
+    elif video_id is not None:
         parts.append(_safe_name(str(video_id)))
     elif max_videos is not None:
         parts.append(f"top{max_videos}")
@@ -197,11 +205,18 @@ def _default_video_out_name(category, video_id, fps, max_videos):
 
 
 def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
-                    max_videos, out_name, max_objects, fill_annotations=False):
+                    max_videos, out_name, max_objects, fill_annotations=False,
+                    patch_size=None):
     """Common path for video_ag / video_vidvrd bakers.
 
     Calls the loader's build_dataset(...) with video_id_filter set, then
     writes the raw-array npz at the overfit/ keyspace.
+
+    video_id : str | list[str] | None — when a list, the loader receives all
+    ids and the default out_name is `<cat>-<N>vids-<sha1[:6]>-<fps>fps`.
+    patch_size : int | None — overrides the module default (PATCH_SIZE=32).
+    Increases pixel resolution per object slot; model.py auto-detects the new
+    patch dim from the data tensor (no model.py change).
     """
     from latplan.util.cache import save_cache
 
@@ -211,7 +226,7 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
 
     print(f"[bake] dataset={dataset_name}  category={category}  "
           f"video_id={video_id}  fps={fps}  max_videos={max_videos}  "
-          f"max_objects={max_objects}")
+          f"max_objects={max_objects}  patch_size={patch_size}")
     print(f"[bake] writing  {out_path}")
 
     kwargs = dict(category_filter=category, fps=fps, num_objs=max_objects)
@@ -221,6 +236,8 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
         kwargs["max_videos"] = max_videos
     if fill_annotations and dataset_name == "vidvrd":
         kwargs["fill_annotations"] = True
+    if patch_size is not None:
+        kwargs["patch_size"] = patch_size
 
     images, bboxes, names, frame_ids = loader_module.build_dataset(**kwargs)
     meta = dict(loader_module.last_load_metadata)
@@ -231,6 +248,8 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
         "fps":            fps,
         "max_videos":     max_videos,
         "max_objects":    max_objects,
+        "patch_size":     patch_size if patch_size is not None
+                          else meta.get("patch_size"),
         "fill_annotations": bool(fill_annotations),
         "out_name":       out_name,
         "schema":         "raw_v1",   # versioning hook for future migrations
@@ -243,7 +262,7 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
 
 def video_ag(category=None, video_id=None, fps="native",
              max_videos=None, out_name=None, max_objects=10,
-             fill_annotations=False):
+             fill_annotations=False, patch_size=None):
     """Bake an ActionGenome overfit npz for one video / category subset."""
     if category is None:
         raise SystemExit("video_ag: --category is required (e.g. chair, table, food)")
@@ -252,25 +271,32 @@ def video_ag(category=None, video_id=None, fps="native",
         print("[bake] note: --fill-annotations has no effect on ActionGenome (AG frame_list is dense already)")
     return _bake_video_npz(_ag, "actiongenome", category, video_id, fps,
                            max_videos, out_name, max_objects,
-                           fill_annotations=False)
+                           fill_annotations=False, patch_size=patch_size)
 
 
 def video_vidvrd(category=None, video_id=None, fps=3,
                  max_videos=None, out_name=None, max_objects=10,
-                 fill_annotations=False):
+                 fill_annotations=False, patch_size=None):
     """Bake a VidVRD overfit npz for one video / category subset.
 
     fill_annotations=True : carry forward last non-empty trajectory entry into
         subsequent empty entries (annotations are sparse in VidVRD; ~13 fps for
         most videos). Image stays from the real source-PTS jpeg; only the bbox
         list is reused. Valid when tracked objects are continuously visible.
+
+    patch_size : int | None — overrides per-object patch resolution (default
+        32 = puzzle_labeled_objects.PATCH_SIZE).
+
+    video_id : str | list[str] | None — comma-separated CLI list lands here as
+        a Python list and is forwarded as video_id_filter.
     """
     if category is None:
         raise SystemExit("video_vidvrd: --category is required (e.g. bicycle, dog, person)")
     from latplan.puzzles import puzzle_vidvrd as _vv
     return _bake_video_npz(_vv, "vidvrd", category, video_id, fps,
                            max_videos, out_name, max_objects,
-                           fill_annotations=fill_annotations)
+                           fill_annotations=fill_annotations,
+                           patch_size=patch_size)
 
 
 def _parse_video_args(argv):
@@ -279,15 +305,22 @@ def _parse_video_args(argv):
     p = argparse.ArgumentParser(prog="setup-dataset.py video_ag|video_vidvrd")
     p.add_argument("category", help="Primary category (e.g. chair, bicycle)")
     p.add_argument("--video-id", default=None,
-                   help="Restrict to one video-id (AG: '<vid>.mp4'; VidVRD: 'ILSVRC2015_…')")
+                   help="Restrict to one or more video-ids. Accepts a single id or a comma-separated list "
+                        "(AG: '<vid>.mp4'; VidVRD: 'ILSVRC2015_…'). Multi-id triggers a <N>vids-<hash> default out-name.")
     p.add_argument("--fps",        default=None, help="fps key (AG default: native, VidVRD default: 3)")
     p.add_argument("--max-videos", default=None, type=int)
     p.add_argument("--max-objects", default=10,  type=int)
+    p.add_argument("--patch-size", default=None, type=int,
+                   help="Per-object patch resolution (default = puzzle_labeled_objects.PATCH_SIZE = 32). "
+                        "model.py auto-detects the new patch dim from the data tensor.")
     p.add_argument("--out-name",   default=None,
                    help="Output stem (no .npz). Default: <cat>-<video_id?>-<fps>fps")
     p.add_argument("--fill-annotations", action="store_true",
                    help="VidVRD only: carry last non-empty trajectory forward into empty entries (dense per-frame supervision)")
     ns = p.parse_args(argv)
+    # Parse comma-separated --video-id into a list (single value stays a string).
+    if ns.video_id is not None and "," in ns.video_id:
+        ns.video_id = [v.strip() for v in ns.video_id.split(",") if v.strip()]
     return ns
 
 
@@ -357,7 +390,8 @@ def main():
             kw = dict(category=ns.category, video_id=ns.video_id,
                       max_videos=ns.max_videos, max_objects=ns.max_objects,
                       out_name=ns.out_name,
-                      fill_annotations=ns.fill_annotations)
+                      fill_annotations=ns.fill_annotations,
+                      patch_size=ns.patch_size)
             if ns.fps is not None:
                 # myeval-style coercion so '3' becomes int but 'native' stays str
                 try:    kw["fps"] = int(ns.fps)

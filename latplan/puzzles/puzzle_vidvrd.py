@@ -59,7 +59,7 @@ def _video_primary_category(ann):
 def build_dataset(annotations_dir=None, frames_dir=None,
                   num_objs=MAX_OBJECTS, max_videos=None, split="train",
                   category_filter=None, fps=3, video_id_filter=None,
-                  fill_annotations=False):
+                  fill_annotations=False, patch_size=None):
     """
     Load all annotated frames from VidVRD.
 
@@ -81,6 +81,12 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         annotations_dir = os.path.normpath(os.path.join(_DEFAULT_ANN_DIR, split))
     if frames_dir is None:
         frames_dir = os.path.normpath(os.path.join(_default_frames_dir(fps), split))
+
+    # patch_size overrides the module default for THIS bake only (env-overridable
+    # via setup-dataset.py --patch-size). model.py:blocks_activation auto-detects
+    # the patch dim from the data tensor at train time, so no model.py change is
+    # needed when this is increased.
+    _patch_size = patch_size if patch_size is not None else PATCH_SIZE
 
     # SPEC §V7-V9: per-category npz cache short-circuit. Bypassed when
     # max_videos or video_id_filter is set (would contaminate shared cache).
@@ -174,13 +180,13 @@ def build_dataset(annotations_dir=None, frames_dir=None,
             for obj in frame_objs:
                 b    = obj["bbox"]
                 bbox = (b["xmin"], b["ymin"], b["xmax"], b["ymax"])
-                patches.append(_crop_object(pil_img, bbox))
+                patches.append(_crop_object(pil_img, bbox, patch_size=_patch_size))
                 bboxes.append(_scale_bbox_to_canvas(bbox, W, H))
                 names.append(tid_to_cat.get(obj["tid"], f"obj{obj['tid']}"))
 
             # Pad to num_objs
             for i in range(len(frame_objs), num_objs):
-                patches.append(np.zeros((PATCH_SIZE, PATCH_SIZE, 3), dtype=np.uint8))
+                patches.append(np.zeros((_patch_size, _patch_size, 3), dtype=np.uint8))
                 bboxes.append((0, 0, 0, 0))
                 names.append(f"pad_{i}")
 
@@ -207,6 +213,7 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "num_states": len(images_list),
         "fps": fps,
         "fill_annotations": fill_annotations,
+        "patch_size": _patch_size,
     })
     print(f"[vidvrd-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(ann_files)} videos, "

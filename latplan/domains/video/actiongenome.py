@@ -60,7 +60,7 @@ def _video_primary_object_category(frames_of_vid, obj_anno):
 def build_dataset(annotations_dir=None, frames_dir=None,
                   num_objs=MAX_OBJECTS, max_videos=None, split="train",
                   category_filter=None, fps="native",
-                  video_id_filter=None):
+                  video_id_filter=None, patch_size=None):
     """Load AG annotated frames; return (images, bboxes, names, frame_ids).
 
     Parameters mirror `puzzle_vidvrd.build_dataset` for consistency.
@@ -76,6 +76,8 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     """
     if annotations_dir is None: annotations_dir = _DEFAULT_ANN_DIR
     if frames_dir is None:      frames_dir      = _DEFAULT_FRAMES
+
+    _patch_size = patch_size if patch_size is not None else PATCH_SIZE
 
     # SPEC §V7-V9: per-category npz cache. Skipped when max_videos or
     # video_id_filter are set (both would otherwise contaminate the shared
@@ -186,12 +188,12 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
             patches, bboxes, names = [], [], []
             for cls, bbox in slots[:num_objs]:
-                patches.append(_crop_object(pil_img, bbox))
+                patches.append(_crop_object(pil_img, bbox, patch_size=_patch_size))
                 bboxes.append(_scale_bbox_to_canvas(bbox, W, H))
                 names.append(cls)
 
             for i in range(len(slots), num_objs):
-                patches.append(np.zeros((PATCH_SIZE, PATCH_SIZE, 3), dtype=np.uint8))
+                patches.append(np.zeros((_patch_size, _patch_size, 3), dtype=np.uint8))
                 bboxes.append((0, 0, 0, 0))
                 names.append(f"pad_{i}")
 
@@ -217,6 +219,7 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "num_videos":         len(loaded_video_ids),
         "num_states":         len(images_list),
         "fps":                fps,
+        "patch_size":         _patch_size,
     })
     print(f"[ag-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(video_ids)} videos, "
