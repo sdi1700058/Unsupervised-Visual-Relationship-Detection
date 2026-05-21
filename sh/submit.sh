@@ -134,6 +134,18 @@ params = {
     "puzzle_type":["${PUZZLE_TYPE}"], "width":[${WIDTH}], "height":[${HEIGHT}],
     "track":["${TRACK}"], "aeclass":["${AECLASS}"],
     "npz_path":["${NPZ_PATH}"],
+    # Env-overridable hyperparameters — fold INTO the hash so jobs that differ
+    # only on these knobs land in distinct OUT_DIRs (previously all collided
+    # into the same dir and overwrote each other's training_history.csv).
+    "lr":["${LR:-}"],
+    "zerosuppress":["${ZEROSUPPRESS:-}"],
+    "zerosuppress_delay":["${ZEROSUPPRESS_DELAY:-}"],
+    "max_temperature":["${MAX_TEMPERATURE:-}"],
+    "dropout":["${DROPOUT:-}"],
+    "noise":["${NOISE:-}"],
+    "preenc_layers":["${PREENC_LAYERS:-}"],
+    "preenc_dim":["${PREENC_DIM:-}"],
+    "no_earlystop":["${NO_EARLYSTOP:-}"],
 }
 dom_kw = dict(type="${PUZZLE_TYPE}", width=${WIDTH}, height=${HEIGHT}, track="${TRACK}")
 # When loading a pre-baked overfit npz, anchor the run_tag to the npz stem

@@ -67,14 +67,12 @@ JOB_NAME="baseline-mnist-sentinel-$(date +%Y%m%d-%H%M%S)" \
 bash "${PROJECT_DIR}/sh/submit.sh"
 
 echo
-echo "[baseline_verify] After 'seff <JOBID>' shows COMPLETED, check val_BCE:"
+echo "[baseline_verify] After 'seff <JOBID>' shows COMPLETED, check val_BCE via:"
 echo
 cat <<'POST'
   J=<JOBID>
   F=$(ls logs/baseline-mnist-sentinel-*.${J}.out | head -1)
   OUT=$(grep '\[info\] Output dir:' "$F" | head -1 | awk '{print $NF}')
-  echo "[baseline_verify] OUT=$OUT"
-  echo "[baseline_verify] val_BCE end:"
-  tail -1 "$OUT/training_history.csv" | awk -F, '{print "  col7 val_BCE =", $7}'
-  echo "[baseline_verify] reference 1.038e-07. Pass if within an order of magnitude."
+  python3 tools/summarize_run.py "$OUT"
+  # Reference (May 19 archive): val_BCE min ~ 1e-7. PASS if within an order of magnitude.
 POST
