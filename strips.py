@@ -258,6 +258,36 @@ def show_summary(ae,train,test):
 
 ################################################################
 
+def _apply_env_overrides(parameters, *, knobs=("ZEROSUPPRESS","ZEROSUPPRESS_DELAY",
+                                                "MAX_TEMPERATURE","DROPOUT","NOISE","LR")):
+    """Honor env knobs that override default hyperparameters in `parameters`.
+
+    Keeps the env-knob set in one place so every domain entrypoint
+    (puzzle/blocksworld/labeled_objects/vidvrd/actiongenome) honors the same
+    overrides without duplicating boilerplate.
+
+    Knob -> parameters key mapping (env var name in UPPERCASE, parameters
+    key in lowercase, all `float`-cast):
+        ZEROSUPPRESS         -> zerosuppress
+        ZEROSUPPRESS_DELAY   -> zerosuppress_delay
+        MAX_TEMPERATURE      -> max_temperature
+        DROPOUT              -> dropout
+        NOISE                -> noise
+        LR                   -> lr
+    """
+    pmap = {
+        "ZEROSUPPRESS":       "zerosuppress",
+        "ZEROSUPPRESS_DELAY": "zerosuppress_delay",
+        "MAX_TEMPERATURE":    "max_temperature",
+        "DROPOUT":            "dropout",
+        "NOISE":              "noise",
+        "LR":                 "lr",
+    }
+    for k in knobs:
+        if k in os.environ:
+            parameters[pmap[k]] = [float(os.environ[k])]
+
+
 def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=None,num_examples=6500,comment=None):
     for name, value in locals().items():
         if value is not None:
@@ -269,6 +299,8 @@ def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=
     parameters["preencoder_dimension"] = [0] # disable object embedding
     parameters["preencoder_layers"]    = [0.0] # disable object embedding
     parameters["preencoder_l1"]        = [0.0] # disable object embedding
+
+    _apply_env_overrides(parameters)
 
     import importlib
     p = importlib.import_module('latplan.puzzles.puzzle_{}'.format(type))
@@ -322,6 +354,7 @@ def blocksworld(aeclass="FirstOrderAE",track="blocks-5-3",U=None,A=None,P=None,n
         if value is not None:
             parameters[name] = [value]
     default_parameters["aeclass"] = aeclass
+    _apply_env_overrides(parameters)
 
     with np.load(_find_dataset(track+".npz")) as data:
         images = data['images'].astype(np.float32) / 256
@@ -421,6 +454,7 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
     default_parameters["aeclass"]    = aeclass
     default_parameters["activation"] = "self.blocks_activation"
     default_parameters["epoch"]      = epoch
+    _apply_env_overrides(parameters)
     parameters['preencoder_layers']              = [2]
     parameters['preencoder_dimention']           = [256]
     parameters['preencoder_output_activation']   = [("linear", "MSE")]
