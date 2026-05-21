@@ -220,20 +220,27 @@ def main():
     n_panels = 1 + min(len(extras), 3)
     fig, axes = plt.subplots(n_panels, 1, figsize=(9, 3 * n_panels), squeeze=False)
 
-    # Panel 0 — aggregate loss
+    # Panel 0 — train BCE vs val BCE on same axes (the actual "did model learn?" signal).
+    # `loss`/`val_loss` are misleading on FOSAE because train `loss` includes
+    # regularizer terms (preencoder_l1, zerosuppress * latent_l1) that scale with
+    # latent size — the train series ends up ~30x bigger than val on the same axes.
+    train_bce = extras.get("BCE") or train_loss
+    val_bce   = extras.get("val_BCE") or val_loss
     ax = axes[0, 0]
-    if train_loss:
-        ax.plot(epochs or range(1, len(train_loss) + 1), train_loss, label="train loss", marker=".", ms=3, lw=1)
-    if val_loss:
-        ax.plot(epochs[:len(val_loss)] if epochs else range(1, len(val_loss) + 1), val_loss,
-                label="val_loss", marker=".", ms=3, lw=1, alpha=0.7)
-    ax.set_ylabel("loss")
-    ax.set_title(f"Aggregate loss — {os.path.basename(source)}")
+    if train_bce:
+        ax.plot(epochs[:len(train_bce)] if epochs else range(1, len(train_bce) + 1),
+                train_bce, label="train BCE", marker=".", ms=3, lw=1)
+    if val_bce:
+        ax.plot(epochs[:len(val_bce)] if epochs else range(1, len(val_bce) + 1), val_bce,
+                label="val BCE", marker=".", ms=3, lw=1, alpha=0.7)
+    ax.set_ylabel("BCE")
+    ax.set_title(f"Reconstruction BCE — {os.path.basename(source)}")
     if args.logy:
         ax.set_yscale("log")
     ax.grid(True, alpha=0.3)
-    if train_loss or val_loss:
+    if train_bce or val_bce:
         ax.legend()
+    # Don't drop BCE from extras — it might also be useful as a separate panel below.
 
     # Pick the top-3 most informative extra metrics (prefer BCE, MSE, then alphabetical)
     priority = ["BCE", "MSE", "val_BCE", "val_MSE", "activation", "preencoder_l1"]

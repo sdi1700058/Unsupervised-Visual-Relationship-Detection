@@ -522,11 +522,21 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     # Env-overridable hyperparameters. Default = encoder-collapse-resistant
     # settings tuned for full-dataset realistic-image domains (SPEC §C6).
     # For tiny overfit datasets (one video), match the MNIST baseline:
-    #   LR=0.001 PREENC_LAYERS=0 — see README §5.1.
+    #   LR=0.001 PREENC_LAYERS=0 ZEROSUPPRESS=0 — see README §5.1.
     parameters['preencoder_layers']            = [int(os.environ.get('PREENC_LAYERS', 2))]
     parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
     parameters['preencoder_output_activation'] = [("linear", "MSE")]
     parameters['lr']                           = [float(os.environ.get('LR', 0.0001))]
+    if "ZEROSUPPRESS" in os.environ:
+        parameters['zerosuppress'] = [float(os.environ['ZEROSUPPRESS'])]
+    if "ZEROSUPPRESS_DELAY" in os.environ:
+        parameters['zerosuppress_delay'] = [float(os.environ['ZEROSUPPRESS_DELAY'])]
+    if "MAX_TEMPERATURE" in os.environ:
+        parameters['max_temperature'] = [float(os.environ['MAX_TEMPERATURE'])]
+    if "DROPOUT" in os.environ:
+        parameters['dropout'] = [float(os.environ['DROPOUT'])]
+    if "NOISE" in os.environ:
+        parameters['noise'] = [float(os.environ['NOISE'])]
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
@@ -636,6 +646,16 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
     parameters['preencoder_output_activation'] = [("linear", "MSE")]
     parameters['lr']                           = [float(os.environ.get('LR', 0.0001))]
+    if "ZEROSUPPRESS" in os.environ:
+        parameters['zerosuppress'] = [float(os.environ['ZEROSUPPRESS'])]
+    if "ZEROSUPPRESS_DELAY" in os.environ:
+        parameters['zerosuppress_delay'] = [float(os.environ['ZEROSUPPRESS_DELAY'])]
+    if "MAX_TEMPERATURE" in os.environ:
+        parameters['max_temperature'] = [float(os.environ['MAX_TEMPERATURE'])]
+    if "DROPOUT" in os.environ:
+        parameters['dropout'] = [float(os.environ['DROPOUT'])]
+    if "NOISE" in os.environ:
+        parameters['noise'] = [float(os.environ['NOISE'])]
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
