@@ -39,7 +39,8 @@ def list_jobs(start, states=("COMPLETED",)):
          "--starttime", start, "-X",
          f"--state={state_arg}",
          "--format=JobID,State", "-n", "-P"],
-        capture_output=True, text=True, check=False)
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        universal_newlines=True, check=False)
     rows = []
     for line in out.stdout.splitlines():
         line = line.strip()
