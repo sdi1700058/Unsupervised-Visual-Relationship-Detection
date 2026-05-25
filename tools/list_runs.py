@@ -33,11 +33,18 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def list_jobs(start, states=("COMPLETED",)):
+def list_jobs(start, states=("COMPLETED",), user=None, debug=False):
     state_arg = ",".join(states)
     cmd = ["sacct", "--starttime", start, "-X",
            f"--state={state_arg}",
            "--format=JobID,State", "-n"]
+    if user:
+        cmd = ["sacct", "-u", user, "--starttime", start, "-X",
+               f"--state={state_arg}", "--format=JobID,State", "-n"]
+    
+    if debug:
+        print(f"DEBUG: Running command: {' '.join(cmd)}")
+        
     out = subprocess.run(cmd,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         universal_newlines=True, check=False)
@@ -48,25 +55,37 @@ def list_jobs(start, states=("COMPLETED",)):
             print(f"sacct stderr:\n{out.stderr.strip()}")
             
     rows = []
-    for line in out.stdout.splitlines():
+    lines = out.stdout.splitlines()
+    if debug:
+        print(f"DEBUG: sacct returned {len(lines)} lines")
+        
+    for line in lines:
         line = line.strip()
         if not line:
             continue
         parts = line.split()
         if len(parts) >= 2:
             jid, state = parts[0], parts[1]
+            if debug and jid.startswith("25"): # print some matching jids
+                print(f"DEBUG: Found job {jid} in state {state}")
             # Accept digits, underscores, brackets (for array jobs)
             if jid and jid[0].isdigit():
                 rows.append((jid, state.strip()))
     return rows
 
 
-def find_log(jobid):
-    # Try .out first, fall back to .err
-    for pat in (f"logs/*.{jobid}.out", f"logs/*.{jobid}.err"):
+def find_log(jobid, debug=False):
+    # Try .out first, fall back to .err, or any log containing the jobid
+    patterns = [f"logs/*.{jobid}.out", f"logs/*.{jobid}.err", f"logs/*{jobid}*"]
+    for pat in patterns:
         hits = sorted(glob.glob(str(ROOT / pat)))
         if hits:
+            if debug:
+                print(f"DEBUG: Job {jobid} -> Found log {hits[0]}")
             return hits[0]
+            
+    if debug:
+        print(f"DEBUG: Job {jobid} -> No logs found for patterns: {patterns}")
     return None
 
 
@@ -148,16 +167,22 @@ def main():
     ap.add_argument("--limit", type=int, default=50)
     ap.add_argument("--include-failed", action="store_true",
                     help="also include FAILED / TIMEOUT jobs (these may still have partial training_history.csv)")
+    ap.add_argument("--debug", action="store_true", help="Print debug information")
     args = ap.parse_args()
 
     states = ("COMPLETED",)
     if args.include_failed:
         states = ("COMPLETED", "FAILED", "TIMEOUT")
-    jobs = list_jobs(args.start, states)
+        
+    user = os.environ.get("USER", getpass.getuser())
+    jobs = list_jobs(args.start, states, user=user, debug=args.debug)
+
+    if args.debug:
+        print(f"DEBUG: Found {len(jobs)} jobs from sacct")
 
     rows = []
     for jid, state in jobs:
-        log = find_log(jid)
+        log = find_log(jid, debug=args.debug)
         if not log:
             rows.append((float("inf"), float("inf"), float("nan"), 0, jid, state, "-", "(no log)"))
             continue
