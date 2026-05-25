@@ -27,6 +27,7 @@ import os
 import re
 import subprocess
 import sys
+import getpass
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -35,7 +36,7 @@ ROOT = Path(__file__).resolve().parent.parent
 def list_jobs(start, states=("COMPLETED",)):
     state_arg = ",".join(states)
     out = subprocess.run(
-        ["sacct", "-u", os.environ.get("USER", ""),
+        ["sacct", "-u", getpass.getuser(),
          "--starttime", start, "-X",
          f"--state={state_arg}",
          "--format=JobID,State", "-n", "-P"],
@@ -48,7 +49,8 @@ def list_jobs(start, states=("COMPLETED",)):
             continue
         jid, state = line.split("|", 1)
         jid = jid.strip()
-        if jid.isdigit():
+        # Accept digits, underscores, brackets (for array jobs)
+        if jid and jid[0].isdigit():
             rows.append((jid, state.strip()))
     return rows
 
