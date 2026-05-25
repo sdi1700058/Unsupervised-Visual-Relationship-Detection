@@ -35,23 +35,29 @@ ROOT = Path(__file__).resolve().parent.parent
 
 def list_jobs(start, states=("COMPLETED",)):
     state_arg = ",".join(states)
-    out = subprocess.run(
-        ["sacct", "-u", getpass.getuser(),
-         "--starttime", start, "-X",
-         f"--state={state_arg}",
-         "--format=JobID,State", "-n", "-P"],
+    cmd = ["sacct", "--starttime", start, "-X",
+           f"--state={state_arg}",
+           "--format=JobID,State", "-n"]
+    out = subprocess.run(cmd,
         stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         universal_newlines=True, check=False)
+    
+    if out.returncode != 0:
+        print(f"WARNING: sacct failed with exit code {out.returncode}")
+        if out.stderr:
+            print(f"sacct stderr:\n{out.stderr.strip()}")
+            
     rows = []
     for line in out.stdout.splitlines():
         line = line.strip()
-        if not line or "|" not in line:
+        if not line:
             continue
-        jid, state = line.split("|", 1)
-        jid = jid.strip()
-        # Accept digits, underscores, brackets (for array jobs)
-        if jid and jid[0].isdigit():
-            rows.append((jid, state.strip()))
+        parts = line.split()
+        if len(parts) >= 2:
+            jid, state = parts[0], parts[1]
+            # Accept digits, underscores, brackets (for array jobs)
+            if jid and jid[0].isdigit():
+                rows.append((jid, state.strip()))
     return rows
 
 
