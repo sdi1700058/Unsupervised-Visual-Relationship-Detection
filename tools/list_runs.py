@@ -37,10 +37,10 @@ def list_jobs(start, states=("COMPLETED",), user=None, debug=False):
     state_arg = ",".join(states)
     cmd = ["sacct", "--starttime", start, "-X",
            f"--state={state_arg}",
-           "--format=JobID,State", "-n"]
+           "--format=JobID,State", "-n", "-P"]
     if user:
         cmd = ["sacct", "-u", user, "--starttime", start, "-X",
-               f"--state={state_arg}", "--format=JobID,State", "-n"]
+               f"--state={state_arg}", "--format=JobID,State", "-n", "-P"]
     
     if debug:
         print(f"DEBUG: Running command: {' '.join(cmd)}")
@@ -63,14 +63,14 @@ def list_jobs(start, states=("COMPLETED",), user=None, debug=False):
         line = line.strip()
         if not line:
             continue
-        parts = line.split()
+        parts = line.split("|") if "|" in line else line.split()
         if len(parts) >= 2:
-            jid, state = parts[0], parts[1]
+            jid, state = parts[0].strip(), parts[1].strip()
             if debug and jid.startswith("25"): # print some matching jids
                 print(f"DEBUG: Found job {jid} in state {state}")
             # Accept digits, underscores, brackets (for array jobs)
             if jid and jid[0].isdigit():
-                rows.append((jid, state.strip()))
+                rows.append((jid, state))
     return rows
 
 
