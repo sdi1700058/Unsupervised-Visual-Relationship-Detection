@@ -66,6 +66,11 @@ def list_jobs(start, states=("COMPLETED",), user=None, debug=False):
         parts = line.split("|") if "|" in line else line.split()
         if len(parts) >= 2:
             jid, state = parts[0].strip(), parts[1].strip()
+            
+            # Skip step jobs (e.g. 123.batch) since -X should handle it, but just in case
+            if "." in jid:
+                continue
+                
             if debug and jid.startswith("25"): # print some matching jids
                 print(f"DEBUG: Found job {jid} in state {state}")
             # Accept digits, underscores, brackets (for array jobs)
@@ -94,7 +99,12 @@ def find_out_dir(log):
         with open(log) as f:
             for line in f:
                 if "[info] Output dir:" in line:
-                    return line.strip().split()[-1]
+                    path = line.strip().split()[-1]
+                    # Map remote cluster paths (e.g. /scratch/.../out/...) to local workspace
+                    if "/out/" in path:
+                        local_path = path[path.index("/out/") + 1:]
+                        return str(ROOT / local_path)
+                    return path
     except OSError:
         pass
     return None
