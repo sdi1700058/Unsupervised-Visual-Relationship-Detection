@@ -77,15 +77,44 @@ def find_out_dir(log):
 
 
 def npz_stem(log):
+    """Pull the `.npz` basename from the submit.sh banner line in the .out log.
+
+    Banner format is `[submit] NPZ_PATH : /path/to/file.npz` — note the
+    `NPZ_PATH` token can be followed by either `:` or `=`, plus spaces, and
+    the path itself may include colons (rare) or whitespace-padding. Robust
+    extraction: search for the first `.npz` token on a line that contains
+    `NPZ_PATH`. Strip surrounding non-path characters.
+    """
     try:
         with open(log) as f:
             for line in f:
-                m = re.search(r"NPZ_PATH\s*[:=]\s*(\S+)", line)
+                if "NPZ_PATH" not in line:
+                    continue
+                m = re.search(r"([^\s:=]+\.npz)", line)
                 if m:
                     return os.path.basename(m.group(1))
     except OSError:
         pass
     return "-"
+
+
+def out_dir_hash(out_dir):
+    """Extract the 6-hex sha1-short from an OUT_DIR basename.
+
+    Submit.sh composes dirs like `..._catdog-3vids-30fps-mo3-fill_fps30_d2ebdd`
+    (canonical) or `..._d2ebdd_2` (collision-suffix). The 6-hex hash is the
+    discriminative identifier; the `_<idx>` tail (`_2`, `_3`, ...) is just a
+    deduplicator. Previous code's `basename.split("_")[-1]` grabbed the
+    `_<idx>` tail (e.g. `2`) for collision dirs — useless for cross-ref.
+    """
+    base = os.path.basename(out_dir.rstrip("/"))
+    # Strip any trailing `_<digits>` collision suffix, then take the last
+    # underscore-segment as the hash.
+    base_no_idx = re.sub(r"_\d+$", "", base)
+    m = re.search(r"_([0-9a-f]{6})$", base_no_idx)
+    if m:
+        return m.group(1)
+    return base_no_idx.split("_")[-1] or "-"
 
 
 def summarize(out_dir):
@@ -169,9 +198,9 @@ def main():
         s = summarize(out)
         if not s:
             rows.append((float("inf"), float("inf"), float("nan"), 0, jid, state,
-                         os.path.basename(out).split("_")[-1], "(no csv)"))
+                         out_dir_hash(out), "(no csv)"))
             continue
-        h = os.path.basename(out).split("_")[-1]
+        h = out_dir_hash(out)
         npz = npz_stem(log)
         rows.append((s["val_BCE_min"], s["train_BCE_min"], s["val_act_last"],
                      s["epochs"], jid, state, h, npz))
