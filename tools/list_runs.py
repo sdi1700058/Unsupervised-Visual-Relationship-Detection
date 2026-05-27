@@ -77,20 +77,22 @@ def find_out_dir(log):
 
 
 def npz_stem(log):
-    """Pull the `.npz` basename from the submit.sh banner line in the .out log.
+    """Pull the first `.npz` basename referenced anywhere in the .out log.
 
-    Banner format is `[submit] NPZ_PATH : /path/to/file.npz` — note the
-    `NPZ_PATH` token can be followed by either `:` or `=`, plus spaces, and
-    the path itself may include colons (rare) or whitespace-padding. Robust
-    extraction: search for the first `.npz` token on a line that contains
-    `NPZ_PATH`. Strip surrounding non-path characters.
+    Matches whatever line contains a `.npz` token. In real .out logs that
+    means either:
+      - `run_training.sh:52` line `TRAIN_CMD : python3 strips.py ... /path.npz`
+      - `strips.py::vidvrd()` line `Loading VidVRD overfit npz: /path.npz`
+
+    The submit.sh `[submit] NPZ_PATH :` banner is NOT in .out (echoed
+    pre-sbatch on the login node) so we don't rely on that keyword.
+
+    Puzzle / blocks jobs have no `.npz` token → returns "-" as expected.
     """
     try:
         with open(log) as f:
             for line in f:
-                if "NPZ_PATH" not in line:
-                    continue
-                m = re.search(r"([^\s:=]+\.npz)", line)
+                m = re.search(r"(\S+\.npz)\b", line)
                 if m:
                     return os.path.basename(m.group(1))
     except OSError:
