@@ -32,3 +32,9 @@ venv/
 **/events.out.tfevents.*
 **/lock
 slurm-*.out
+.hf/
+.pip-cache/
+venv-detect/
+data/video/videonet/raw/
+data/video/videonet/videos/
+data/video/videonet/frames_*

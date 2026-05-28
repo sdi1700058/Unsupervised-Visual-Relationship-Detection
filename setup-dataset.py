@@ -206,7 +206,7 @@ def _default_video_out_name(category, video_id, fps, max_videos):
 
 def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
                     max_videos, out_name, max_objects, fill_annotations=False,
-                    patch_size=None):
+                    patch_size=None, annotations_dir=None, frames_dir=None):
     """Common path for video_ag / video_vidvrd bakers.
 
     Calls the loader's build_dataset(...) with video_id_filter set, then
@@ -217,6 +217,9 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
     patch_size : int | None — overrides the module default (PATCH_SIZE=32).
     Increases pixel resolution per object slot; model.py auto-detects the new
     patch dim from the data tensor (no model.py change).
+    annotations_dir / frames_dir : Path overrides forwarded to the loader.
+    Used when loading from a non-default directory layout (e.g. VideoNet
+    layered under `data/video/videonet/`) without a new loader module.
     """
     from latplan.util.cache import save_cache
 
@@ -238,6 +241,10 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
         kwargs["fill_annotations"] = True
     if patch_size is not None:
         kwargs["patch_size"] = patch_size
+    if annotations_dir is not None:
+        kwargs["annotations_dir"] = annotations_dir
+    if frames_dir is not None:
+        kwargs["frames_dir"] = frames_dir
 
     images, bboxes, names, frame_ids = loader_module.build_dataset(**kwargs)
     meta = dict(loader_module.last_load_metadata)
@@ -262,7 +269,8 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
 
 def video_ag(category=None, video_id=None, fps="native",
              max_videos=None, out_name=None, max_objects=10,
-             fill_annotations=False, patch_size=None):
+             fill_annotations=False, patch_size=None,
+             annotations_dir=None, frames_dir=None):
     """Bake an ActionGenome overfit npz for one video / category subset."""
     if category is None:
         raise SystemExit("video_ag: --category is required (e.g. chair, table, food)")
@@ -271,12 +279,14 @@ def video_ag(category=None, video_id=None, fps="native",
         print("[bake] note: --fill-annotations has no effect on ActionGenome (AG frame_list is dense already)")
     return _bake_video_npz(_ag, "actiongenome", category, video_id, fps,
                            max_videos, out_name, max_objects,
-                           fill_annotations=False, patch_size=patch_size)
+                           fill_annotations=False, patch_size=patch_size,
+                           annotations_dir=annotations_dir, frames_dir=frames_dir)
 
 
 def video_vidvrd(category=None, video_id=None, fps=3,
                  max_videos=None, out_name=None, max_objects=10,
-                 fill_annotations=False, patch_size=None):
+                 fill_annotations=False, patch_size=None,
+                 annotations_dir=None, frames_dir=None):
     """Bake a VidVRD overfit npz for one video / category subset.
 
     fill_annotations=True : carry forward last non-empty trajectory entry into
@@ -296,7 +306,9 @@ def video_vidvrd(category=None, video_id=None, fps=3,
     return _bake_video_npz(_vv, "vidvrd", category, video_id, fps,
                            max_videos, out_name, max_objects,
                            fill_annotations=fill_annotations,
-                           patch_size=patch_size)
+                           patch_size=patch_size,
+                           annotations_dir=annotations_dir,
+                           frames_dir=frames_dir)
 
 
 def _parse_video_args(argv):
@@ -317,6 +329,12 @@ def _parse_video_args(argv):
                    help="Output stem (no .npz). Default: <cat>-<video_id?>-<fps>fps")
     p.add_argument("--fill-annotations", action="store_true",
                    help="VidVRD only: carry last non-empty trajectory forward into empty entries (dense per-frame supervision)")
+    p.add_argument("--annotations-dir", default=None,
+                   help="Override default annotations dir (passed to loader.build_dataset). "
+                        "Use when sourcing annotations from a non-default layout (e.g. VideoNet under data/video/videonet/).")
+    p.add_argument("--frames-dir", default=None,
+                   help="Override default frames dir (passed to loader.build_dataset). "
+                        "Use for non-default frame trees (e.g. data/video/videonet/frames_5fps).")
     ns = p.parse_args(argv)
     # Parse comma-separated --video-id into a list (single value stays a string).
     if ns.video_id is not None and "," in ns.video_id:
@@ -391,7 +409,9 @@ def main():
                       max_videos=ns.max_videos, max_objects=ns.max_objects,
                       out_name=ns.out_name,
                       fill_annotations=ns.fill_annotations,
-                      patch_size=ns.patch_size)
+                      patch_size=ns.patch_size,
+                      annotations_dir=ns.annotations_dir,
+                      frames_dir=ns.frames_dir)
             if ns.fps is not None:
                 # myeval-style coercion so '3' becomes int but 'native' stays str
                 try:    kw["fps"] = int(ns.fps)
