@@ -1,1267 +1,241 @@
-# labeled-fosae
+# labeled-fosae — User Guide
 
-**First-Order State AutoEncoder (FOSAE)** — fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae) extended with a VLM-annotation pipeline for real-world COCO images.
+A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video: `vidvrd`, `actiongenome`, and `videonet`.
 
-FOSAE learns to decompose visual scenes into object-centric, interpretable **First-Order Logic (FOL)** predicates entirely without supervision. It bridges raw pixel input with symbolic planning (PDDL/STRIPS). Published at ICAPS 2019; see [arXiv:1902.08093](https://arxiv.org/abs/1902.08093).
+The document is a runbook. It tells you how to install the code, how to bake data, how to train the model, and how to look at the results. The document does not explain the theory. For the theory, read `.claude/docs/THEORY.md`.
 
-This fork extends FOSAE with two new real-world domains:
-- **Labeled Objects** — VLM-annotated (Unsloth/Qwen3-VL) COCO images
-- **VidVRD** — ImageNet Video Visual Relationship Detection (1000 videos, per-frame object tracking)
+## 1. What FOSAE Does (Short Version)
 
----
+- FOSAE reads a set of object patches per frame.
+- FOSAE learns a binary latent code of shape `U × P`. The code names first-order predicates such as `pred_3(dog, table)`.
+- FOSAE trains without labels. The only loss is reconstruction (BCE on patches, MSE on bboxes).
+- The output is (a) a reconstruction of the input frame and (b) a discrete symbolic state that a classical planner can use.
 
-## Quick Start
+The FOSAE paper is at [arXiv:1902.08093](https://arxiv.org/abs/1902.08093). Read `.claude/docs/THEORY.md §1-2` for the architecture.
+
+## 2. What This Fork Adds
+
+- **New video domains.** `vidvrd`, `actiongenome`, and `videonet` loaders under `latplan/puzzles/puzzle_vidvrd.py`, `latplan/domains/video/actiongenome.py`, and `sh/download_videonet.sh`.
+- **Per-video overfit pipeline.** `setup-dataset.py video_vidvrd <cat> --video-id <VID>` bakes a single-video training set. The training pipeline reads it through the `NPZ_PATH` env var.
+- **Env-var knobs for hyperparameters.** `LR`, `PREENC_LAYERS`, `PREENC_DIM`, `MAX_TEMPERATURE`, `ZEROSUPPRESS`, `DROPOUT`, `NOISE`, `NO_EARLYSTOP`, `EPOCH`, `TRANSITION_MODE`, `BATCH`, `FPS`.
+- **Sherlock HPC workflow.** `sh/submit.sh` composes a hierarchical output directory with a sha1 hash. `run_training.sh` runs post-train hooks: `tools/replot.py`, `viz/recon.py`, and `tools/plot_training_curve.py`.
+- **Deterministic output paths.** `latplan/util/paths.py::resolved_out_dir` composes `out/<domain>/<category>/<run_tag>/`. Two runs with the same config land in the same directory. Two concurrent runs with the same config get `_2`, `_3` suffixes.
+- **Baseline verification.** `sh/baseline_verify.sh` runs a pinned MNIST puzzle config and checks against `val_BCE = 1.038e-07`.
+
+## 3. Install
+
+### 3.1 Local (workstation)
 
 ```bash
-bash install.sh                                    # first-time setup (conda env + package install)
-conda activate latplan
-python setup-dataset.py puzzle mnist 3 3 5000      # generate puzzle dataset
+bash install.sh                                    # first-time setup: conda env `fosae` per environment.yml
+conda activate fosae
+python setup-dataset.py puzzle mnist 3 3 5000      # bake the puzzle dataset
 python strips.py learn puzzle mnist 3 3 5000       # train
-bash smoke_test.sh                                 # verify install
+bash smoke_test.sh                                 # confirm the install
 ```
 
----
+`install.sh` creates the conda env `fosae` from `environment.yml`. `environment.yml` pins `python=3.7`, `tensorflow-gpu==1.15.2`, `h5py==2.10.0`, `numpy>=1.16.0,<1.24.0`, `keras-adabound==0.9.0`, `keras-rectified-adam==0.9.0`, `protobuf==3.20.3`.
 
-## Table of Contents
-
-1. [Theoretical Background](#1-theoretical-background)
-2. [Architecture Deep-Dive](#2-architecture-deep-dive)
-3. [Repository Layout](#3-repository-layout)
-4. [Domains](#4-domains) — puzzle · blocksworld · labeled\_objects · vidvrd
-5. [Data Pipeline](#5-data-pipeline)
-6. [Installation](#6-installation)
-7. [Training](#7-training)
-8. [FOL Extraction](#8-fol-extraction)
-9. [Visualization](#9-visualization)
-10. [Adding a New Dataset](#10-adding-a-new-dataset)
-11. [Output Reference](#11-output-reference)
-12. [Citation](#12-citation)
-
----
-
-## 1. Theoretical Background
-
-### 1.1 The Problem: Images → Symbolic Planning
-
-Classical AI planners (FastForward, LAMA, etc.) operate on **symbolic state descriptions** — sets of logical facts such as `on(blockA, blockB)`, `clear(table)`. Writing these descriptions by hand (PDDL domain files) is expensive and domain-specific.
-
-FOSAE's goal: given only raw images of a planning domain and pairs of (pre-state, successor-state), learn the symbolic state representation automatically.
-
-### 1.2 LatPlan (Prior Work)
-
-The predecessor system, **LatPlan** ([Asai & Fukunaga, IJCAI 2018](https://arxiv.org/abs/1705.05787)), encodes images into **propositional** binary latent vectors — each bit is a boolean proposition. LatPlan works but has limitations:
-
-- Representations are **not relational**: there is no concept of "objects" or "arguments".
-- The fixed-size latent space does not generalize to problem instances with a different number of objects.
-- Learned bits have no interpretable semantics.
-
-### 1.3 FOSAE: First-Order Logic from Images
-
-FOSAE ([Asai, ICAPS 2019](https://arxiv.org/abs/1902.08093)) extends LatPlan to **first-order logic** by introducing two key ideas:
-
-**1. Object-centric input representation.**
-Rather than feeding a single flat image vector to the encoder, the input is decomposed into `N` object feature vectors: shape `(N, feature_dim)`. Each slot represents one detected object with its appearance and location.
-
-**2. Attention-based argument binding.**
-The encoder maintains `U` **predicate units**. Each unit selects `A` objects from the scene via a learned **attention mechanism** — these become the *arguments* of the predicate. The attention output has shape `(U, A, N)`, where `attention[u, a, o]` is the weight that unit `u` places on object `o` for argument slot `a`.
-
-After binding, each unit produces `P` binary predicate truth-values. The full latent space has `U × P` bits. A decoded state is the union of all true atoms:
-
-```
-pred_p(obj_binding[u,0], obj_binding[u,1], ...) = TRUE   iff   latent[u, p] = 1
-```
-
-This yields interpretable atoms such as `pred_3(dog, table)` whose meaning is discovered purely by gradient descent.
-
-**3. Gumbel-Softmax quantization.**
-The attention weights and predicate values are made discrete at test time but remain differentiable during training via the **Concrete distribution** (Gumbel-Softmax). Temperature anneals from `max_temperature=5.0` to `min_temperature=0.7` during training.
-
-**4. Zero-suppression loss.**
-An optional L1 penalty on the latent bits (`zerosuppress` hyperparameter) encourages most predicates to stay off, producing sparse, interpretable codes.
-
-### 1.4 Why First-Order Logic Matters
-
-- **Generalization**: a predicate `on(X, Y)` learned from 5-block scenes can be applied to 10-block scenes without retraining.
-- **Interpretability**: attention maps directly show which objects a predicate is about.
-- **Planning compatibility**: the binary latent vector is a valid propositional state; the FOL reading is a bonus semantic layer.
-
----
-
-## 2. Architecture Deep-Dive
-
-All neural architecture code lives in [latplan/model.py](latplan/model.py).
-
-### 2.1 Class Hierarchy
-
-```
-Network
-└── AE (autoencoder base)
-    └── StateAE  (Gumbel-Softmax latent space, reconstruction loss)
-        └── FirstOrderSAE   ← main model  (ICAPS 2019)
-              = BaseFirstOrderMixin       (attention encoder, domain renderers)
-              + ZeroSuppressMixin         (L1 zero-suppression loss)
-              + ConcreteLatentMixin       (Gumbel-Softmax discretization)
-              + StateAE
-```
-
-`FirstOrderSAE` is also exported as `FirstOrderAE` (alias).
-
-### 2.2 Encoder Forward Pass
-
-Given input `x` of shape `(batch, N_obj, feat_dim)`:
-
-**Step 1 — Pre-encoder** (`_build_preencoder`, optional)
-
-```
-x : (batch, N_obj, feat_dim)
-  → Dense(layer, relu) → BN → Dropout
-  → Dense(N_obj × preencoder_dimention)
-  → Reshape(N_obj, preencoder_dimention)
-  = o_enc : (batch, N_obj, D)
-```
-
-If `preencoder_layers = 0`, this step is skipped and `D = feat_dim`.
-
-**Step 2 — Attention network** (`_build_to_attention`)
-
-```
-o_enc : (batch, N_obj, D)
-  → flatten
-  → Dense(layer, relu) → Dropout
-  → Dense(U × A × N_obj)
-  → Gumbel-Softmax(N=U×A, M=N_obj)   # soft categorical over N_obj objects
-  → Reshape(U, A, N_obj)
-  = attention : (batch, U, A, N_obj)
-```
-
-Each of the `U × A` slots receives a soft probability distribution over the `N_obj` objects.
-
-**Step 3 — Argument assembly** (einsum)
-
-```python
-args_enc = tf.einsum("buao,bof->buaf", attention, o_enc)
-# (batch, U, A, D) = weighted sum of object embeddings per unit/argument
-```
-
-**Step 4 — Predicate projection** (`_build_to_predicates`)
-
-```
-args_enc : (batch, U, A, D)
-  → Reshape(U, A×D)
-  → Conv1D(P×2, kernel=1)             # independent per-unit, no cross-unit interaction
-  → activation (Gumbel-Softmax or sigmoid)
-  = latent_logits : (batch, U, P×2)
-  → binary rounding at test time
-  = latent : (batch, U×P)
-```
-
-The `× 2` in `P×2` provides pairs of logits for Gumbel-Softmax binary sampling (on/off).
-
-### 2.3 Decoder
-
-The decoder mirrors the encoder:
-
-```
-latent : (batch, U×P)
-  → Dense(layer, relu) → Dropout
-  → Dense(N_obj × feat_dim)
-  → Reshape(N_obj, feat_dim)
-  → domain-specific activation (sigmoid / rounded_softmax)
-  = reconstruction : (batch, N_obj, feat_dim)
-```
-
-Loss: `binary_crossentropy(x, reconstruction)` (default), summed over all feature dimensions.
-
-### 2.4 Domain-Specific Activations
-
-Each domain requires its own output activation because the feature format differs:
-
-| Domain | Activation | Logic |
-|--------|-----------|-------|
-| `puzzle` | `puzzle_activation` | softmax over tile labels (9 bins) + softmax over position (2×3 bins) |
-| `blocks` | `blocks_activation` | sigmoid on RGB patches + rounded_softmax on bbox onehot (x1, y1, x2, y2 bins) |
-| `labeled_objects` | `blocks_activation` | same as blocks (identical feature format) |
-
-`labeled_objects_activation` is also defined (plain sigmoid) as an alternative but `blocks_activation` is used by default since the feature layout is identical to blocksworld.
-
-### 2.5 Auxiliary Networks (Visualization)
-
-Calling `ae.build_aux(input_shape)` constructs two additional Keras models on top of the already-trained weights:
-
-- `ae.attention_encoder` → `Model(input, attention)` — returns `(batch, U, A, N_obj)`
-- `ae.args_encoder` → `Model(input, decoded_args)` — returns reconstructed argument patches `(batch, U, A, feat_dim)`
-
-These are used by `extract_fol.py` and `visualize_fol.py`.
-
-### 2.6 Key Hyperparameters
-
-| Parameter | Default | Meaning |
-|-----------|---------|---------|
-| `U` | 40 | Number of predicate units |
-| `A` | 2 | Arguments per predicate unit (arity) |
-| `P` | 20 | Predicates per unit; total latent bits = U×P |
-| `layer` | 200 | Dense layer width |
-| `dropout` | 0.3 | Dropout rate |
-| `noise` | 0.2 | Gaussian noise σ applied to input during training |
-| `lr` | 0.001 | Learning rate |
-| `optimizer` | radam | Rectified Adam |
-| `epoch` | 1000 | Training epochs (5000 for labeled_objects) |
-| `batch_size` | 1000 | Minibatch size |
-| `max_temperature` | 5.0 | Gumbel-Softmax start temperature |
-| `min_temperature` | 0.7 | Gumbel-Softmax end temperature |
-| `zerosuppress` | 0.0 | L1 weight on latent bits |
-| `zerosuppress_delay` | 0.1 | Fraction of epochs before zero-suppression activates |
-| `preencoder_layers` | 0 | Pre-encoder depth (0 = disabled) |
-| `preencoder_dimention` | 50 | Pre-encoder output dim per object |
-| `preencoder_l1` | 0.0 | L1 on pre-encoder activations |
-| `preencoder_delay` | 0.1 | Fraction of epochs before pre-encoder loss activates |
-| `preencoder_output_activation` | `("relu","MSE")` | Pre-encoder output nonlinearity + loss |
-| `loss` | `BCE` | Reconstruction loss |
-| `eval` | `MSE` | Evaluation metric |
-
-For **labeled_objects** the defaults are overridden to: `preencoder_layers=2`, `preencoder_dimention=256`, `lr=0.0001`, `preencoder_output_activation=("linear","MSE")`, `epoch=5000`.
-
----
-
-## 3. Repository Layout
-
-```
-labeled-fosae/
-├── latplan/                            # Core library
-│   ├── model.py                        # All neural architectures (2800+ lines)
-│   ├── __init__.py
-│   ├── puzzles/                        # Domain-specific data generators
-│   │   ├── puzzle_mnist.py             # 3×3 MNIST sliding puzzle
-│   │   ├── puzzle_digital.py           # 3×3 digital-display puzzle
-│   │   ├── puzzle_mandrill.py          # Mandrill image puzzle
-│   │   ├── puzzle_spider.py            # Spider image puzzle
-│   │   ├── puzzle_lenna.py             # Lenna image puzzle
-│   │   ├── puzzle_labeled_objects.py   # NEW: VLM-annotated COCO loader
-│   │   ├── hanoi.py                    # Tower of Hanoi
-│   │   ├── lightsout_digital.py        # Lights Out (digital)
-│   │   ├── lightsout_twisted.py        # Lights Out (twisted)
-│   │   ├── model/                      # Puzzle simulation logic
-│   │   └── util.py                     # preprocess(), shuffle_objects()
-│   └── util/
-│       ├── fol.py                      # FOL extraction & formatting
-│       ├── layers.py                   # Custom Keras layers (GumbelSoftmax, etc.)
-│       ├── tuning.py                   # Hyperparameter search (genetic algorithm)
-│       ├── paths.py                    # Canonical PROJECT_ROOT / DATA_DIR / OUT_DIR
-│       ├── distances.py                # Distance metrics
-│       ├── noise.py                    # Gaussian / salt / pepper noise
-│       └── plot.py                     # plot_grid(), squarify()
-│
-├── strips.py                           # Main training entry point
-├── extract_fol.py                      # FOL extraction script
-├── visualize_fol.py                    # Visualization script
-├── setup-dataset.py                    # Dataset generation / download
-├── config.py                           # Keras / TF configuration (GPU)
-├── config_cpu.py                       # Keras / TF configuration (CPU)
-├── setup.py                            # Python package setup
-│
-├── notebooks/
-│   ├── dataset_gen.ipynb               # VLM annotation pipeline (Unsloth)
-│   └── dataset_get.ipynb               # COCO download helpers
-│
-├── data/                               # Datasets (populated by setup-dataset.py)
-│   ├── puzzle-mnist-3-3.npz            # (generated)
-│   ├── blocks-5-3.npz                  # (downloaded)
-│   └── gen/                            # VLM-annotated outputs
-│       ├── fosae_labeled_dataset_unsloth.json
-│       └── raw_images/
-│
-└── out/                                # Training outputs
-    ├── puzzle_FirstOrderSAE_mnist_3_3_*/
-    ├── blocks-5-3/
-    └── labeled_objects/
-        └── FirstOrderSAE_U{U}_A{A}_P{P}[_n{N}]/
-```
-
----
-
-## 4. Domains
-
-### 4.1 8-Puzzle (MNIST)
-
-**Domain**: 3×3 sliding tile puzzle where tiles are handwritten MNIST digits.
-
-**Data generation** ([setup-dataset.py](setup-dataset.py)):
-- `puzzle_mnist.py.generate_random_configs()` samples random permutations of the 9 tiles.
-- `successors()` returns valid next states (one tile slide).
-- Saved as `data/puzzle-mnist-3-3.npz` with arrays `pres` and `sucs`.
-
-**Feature representation** ([strips.py](strips.py) `puzzle()`):
-- `p.to_objects(configs, width, height)` converts a configuration to `(N_tiles, tile_feature_dim)`.
-- For a 3×3 puzzle: 9 object slots, each containing the flattened pixel values of one tile.
-- **Pre-encoder disabled** (`preencoder_layers=0`).
-
-**Activation**: `puzzle_activation` — applies `rounded_softmax` over tile labels (9 categories) and over grid positions (2 groups of 3 bins each).
-
-**Training output path**: `out/puzzle_FirstOrderSAE_mnist_3_3_None_None_None_{num_examples}/`
-
----
-
-### 4.2 Blocksworld
-
-**Domain**: Photorealistic stacking blocks (5 blocks, 3 towers). Pre-generated dataset from the original FOSAE paper.
-
-**Data download** ([setup-dataset.py](setup-dataset.py) `blocksworld()`):
-- Downloads `blocks-5-3.npz` from GitHub releases.
-- NPZ fields: `images (N, num_objs, H, W, 3)`, `bboxes (N, num_objs, 4)`, `transitions (2T,)`, `picsize (2,)`.
-
-**Feature representation** ([strips.py](strips.py) `blocksworld()`):
-```
-preprocess(images) / 256          → (N, num_objs, 32, 32, 3) float32 in [0,1]
-images.reshape(N, num_objs, 3072) → pixel features
-
-bboxes_to_onehot(bboxes, X=60, Y=40):
-  bboxes_grid = bboxes // 5       → grid coordinates (5px resolution)
-  x1_onehot (60 bins) | y1_onehot (40 bins)
-  x2_onehot (60 bins) | y2_onehot (40 bins)  → 200-dim onehot vector
-
-feature_dim = 3072 + 200 = 3272
-```
-
-Each state: shape `(num_objs, 3272)`.
-
-**Activation**: `blocks_activation` — sigmoid on patch pixels + `rounded_softmax` on each of the 4 bbox onehot groups.
-
-**Training output path**: `out/blocks-5-3/{sae_path}/`
-
----
-
-### 4.3 Labeled Objects (NEW — this fork)
-
-**Domain**: Arbitrary natural images from COCO, with objects detected and labeled by a VLM.
-
-**Motivation**: Extends FOSAE to real-world visual domains without manual feature engineering. A VLM (Unsloth + Qwen3-VL) generates `class` labels and `bbox` coordinates for each image, which are then fed to FOSAE using the same blocksworld-style encoding.
-
-**Pipeline overview**:
-```
-COCO images
-  → dataset_gen.ipynb  (VLM annotation via Unsloth)
-  → data/gen/fosae_labeled_dataset_unsloth.json
-  → data/gen/raw_images/*.jpg
-```
-
-**JSON dataset format** (`fosae_labeled_dataset_unsloth.json`):
-```json
-[
-  {
-    "image": "000000001108.jpg",
-    "objects": [
-      {"class": "dog",  "bbox": [120, 45, 310, 280]},
-      {"class": "table","bbox": [10,  200, 400, 350]}
-    ]
-  },
-  ...
-]
-```
-Each `bbox` is `[x1, y1, x2, y2]` in original image pixel coordinates.
-
-**Feature representation** ([latplan/puzzles/puzzle_labeled_objects.py](latplan/puzzles/puzzle_labeled_objects.py)):
-
-Objects are sorted by descending area (largest first) for stable slot ordering, then padded to `MAX_OBJECTS=10` slots with zeros.
-
-```
-entry_to_state():
-  _crop_object(image, bbox) → 32×32×3 RGB patch (uint8)
-  _scale_bbox_to_canvas(bbox, img_w, img_h) → canvas coords (200×300 canvas, 5px grid)
-
-→ patches: (10, 32, 32, 3) uint8
-→ bboxes:  (10, 4) uint16  (canvas pixel coords)
-```
-
-Then in [strips.py](strips.py) `labeled_objects()`, identical to blocksworld:
-```
-images.astype(float32)/256 → preprocess → reshape(N, 10, 3072)
-bboxes_to_onehot(bboxes, X=60, Y=40) → reshape(N, 10, 200)
-states = concat([images, bboxes_onehot], axis=-1)  → (N, 10, 3272)
-```
-
-**Transitions**: `build_transitions(states, mode)` supports:
-- `sequential` → `state[i] → state[i+1]` for all `i` (N−1 pairs)
-- `all_pairs` → every ordered pair `(i, j)` with `i ≠ j` (N×(N−1) pairs) — **default**
-
-`all_pairs` is preferred to maximize training signal when the dataset is small.
-
-**Saved artifact**: `out/labeled_objects/{run_tag}/object_names.json` — maps each state index to its per-state object name list (used by `extract_fol.py` for interpretable predicate labels).
-
-**Training output path**: `out/labeled_objects/FirstOrderSAE_U{U}_A{A}_P{P}[_n{max_images}]/`
-
----
-
-### 4.4 VidVRD (NEW — this fork)
-
-**Domain**: ImageNet Video Visual Relationship Detection (1000 videos, 35 object categories, bounding boxes per frame).
-
-**Data download**:
-```bash
-bash sh/download_vidvrd.sh                # downloads ~7 GB, extracts frames at 1fps
-bash sh/download_vidvrd.sh --annotations-only   # annotations only (3 MB, no video)
-```
-Requires: `wget`, `ffmpeg`, `unzip`. Output:
-```
-data/vidvrd/annotations/<video_id>.json   # one JSON per video
-data/vidvrd/frames/<video_id>/<000001>.jpg
-```
-
-**Annotation format** (one JSON per video):
-```json
-{
-  "video_id": "ILSVRC2015_train_00005003",
-  "width": 1920, "height": 1080, "frame_count": 219,
-  "subject/objects": [{"tid": 0, "category": "dog"}, ...],
-  "trajectories": [
-    [{"tid": 0, "bbox": {"xmin": 672, "ymin": 560, "xmax": 781, "ymax": 693}}],
-    ...
-  ]
-}
-```
-`bbox` values are pixel coordinates in the original video resolution.
-
-**Feature representation** ([latplan/puzzles/puzzle_vidvrd.py](latplan/puzzles/puzzle_vidvrd.py)):
-
-Identical pipeline to labeled_objects (re-uses `_crop_object`, `_scale_bbox_to_canvas`):
-```
-per frame: sort tracked objects by area → take top MAX_OBJECTS=10
-→ patches: (10, 32, 32, 3) uint8
-→ bboxes:  (10, 4) uint16  (CANVAS 200×300, 5px grid → X=60, Y=40)
-→ feature dim = 3272  (identical to blocksworld and labeled_objects)
-```
-
-**Transitions**: `build_transitions(states, frame_ids, mode='sequential')` only pairs consecutive frames within the same video (cross-video pairs excluded). This gives semantically valid transitions (object motion between adjacent frames).
-
-**Training**:
-```bash
-python strips.py learn vidvrd FirstOrderSAE 40 2 20
-```
-
-**Training output path**: `out/vidvrd/FirstOrderSAE_U{U}_A{A}_P{P}/`
-
----
-
-## 5. Data Pipeline
-
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│ Data Generation / Download                                          │
-│                                                                     │
-│  puzzle:          setup-dataset.py puzzle mnist 3 3 5000           │
-│                   → data/puzzle-mnist-3-3.npz                       │
-│                                                                     │
-│  blocksworld:     setup-dataset.py blocksworld blocks-5-3           │
-│                   → data/blocks-5-3.npz                             │
-│                                                                     │
-│  labeled_objects: notebooks/dataset_gen.ipynb                       │
-│                   → data/gen/fosae_labeled_dataset_unsloth.json     │
-│                   → data/gen/raw_images/*.jpg                       │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Feature Extraction  (strips.py domain fn)                           │
-│                                                                     │
-│  raw data → object patches + bboxes                                 │
-│           → preprocess (float32 / 256)                              │
-│           → bboxes_to_onehot(bboxes, X, Y)                          │
-│           → concat → states (N, num_objs, feature_dim)             │
-│           → 90% train / 5% val / 5% test                           │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Model Training  (latplan/model.py FirstOrderSAE)                    │
-│                                                                     │
-│  Input (batch, N_obj, feat_dim)                                     │
-│    → PreEncoder (optional)                                          │
-│    → Attention  (batch, U, A, N_obj)                                │
-│    → einsum → args_enc (batch, U, A, D)                             │
-│    → Conv1D → Gumbel-Softmax → latent (batch, U×P)                 │
-│    → Decoder → reconstruction                                       │
-│                                                                     │
-│  Loss: BCE(input, recon) + zerosuppress * L1(latent)                │
-│  → simple_genetic_search → best model saved to out/.../             │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ Artifacts                                                           │
-│                                                                     │
-│  net0.h5            trained weights                                 │
-│  aux.json           hyperparameters + metadata                      │
-│  states.csv         binary latent codes for all training states     │
-│  actions.csv        (pre_latent, suc_latent) transition pairs       │
-│  *.png              reconstruction visualizations                   │
-│  object_names.json  (labeled_objects only) per-state object labels  │
-└────────────────────────────┬────────────────────────────────────────┘
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│ FOL Extraction  (extract_fol.py)                                    │
-│                                                                     │
-│  attention = ae.encode_attention(states)  # (N, U, A, N_obj)        │
-│  latent    = ae.encode(states)            # (N, U×P)                │
-│  bindings  = argmax(attention, axis=-1)   # (N, U, A)               │
-│                                                                     │
-│  For each state i, unit u, predicate p:                             │
-│    if latent[i, u, p] == 1:                                         │
-│      pred_p(obj_binding[i,u,0], ...) = TRUE                         │
-│                                                                     │
-│  → fol_predicates.json / .txt                                       │
-│  → predicate_analysis.json                                          │
-└─────────────────────────────────────────────────────────────────────┘
-```
-
-### 5.1. Video → Model: how a frame becomes a sample
-
-The video pipeline (`vidvrd` / `actiongenome`) confused users in earlier iterations.
-This section explains exactly what the model sees per training step and how the
-temporal structure does (and does NOT) flow into training.
-
-**Step 1 — annotation-driven frame loading**
-
-`build_dataset(video_id_filter=..., fps=30)` reads the annotation JSON, then for
-*each annotated frame* (one entry per source-PTS index in `trajectories`):
-
-```
-images:     (N, num_objs=10, PATCH_SIZE=32, 32, 3)  uint8
-bboxes:     (N, num_objs=10, 4)                     uint16 (in 200×300 canvas)
-frame_ids:  list[str]  '<video_id>/<NNNNNN>'        — preserves video order
-```
-
-N = the count of annotated frames present on disk. For a 30 fps VidVRD video
-with 100 annotated frames, N = 100.
-
-**Step 2 — per-object feature build** (`strips.py::vidvrd()` / `actiongenome()`)
-
-```
-images   → float32/256 + preprocess()              → (N, 10, 32, 32, 3)
-bboxes   → bboxes_to_onehot(bboxes, X=60, Y=40)    → (N, 10, 200)
-        concat                                       → (N, 10, 3272)
-```
-
-3072 pixel features per slot + 200 one-hot bbox features = **3272-dim per-object
-feature vector**. One *state* = `(10, 3272)` = the whole annotated frame
-represented as ten object slots (some may be zero-padded if the frame has < 10
-visible objects).
-
-**Step 3 — transition pairing** (`build_transitions(mode='sequential')`)
-
-For every consecutive pair of states from the **same video** (i.e. `frame_ids[i]`
-and `frame_ids[i+1]` share the `<video_id>` prefix):
-
-```
-pres.append(all_states[i])
-sucs.append(all_states[i+1])
-
-transitions = np.array([pres, sucs])    # shape (2, M, 10, 3272)
-```
-
-M = number of sequential transitions. For N=100 annotated frames in **one**
-video, M = 99 (every frame except the first contributes a pre→suc pair).
-
-**Step 4 — flatten back to a state pool** (here's the surprise)
-
-```python
-states = transitions.reshape((M * 2, num_objs, -1))   # (198, 10, 3272)
-```
-
-The 99 transition pairs are flattened into 198 individual states. The 90/5/5
-split then runs over this **flat pool**.
-
-> **⚠ Critical clarification.** From the model's point of view, a *sample* is a
-> single state of shape `(num_objs, feature_dim)` — **NOT** a sequence of frames.
-> `transition_mode` controls which states end up in the training pool, not how
-> many frames the model sees at once. There is no temporal recurrence.
-
-**Step 5 — per-state autoencoder training**
-
-The encoder maps `(10, 3272) → (U, P)` latent predicate codes via per-unit
-object attention. The decoder reconstructs the same state. The loss is purely
-reconstruction (BCE on patch pixels + per-component MSE on bbox one-hot) plus
-the `zerosuppress` L1 regularizer on the latent. **No action label, no temporal
-loss, no validation of action accuracy.**
-
-**Step 6 — action emerges post-training**
-
-Only after the autoencoder is trained do transition pairs come back into play:
-
-```python
-z_pre = encoder(pres)
-z_suc = encoder(sucs)
-action_latent = z_suc - z_pre          # used by dump_actions / extract_fol
-```
-
-This is where temporal coherence matters. Sequential pairs encode real
-frame-to-frame change. Random `all_pairs` pairs encode fictitious transitions
-and the extracted "action" is meaningless.
-
-**What this means in practice**
-
-- For the smallest "can FOSAE learn from video frames?" overfit test, only
-  `transition_mode='sequential'` is needed. `all_pairs` is **not** a comparison
-  experiment at the model-training level — both modes produce the same kind of
-  per-state autoencoder loss; they differ only in which states populate the
-  pool and in the post-hoc action extraction.
-- The `< 100 states` branch in `strips.py` short-circuits to
-  `train = val = test = all_states` — for tiny single-video subsets this means
-  `transition_mode` has **zero** effect on training (the flattened pool is
-  ignored; the model trains directly on the N raw states).
-- To make 2a-vs-2b a meaningful TRAINING comparison would require ≥100 source
-  states (or removing the short-circuit). To meaningfully compare the
-  *action-extraction* output (post-train), tiny N is fine.
-
-**Reproducing the smallest test**
+### 3.2 Sherlock HPC (canonical for training)
 
 ```bash
-# Bake one sheep video at 30 fps (100 annotated frames → 100 states)
-python3 setup-dataset.py video_vidvrd sheep \
-    --video-id ILSVRC2015_train_00256010 \
-    --fps 30 \
-    --out-name sheep-ILSVRC2015_train_00256010-30fps
+# On a login node, once per shell session
+source activate.sh                                 # loads module collection `fosae` + venv
+```
 
-# Train sequential overfit (NO_EARLYSTOP=1 so full 1000 epochs run)
-NPZ_PATH=data/npz/video/vidvrd/overfit/sheep-ILSVRC2015_train_00256010-30fps.npz \
-DOMAIN=vidvrd \
-TRANSITION_MODE=sequential \
+The module collection `fosae` holds `gcc/8.1.0`, `python/3.6.1`, `cudnn/7.6.5`, `cuda/10.0.130`, and `ffmpeg`. `activate.sh` sources `sh/sherlock_env.sh`. That file loads the collection and activates the project venv.
+
+**Warning**: The `cudnn/7.6.5` module has a dependency on `cuda/10.2.89`. Load `cuda/10.0.130` after `cudnn/7.6.5` so that the second `cuda` load swaps to `cuda/10.0.130`. TensorFlow 1.15.2 requires `libcudart.so.10.0` and `libcudnn.so.7`. `sh/sherlock_env.sh` handles the order.
+
+Verify the GPU stack:
+
+```bash
+python3 -c "from tensorflow.python.client import device_lib; print([d.name for d in device_lib.list_local_devices()])"
+# expect: output contains `/device:GPU:0` AND no `libcudart.so.10.0` dlopen warning
+```
+
+## 4. Bake a Dataset
+
+The bake step is one Python command per data setup. The bake writes an `.npz` file into `data/npz/`.
+
+### 4.1 Puzzle datasets
+
+```bash
+python setup-dataset.py puzzle mnist 3 3 5000
+python setup-dataset.py puzzle mandrill 3 3 5000
+python setup-dataset.py blocksworld blocks-5-3 6500
+```
+
+### 4.2 Video overfit (single-video, canonical since 2026-05-19)
+
+```bash
+# 1. Look at a candidate video
+python3 - <<'PY'
+import json
+a = json.load(open('data/video/vidvrd/annotations/train/<VID>.json'))
+print('subjects:', [(o['tid'], o['category']) for o in a.get('subject/objects', [])])
+print('non-empty frames:', sum(1 for fr in a.get('trajectories', []) if fr))
+PY
+
+# 2. Bake the overfit npz to data/npz/video/vidvrd/overfit/
+python3 setup-dataset.py video_vidvrd <CAT> \
+    --video-id <VID> --fps 30 --max-objects 3 \
+    --fill-annotations \
+    --out-name <CAT>-<VID>-30fps-mo3-fill
+```
+
+Flags:
+
+- `--video-id ID1[,ID2,...]` — one or more videos. A comma-separated list makes a multi-video npz.
+- `--fps N` — frame extraction rate.
+- `--max-objects K` — object slot count per frame. Cuts padding-slot noise. Use `K = real_object_count + 1`.
+- `--fill-annotations` — forward-fill and backward-fill the trajectory when the annotation density is lower than the frame rate. VidVRD sample: dog-frisbee video goes from 60 to 135 states.
+- `--patch-size N` — patch resolution (default 32).
+- `--out-name STR` — output file stem.
+
+### 4.3 Video per-category (all-video-in-category, deprecated for main experiment)
+
+```bash
+python setup-dataset.py video_vidvrd person --fps 30 --out-name person-30fps
+```
+
+This bakes every video in the category into one npz. Per-category data volume on VidVRD is under the viability threshold (largest = `person` ≈ 1967 transitions). Prefer the per-video overfit workflow (`§4.2`) for the main experiment.
+
+### 4.4 ActionGenome
+
+```bash
+python setup-dataset.py video_ag chair --max-videos 30 --out-name chair-30vids
+```
+
+ActionGenome has 17 viable classes (≥ 5000 transitions). See `tools/video/inspect_ag.py --threshold 5000`.
+
+## 5. Train
+
+The canonical entry point is `sh/submit.sh`. It composes the output directory and submits an sbatch job on Sherlock. For a local dry run, prepend `DRY_RUN=1`.
+
+### 5.1 Video overfit (recommended)
+
+```bash
+NPZ_PATH=$SCRATCH/panos/sgg-thesis/data/npz/video/vidvrd/overfit/<CAT>-<VID>-30fps-mo3-fill.npz \
+DOMAIN=vidvrd TRANSITION_MODE=sequential EPOCH=2000 NO_EARLYSTOP=1 \
+LR=0.001 PREENC_LAYERS=0 MAX_TEMPERATURE=1.0 \
+MEM=16G TIME=0:45:00 AUTO_RESOURCES=0 \
+bash sh/submit.sh
+```
+
+Critical override knobs for video overfit:
+
+| Knob | Overfit value | Default (video) | Reason |
+|------|---------------|-----------------|--------|
+| `LR` | `0.001` | `0.0001` | The video default is too slow for a small overfit set. |
+| `PREENC_LAYERS` | `0` | `2` | The pre-encoder adds capacity that a small overfit set does not need. |
+| `NO_EARLYSTOP` | `1` | not set | `EarlyStopMixin` kills training before the Gumbel anneal completes. |
+| `MAX_TEMPERATURE` | `1.0` | `5.0` | The paper default is too hot for the Gumbel discretization. MNIST baseline uses `1.0`. |
+| `--fill-annotations` (bake) | on | off | VidVRD annotation density (~13 fps) is lower than the frame rate (30 fps). |
+| `--max-objects K` (bake) | `real + 1` | 10 | 8 pad slots swamp the reconstruction loss on a 2-object scene. |
+
+### 5.2 MNIST puzzle baseline
+
+```bash
+DOMAIN=puzzle PUZZLE_TYPE=mnist WIDTH=3 HEIGHT=3 NUM_EXAMPLES=20000 \
 EPOCH=1000 NO_EARLYSTOP=1 \
 bash sh/submit.sh
 ```
 
-The training history CSV (`<out_dir>/training_history.csv`) should show
-`val_loss` decreasing monotonically (with `NO_EARLYSTOP=1` set) and the
-reconstruction PNGs in `<out_dir>` should look visually close to the input
-frames if the model truly learned.
+Verified result: `val_BCE = 1.038e-07` at epoch 1000. `sh/baseline_verify.sh` runs this as a regression sentinel.
 
----
+### 5.3 Env-var reference
 
-## 6. Installation
+| Group | Vars |
+|-------|------|
+| Training | `DOMAIN`, `AECLASS`, `U`, `A`, `P`, `EPOCH`, `MAX_VIDEOS`, `BATCH`, `FPS`, `CATEGORY`, `TRANSITION_MODE`, `ARGS_TAIL`, `TRAIN_CMD`, `NPZ_PATH`, `NO_EARLYSTOP` |
+| Hyperparameters | `LR`, `PREENC_LAYERS`, `PREENC_DIM`, `MAX_TEMPERATURE`, `ZEROSUPPRESS`, `ZEROSUPPRESS_DELAY`, `DROPOUT`, `NOISE` |
+| Post-train | `EXTRACT_FOL` (0/1), `VISUALIZE` (0/1), `VIS_NUM`, `FOL_VIZ` (0/1) |
+| SLURM | `JOB_NAME`, `JOB_SUFFIX`, `PARTITION`, `GPUS`, `CPUS`, `MEM`, `TIME`, `QOS`, `CONSTRAINT`, `MAIL_TYPE`, `MAIL_USER` |
+| Estimator | `AUTO_RESOURCES` (0/1), `SACCT_DAYS` |
+| Filter | `VIDVRD_STRICT_CATEGORY` (0/1) |
+| Modules | `PYTHON_MODULE`, `CUDA_MODULE`, `CUDNN_MODULE`, `GCC_MODULE` |
 
-**Requirements**: Python 3.6+, TensorFlow 1.15.x, Keras 2.2.x, CUDA 10.0 (GPU).
+## 6. Inspect the Outputs
 
-**Setup**:
-```bash
-bash install.sh                          # create conda env + install package + Keras config
-conda activate latplan
-bash smoke_test.sh                       # verify imports work
+Each run lands in a unique directory. The pattern is:
+
+```
+out/<domain>/<category>/<run_tag>/
 ```
 
-Done. All dependencies (including Unsloth for VLM annotation) install in the **same** `latplan` env.
+`<run_tag>` = `<aeclass>_U<U>_A<A>_P<P>[_cat<X>][_fps<F>]_<sha1[:6]>[_<idx>]`. The sha1 covers every hyperparameter. A configuration collision gets `_2`, `_3`.
 
-**Manual install** (if needed):
-```bash
-conda env create -f environment.yml
-conda run -n latplan pip install -e .
-mkdir -p ~/.keras && cp keras-tf.json ~/.keras/keras.json
-```
+### 6.1 Files that a training run writes
 
----
-
-## 7. Training
-
-All training via [strips.py](strips.py):
-```bash
-python strips.py learn <domain> [args...]
-```
-
-### 7.1 Dataset Setup
-
-```bash
-python setup-dataset.py puzzle mnist 3 3 5000         # puzzle
-python setup-dataset.py blocksworld blocks-5-3        # blocksworld
-bash sh/download_vidvrd.sh [--annotations-only]       # VidVRD
-# labeled_objects: run notebooks/dataset_gen.ipynb (generates JSON + images automatically)
-```
-
-### 7.2 Training Commands
-
-**Puzzle**:
-```bash
-python strips.py learn puzzle mnist 3 3 5000
-```
-
-**Blocksworld**:
-```bash
-python strips.py learn blocksworld blocks-5-3
-```
-
-**Labeled Objects** (COCO, VLM-annotated):
-```bash
-python strips.py learn labeled_objects FirstOrderSAE None None None None None \
-    ./data/gen/fosae_labeled_dataset_unsloth.json ./data/gen/raw_images \
-    all_pairs 2000 100
-# Smaller experiment: 100 images, 2000 epochs
-```
-
-**VidVRD** (video frames):
-```bash
-python strips.py learn vidvrd FirstOrderSAE 40 2 20 None None None sequential 5000
-# Sequential transitions (consecutive frames = real state change)
-```
-
-**Mode flags** (first arg):
-- `learn` — train + dump states/actions
-- `learn+plot` — + reconstruction plots
-- `learn+dump` — + export CSV
-- `learn+summary` — + print metrics
-- Combine with `+`: `learn+plot+dump`
-
-### 7.3 Hyperparameter Search
-
-Default: `parameters` dict contains single-element lists (no search, `limit=1`).
-
-To enable grid search: replace with multi-element lists in [strips.py](strips.py), then set `limit=N` in `run()` call.
-
-```python
-parameters = {
-    'U': [20, 40, 80],
-    'A': [2, 3],
-    'P': [10, 20],
-    ...
-}
-```
-
----
-
-## 8. FOL Extraction
-
-[extract_fol.py](extract_fol.py) loads a trained model and extracts human-readable FOL predicates.
-
-### 8.1 How Extraction Works
-
-```python
-ae = latplan.model.load(model_dir)   # reads aux.json → instantiates class
-ae.load()                             # loads net0.h5 weights
-ae.build_aux(input_shape)             # builds attention_encoder model
-
-attention = ae.encode_attention(data)  # (N, U, A, N_obj)
-latent    = ae.encode(data)            # (N, U*P)
-
-# Hard binding: which object does each argument slot attend to?
-bindings = argmax(attention, axis=-1)  # (N, U, A)  integer indices
-
-# For each state, unit, predicate:
-# if latent[i, u, p] == 1: emit atom  pred_p(obj_names[bindings[i,u,0]], ...)
-```
-
-Atoms are filtered by a **confidence threshold** on the minimum attention weight across all argument slots of a unit (default `0.5`). Low-confidence bindings are skipped.
-
-### 8.2 Commands
-
-```bash
-# Puzzle domain
-python extract_fol.py out/puzzle_FirstOrderSAE_mnist_3_3_None_None_None_5000 \
-    --domain puzzle --num 50 --output ./fol_output
-
-# Blocksworld
-python extract_fol.py out/blocks-5-3/FirstOrderSAE_... \
-    --domain blocks --track blocks-5-3 --num 100
-
-# Labeled objects
-python extract_fol.py out/labeled_objects/FirstOrderSAE_U40_A2_P20 \
-    --domain labeled_objects \
-    --dataset-path ./data/gen/fosae_labeled_dataset_unsloth.json \
-    --images-dir   ./data/gen/raw_images \
-    --num 50 --confidence 0.5
-```
-
-### 8.3 All Flags
-
-| Flag | Default | Description |
-|------|---------|-------------|
-| `model_dir` | (required) | Path to trained model directory |
-| `--domain` | `puzzle` | `puzzle`, `blocks`, or `labeled_objects` |
-| `--type` | `mnist` | Puzzle type (puzzle domain only) |
-| `--width` / `--height` | `3` | Puzzle grid size |
-| `--track` | `blocks-5-3` | Blocksworld track name |
-| `--dataset-path` | auto | JSON dataset path (labeled_objects) |
-| `--images-dir` | auto | Raw images directory (labeled_objects) |
-| `--num` | `50` | Number of states to extract |
-| `--output` | `<model_dir>/fol_output` | Output directory |
-| `--confidence` | `0.5` | Min attention confidence threshold |
-| `--show-negated` | off | Include `pred_p(...) = FALSE` atoms |
-
-### 8.4 Output Files
-
-| File | Contents |
-|------|----------|
-| `fol_predicates.json` | Full extraction: per-state list of atoms with unit, predicate, argument names, truth value, confidence |
-| `fol_predicates.txt` | Human-readable text: one atom per line per state |
-| `predicate_analysis.json` | Activation rates: which predicates are always-on (>99%), always-off (<1%), variable |
-| `state_image_mapping.json` | (labeled_objects only) Maps state index → original COCO filename + object names |
-
-**Sample `fol_predicates.txt` output**:
-```
-State 0:
-  pred_3(dog, table) = TRUE  [conf=0.92]
-  pred_7(table, dog) = TRUE  [conf=0.88]
-  pred_12(dog, dog) = FALSE  [conf=0.91]
-
-State 1:
-  pred_3(cat, chair) = TRUE  [conf=0.95]
-  ...
-```
-
----
-
-## 9. Visualization
-
-[visualize_fol.py](visualize_fol.py) generates per-state diagnostic figures.
-
-### 9.1 Output Figures
-
-For each visualized state `i`:
-
-**`fol_state_{i}_recon.png`** — 2×2 grid:
-- Top-left: original rendered scene
-- Bottom-left: reconstructed scene
-- Top-right: absolute difference (`|recon − original|`)
-- Bottom-right: binary latent code heatmap (U rows × P columns)
-
-**`fol_state_{i}_attention.png`** — attention heatmaps for the first 5 predicate units:
-- Y-axis: argument slots (arg_0, arg_1, ...)
-- X-axis: object names
-- Color: attention weight (blue scale)
-- Title: bound object indices + predicate truth vector for that unit
-
-**`fol_state_{i}_predicates.png`** — text box with extracted FOL atoms (same as `fol_predicates.txt` for that state)
-
-**`attention_overview.png`** — average attention patterns across all visualized states, one heatmap per unit.
-
-### 9.2 Commands
-
-```bash
-# Puzzle
-python visualize_fol.py out/puzzle_FirstOrderSAE_mnist_3_3_... \
-    --domain puzzle --num 6 --output ./viz
-
-# Blocksworld
-python visualize_fol.py out/blocks-5-3/FirstOrderSAE_... \
-    --domain blocks --num 6
-
-# Labeled objects
-python visualize_fol.py out/labeled_objects/FirstOrderSAE_U40_A2_P20 \
-    --domain labeled_objects \
-    --dataset-path ./data/gen/fosae_labeled_dataset_unsloth.json \
-    --images-dir   ./data/gen/raw_images \
-    --num 10 --output ./viz
-```
-
----
-
-## 10. Adding a New Dataset
-
-This section is a step-by-step guide for developers who want to run FOSAE on a new visual domain.
-
-### Step 1 — Create a data loader module
-
-Create `latplan/puzzles/puzzle_<name>.py`. It must provide:
-
-```python
-# latplan/puzzles/puzzle_myname.py
-
-import numpy as np
-import os
-
-PATCH_SIZE  = 32
-MAX_OBJECTS = 10
-CANVAS_H    = 200
-CANVAS_W    = 300
-PICSIZE     = [CANVAS_H, CANVAS_W, 3]
-
-
-def build_dataset(dataset_path, images_dir,
-                  num_objs=MAX_OBJECTS, patch_size=PATCH_SIZE,
-                  skip_empty=True, max_images=None):
-    """
-    Load your data and return raw features.
-
-    Returns
-    -------
-    images       : (N, num_objs, patch_size, patch_size, 3)  uint8
-    bboxes       : (N, num_objs, 4)  uint16  pixel coords in CANVAS space
-                   (x1, y1, x2, y2) already scaled to CANVAS_H x CANVAS_W
-    object_names : list[list[str]]  shape (N, num_objs)
-    image_ids    : list[str]  one identifier per state
-
-    The caller (strips.py) will apply:
-        images = images.astype(float32) / 256
-        images = preprocess(images)
-        picsize_grid = (np.array(PICSIZE) // 5).astype(int)
-        Y, X = picsize_grid   # 40, 60
-        bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
-        states = concat([images.reshape(N, num_objs, -1),
-                         bboxes_onehot.reshape(N, num_objs, -1)], axis=-1)
-    """
-    # ... your loading code ...
-    return images, bboxes, object_names, image_ids
-
-
-def build_transitions(states, mode="sequential"):
-    """Build (pre, suc) pairs from state array. See puzzle_labeled_objects.py."""
-    n = len(states)
-    if mode == "sequential":
-        return np.array([states[:-1], states[1:]])
-    elif mode == "all_pairs":
-        idx_pre, idx_suc = zip(*[(i, j) for i in range(n)
-                                         for j in range(n) if i != j])
-        return np.array([states[np.array(idx_pre)], states[np.array(idx_suc)]])
-    else:
-        raise ValueError(f"Unknown mode '{mode}'")
-```
-
-If your objects do **not** have bounding boxes, you can set all bboxes to zeros — the model will still learn from pixel patches alone (the bbox onehot dimensions will be constant and effectively ignored).
-
-### Step 2 — Add an activation function to model.py
-
-In [latplan/model.py](latplan/model.py), inside `class BaseFirstOrderMixin`, add a method after `labeled_objects_activation`:
-
-```python
-def myname_activation(self, input_shape):
-    """Activation for myname domain."""
-    # For the standard blocksworld-style feature layout (patches + bbox onehot):
-    # just reuse blocks_activation.  If your feature layout is identical, do:
-    return self.blocks_activation(input_shape)
-
-    # Or, if your output is pure float (no onehot), use plain sigmoid:
-    # def obj_activation(x):
-    #     return wrap(x, K.sigmoid(x), name="obj_activation")
-    # return obj_activation
-```
-
-Also add a renderer for visualization (optional but recommended):
-
-```python
-def myname_renderer(self):
-    """Reconstruct a scene from object features for visualization.
-    Reuse blocks_renderer if feature layout is identical."""
-    return self.blocks_renderer()
-```
-
-If needed, set `default_parameters["picsize"]` and `default_parameters["picsize_grid"]` in the training function (Step 3) so the renderer knows the canvas size.
-
-### Step 3 — Add a training function to strips.py
-
-In [strips.py](strips.py), add a function following the `labeled_objects()` pattern:
-
-```python
-def myname(aeclass="FirstOrderAE", U=None, A=None, P=None,
-           num_objects=None, dataset_path=None, images_dir=None,
-           transition_mode="all_pairs", epoch=5000,
-           max_images=None, batch_size=None):
-    from latplan.puzzles.puzzle_myname import (
-        build_dataset, build_transitions, MAX_OBJECTS, PICSIZE)
-    from latplan.puzzles.util import preprocess
-    import json as _json
-
-    # Override hyperparameters
-    for name, value in dict(U=U, A=A, P=P).items():
-        if value is not None:
-            parameters[name] = [value]
-    default_parameters["aeclass"]    = aeclass
-    default_parameters["activation"] = "self.blocks_activation"  # or "self.myname_activation"
-    default_parameters["epoch"]      = epoch
-    # Enable pre-encoder for complex features
-    parameters['preencoder_layers']            = [2]
-    parameters['preencoder_dimention']         = [128]
-    parameters['preencoder_output_activation'] = [("linear", "MSE")]
-    if batch_size is not None:
-        default_parameters["batch_size"] = batch_size
-
-    num_objs = num_objects or MAX_OBJECTS
-
-    # Load data
-    images, bboxes, all_object_names, image_ids = build_dataset(
-        dataset_path=dataset_path, images_dir=images_dir,
-        num_objs=num_objs, max_images=max_images)
-    num_states = len(images)
-
-    # Standard preprocessing (identical to blocksworld / labeled_objects)
-    picsize      = np.array(PICSIZE)
-    picsize_grid = (picsize // 5).astype(int)
-    Y, X         = picsize_grid[0], picsize_grid[1]
-    default_parameters["picsize_grid"] = list(map(int, picsize_grid))
-    default_parameters["picsize"]      = list(map(int, picsize))
-
-    images = images.astype(np.float32) / 256
-    images = preprocess(images)
-    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
-    all_states = np.concatenate(
-        (images.reshape((num_states, num_objs, -1)),
-         bboxes_onehot.reshape((num_states, num_objs, -1))), axis=-1)
-    del images, bboxes_onehot
-
-    # Transitions + splits
-    transitions = build_transitions(all_states, mode=transition_mode)
-    states      = transitions.reshape((transitions.shape[1] * 2, num_objs, -1))
-    if num_states < 100:
-        train = val = test = all_states
-    else:
-        train = states[:int(len(states)*0.9)]
-        val   = states[int(len(states)*0.9):int(len(states)*0.95)]
-        test  = states[int(len(states)*0.95):]
-
-    # Train
-    out_path = os.path.join(OUT_DIR, "myname", aeclass)
-    os.makedirs(out_path, exist_ok=True)
-    ae = run(out_path, train, val, parameters)
-    show_summary(ae, train, test)
-    plot_autoencoding_image(ae, test, train, "blocks")  # or "myname" if you added renderer
-    dump_states(ae, all_states)
-    dump_actions(ae, transitions)
-
-    # Save object names
-    names_path = os.path.join(out_path, "object_names.json")
-    with open(names_path, "w") as f:
-        _json.dump({"image_ids": image_ids, "object_names": all_object_names}, f, indent=2)
-```
-
-### Step 4 — Add data loaders to extract_fol.py and visualize_fol.py
-
-In [extract_fol.py](extract_fol.py):
-
-```python
-def load_myname_data(model_dir, dataset_path=None, images_dir=None, num_examples=None):
-    from latplan.puzzles.puzzle_myname import build_dataset, PICSIZE
-    from latplan.puzzles.util import preprocess
-    from strips import bboxes_to_onehot
-    # ... same pattern as load_labeled_objects_data() ...
-    return states, per_state_names, image_ids
-```
-
-Add `"myname"` to the `--domain` choices and add the corresponding `elif` branch in `main()`.
-
-In [visualize_fol.py](visualize_fol.py):
-
-```python
-def load_myname_data_and_renderer(ae, model_dir, num=10, dataset_path=None, images_dir=None):
-    # ... same pattern as load_labeled_objects_data_and_renderer() ...
-    render_fn, _ = ae.blocks_renderer()  # or ae.myname_renderer()
-    return states, flat_names, render_fn, per_state_names
-```
-
-Add `"myname"` to `--domain` choices and the corresponding branch in `main()`.
-
-### Step 5 — Generate your dataset and train
-
-```bash
-# Generate (or provide your own JSON + images)
-python setup-dataset.py myname  # if you added a function there
-
-# Train
-python strips.py learn myname FirstOrderAE \
-    None None None None None \
-    ./data/my_dataset.json ./data/my_images \
-    all_pairs 3000 200
-
-# Extract FOL
-python extract_fol.py out/myname/FirstOrderAE \
-    --domain myname --num 50
-
-# Visualize
-python visualize_fol.py out/myname/FirstOrderAE \
-    --domain myname --num 10
-```
-
----
-
-## 11. Output Reference
-
-Each training run creates a directory under `out/`. Contents:
-
-| File | Written by | Contents |
-|------|-----------|---------|
-| `net0.h5` | model.py | Trained Keras weights |
-| `aux.json` | model.py | All hyperparameters + class name + metadata |
-| `performance.json` | model.py | MSE/BCE on train/val under noise variations |
-| `parameter_count.json` | model.py | Trainable parameter counts per layer |
-| `logs/` | model.py | TensorBoard event files |
-| `states.csv` | strips.py | Binary latent codes (U×P bits) for all training states |
-| `actions.csv` | strips.py | Concatenated (pre_latent ++ suc_latent) for all transitions |
-| `all_states.csv` | strips.py | (blocksworld) Binary codes for entire dataset |
-| `all_actions.csv` | strips.py | (blocksworld) All transitions |
-| `autoencoding_train.png` | strips.py | Input / attention / latent / recon grid for train set |
-| `autoencoding_test.png` | strips.py | Same for test set |
-| `render_train.png` | strips.py | Domain-rendered reconstruction (not raw features) |
-| `render_test.png` | strips.py | Same for test set |
-| `booleans_test.png` | strips.py | Per-predicate positive/negative example patches |
-| `object_names.json` | strips.py | (labeled_objects) Per-state semantic object labels |
-
-After running `extract_fol.py`, a `fol_output/` subdirectory is created:
-
-| File | Contents |
+| File | Purpose |
 |------|---------|
-| `fol_predicates.json` | Structured extraction results |
-| `fol_predicates.txt` | Human-readable atoms |
-| `predicate_analysis.json` | Predicate activation statistics |
-| `state_image_mapping.json` | (labeled_objects) State → COCO filename mapping |
+| `net0.h5` | Trained model weights. |
+| `training_history.csv` | Per-epoch `BCE`, `MSE`, `activation`, `loss`, `preencoder_l1` (and `val_*` siblings). CSVLogger writes it every epoch. |
+| `training_curve.png` | 4-panel loss plot. `tools/plot_training_curve.py` writes it. |
+| `render_test.png`, `render_train.png` | Decoded scene canvases per split. |
+| `render_test_shuffled.png`, `render_train_shuffled.png` | Slot-shuffled reconstruction. Tests permutation invariance. |
+| `autoencoding_test.png`, `autoencoding_train.png` | Latent grid plus decoded scene per state. |
+| `booleans_test.png`, `booleans_train.png` | U × P bit pattern per state. Shows collapsed predicates. |
+| `viz/recon_grid.png` | 3 × N grid: input row, reconstruction row, per-pixel diff row. |
+| `loaded_videos.json` | Data provenance: `video_ids`, `video_id_filter`, `npz_path`, `fps`, `category_filter`, `transition_mode`. |
+| `trial_t1/net0.h5` | Per-trial save from the genetic search wrapper. |
+| `test*.pdf` | Per-predicate CART decision trees. |
 
-After running `visualize_fol.py`, a `fol_visualizations/` subdirectory is created:
-
-| File | Contents |
-|------|---------|
-| `fol_state_{i}_recon.png` | Reconstruction diagnostic for state `i` |
-| `fol_state_{i}_attention.png` | Attention heatmaps for state `i` |
-| `fol_state_{i}_predicates.png` | FOL text for state `i` |
-| `attention_overview.png` | Average attention across all states |
-
----
-
-## 12. Citation
-
-If you use this code, please cite the original FOSAE paper:
-
-```bibtex
-@inproceedings{asai2019fosae,
-  title     = {Unsupervised Grounding of Plannable First-Order Logic Representation from Images},
-  author    = {Asai, Masataro},
-  booktitle = {Proceedings of the 29th International Conference on Automated Planning and Scheduling (ICAPS)},
-  year      = {2019},
-  url       = {https://arxiv.org/abs/1902.08093}
-}
-```
-
-Original repository: [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae)
-
-This fork (labeled-fosae) extends FOSAE with VLM-annotated COCO support. If you build on the labeled-objects domain, please also acknowledge this fork.
-
----
-
-## Hyperparameter reference (2026-05-14)
-
-Distilled from the original FOSAE codebase ([guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae); local clone at `/home/panoslat/Dev/Thesis/FOSAE/latplan-fosae`) and the paper [Unsupervised Grounding of Plannable First-Order Logic Representation from Images (Asai 2019, arXiv:1902.08093)](https://arxiv.org/abs/1902.08093). Use this section as the source of truth when configuring a run.
-
-### Original defaults — `default_parameters` (`strips.py:39-52`, byte-identical to upstream)
-
-These are the values that apply to **every** parameter not over-ridden by the tuning grid or CLI args.
-
-| Key | Value | Role |
-|-----|-------|------|
-| `epoch` | `int(os.environ.get("EPOCH", 1000))` | training epochs (env-overridable, this fork) |
-| `batch_size` | `1000` | minibatch size |
-| `optimizer` | `"radam"` | Rectified Adam |
-| `max_temperature` | `5.0` | Gumbel-softmax initial temperature |
-| `min_temperature` | `0.7` | Gumbel-softmax final temperature |
-| `N` | `None` | per-PU output length (resolved later as `U*A`) |
-| `M` | `2` | binary latent vocabulary (=2 → boolean propositions) |
-| `train_gumbel` | `True` | inject Gumbel noise during training |
-| `train_softmax` | `True` | continuous latent during training |
-| `test_gumbel` | `False` | deterministic latent at inference |
-| `test_softmax` | `False` | discrete (rounded) latent at inference |
-| `dropout_z` | `False` | dropout on latent layer (paper kept off) |
-
-### Original tuning grid — `parameters` (`strips.py:75-95`, byte-identical to upstream after 2026-05-14)
-
-`simple_genetic_search` samples up to **`LIMIT`** configs from this Cartesian space. Upstream paper used **`LIMIT=300`** (`run()` in `latplan-fosae/strips.py:174`). This fork makes `LIMIT` env-overridable (default `LIMIT=1` for fast smokes).
-
-| Key | Search values | Note |
-|-----|---------------|------|
-| `beta` | `-0.3, -0.1, 0.0, 0.1, 0.3` | KL-style scalar coefficient |
-| `lr` | `0.1, 0.01, 0.001, 0.0001` | learning rate |
-| `U` | `20, 40, 80` | number of Predicate Units |
-| `A` | `2, 3, 4` | arity of every predicate |
-| `P` | `10, 20, 40, 80, 160, 320` | predicates per unit; total propositions = `U × P` |
-| `layer` | `50, 100, 400, 1000` | hidden dim of the FC encoder/decoder |
-| `dropout` | `0.3, 0.4, 0.5` | encoder/decoder dropout rate |
-| `noise` | `0.1, 0.2, 0.4` | additive input noise (denoising AE) |
-| `zerosuppress` | `0.0, 0.05, 0.1, 0.2, 0.5` | latent-sparsity penalty weight |
-| `zerosuppress_delay` | `0.05, 0.1, 0.2, 0.3, 0.5` | warm-up fraction before `zerosuppress` kicks in |
-| `preencoder_dimention` | `10, 25, 50, 100, 200, 400` | preencoder bottleneck width (note: paper's spelling is "dimention", typo preserved by upstream) |
-| `preencoder_layers` | `0, 1, 2` | Conv1D layers in the preencoder (0 = preencoder disabled) |
-| `preencoder_l1` | `0.0, 1e-5, 1e-4, 1e-3, 1e-2` | L1 regulariser on preencoder output |
-| `preencoder_delay` | `0.05, 0.1, 0.2, 0.3, 0.5` | warm-up fraction before preencoder loss is added |
-| `preencoder_output_activation` | `("relu","MSE"), ("linear","MSE"), ("sigmoid","MSE"), ("sigmoid","BCE")` | preencoder output activation + loss head |
-| `loss` | `"BCE"` | reconstruction loss head |
-| `eval` | `"MSE"` | validation metric |
-
-### Per-domain overrides (applied by the task function in `strips.py`)
-
-| Domain | Function `strips.py` | Override |
-|--------|----------------------|----------|
-| `puzzle` (mnist / mandrill / lenna / spider / digital) | `puzzle()` | `preencoder_dimension=0`, `preencoder_layers=0`, `preencoder_l1=0` — **preencoder disabled** (15-dim feature input is too small to benefit) |
-| `blocksworld` | `blocksworld()` | `picsize_grid`, `picsize` injected from npz; activation `self.blocks_activation` |
-| `labeled_objects` / `vidvrd` / `actiongenome` | (realistic-image domains) | `preencoder_layers=2`, `preencoder_dimention=256`, `preencoder_output_activation=("linear","MSE")`, `lr=0.0001` — paper-grade preencoder for 3272-dim feature input |
-
-### Paper-published "final picks" (Table 1, Fig 12 of 1902.08093)
-
-These are the **best** configs the paper reports after running the full grid above with `LIMIT=300`. They are **NOT defaults** — they are the *answers* to the grid search, useful as starting points for follow-up tuning.
-
-| Domain | `U` | `A` | `P` | propositions `U·P` | source |
-|--------|-----|-----|-----|---------------------|--------|
-| 8-puzzle (3×3, mnist) | **25** | **2** | **50** | 1 250 | paper §6, Table 1 |
-| 8-puzzle (3×3) Pareto minimum | 9 | 2 | 6 | 54 | paper §6, Fig 12 |
-| blocksworld (5 blocks × 3 stacks) | **10** | **2** | **100** | 1 000 | paper §6, Table 1; `train_all_blocks.sh` |
-| 8-puzzle extreme arity | 1 | 9 | up to 400 | up to 400 | `train_all_contour.sh` (Fig 8 contour study) |
-
-### Reasonable starting points for **new experiments** in this fork
-
-Pick a column by your data size, not by aesthetics. `propositions` is the discrete-capacity knob — too few starves the model, too many lets it memorise.
-
-| Use case | `U` | `A` | `P` | epoch | `lr` | preencoder | rationale |
-|----------|-----|-----|-----|-------|------|------------|-----------|
-| Paper-faithful 8-puzzle baseline | 25 | 2 | 50 | 1 000 | 0.001 | off | matches Table 1 |
-| Paper-faithful blocksworld baseline | 10 | 2 | 100 | 1 000 | 0.001 | off | matches Table 1 |
-| Cheap smoke (any domain) | 10 | 2 | 20 | 100 | 0.001 | off | converges in minutes; lets you confirm pipeline before paying for a full run |
-| Realistic-image domain (vidvrd / actiongenome / labeled_objects) | 40 | 2 | 20 | 2 000 | 0.0001 | layers=2 dim=256 act=("linear","MSE") | 3272-dim input → deeper preencoder + smaller lr |
-| Aggressive video search | 80 | 2 | 40 | 5 000 | 0.0001 | layers=2 dim=256 | 3 200 propositions; gives FOSAE room for many object/relation predicates |
-| Bigger-capacity safety net | 80 | 2 | 80 | 5 000 | 0.0001 | layers=2 dim=256 | 6 400 propositions; use when reconstruction stalls and you suspect bottleneck |
-
-For any of these: **add `LIMIT=20+` to actually search**, otherwise `simple_genetic_search` runs exactly one trial whose seed determines success.
-
-### Environment-variable knobs (this fork)
-
-| Env var | Default | Effect |
-|---------|---------|--------|
-| `EPOCH` | `1000` | overrides `default_parameters['epoch']` (`strips.py:40`) |
-| `LIMIT` | `1` | bounds `simple_genetic_search` trial count (`strips.py:221`) |
-| `OUT_DIR` | `<project>/out` | overrides output base; auto-joined with `<domain>/<type>/<run_tag>/` (`latplan/util/paths.py`) |
-| `VIDVRD_STRICT_CATEGORY` | `1` | strict primary-subject filter for VidVRD category training |
-| `AG_STRICT_CATEGORY` | `1` | same for ActionGenome |
-
-### Sherlock command templates
-
-Prereqs (fresh shell): `module restore fosae && source venv/bin/activate && cd $SCRATCH/panos/sgg-thesis && git pull`. Job submission via `sh/submit.sh`; each job's output lands in `OUT_DIR`.
+### 6.2 Post-run inspection commands
 
 ```bash
-# --- mnist puzzle paper baseline (LIMIT=300 trials, ~paper) ---
-LIMIT=300 EPOCH=1000 \
-  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-paper-puzzle-mnist \
-  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mnist 3 3 None None None 20000" \
-  TIME=72:00:00 \
-  bash sh/submit.sh
-
-# --- mnist puzzle fixed paper picks U=25 A=2 P=50, single trial ---
-EPOCH=1000 \
-  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-fixed-puzzle-mnist \
-  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mnist 3 3 25 2 50 20000" \
-  bash sh/submit.sh
-
-# --- mandrill puzzle (same hyperparams) ---
-EPOCH=1000 \
-  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-fixed-puzzle-mandrill \
-  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mandrill 3 3 25 2 50 20000" \
-  bash sh/submit.sh
-
-# --- blocksworld paper baseline (reproduce_plot replays best from grid_search.log) ---
-MEM=64G EPOCH=1000 \
-  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-paper-blocks-5-3 \
-  TRAIN_CMD="python3 strips.py reproduce_plot blocksworld FirstOrderSAE blocks-5-3 None None None 10000 BCE5" \
-  TIME=72:00:00 \
-  bash sh/submit.sh
-
-# --- blocksworld fixed paper picks U=10 A=2 P=100, single trial ---
-MEM=64G EPOCH=1000 \
-  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/baseline-fixed-blocks-5-3 \
-  TRAIN_CMD="python3 strips.py learn_plot blocksworld FirstOrderAE blocks-5-3 10 2 100 6500" \
-  bash sh/submit.sh
-
-# --- modest search (LIMIT=20 trials, ~2-4 h on v100; populates grid_search.log) ---
-LIMIT=20 EPOCH=1000 \
-  OUT_DIR=$SCRATCH/panos/sgg-thesis/out/search-puzzle-mnist \
-  TRAIN_CMD="python3 strips.py learn_plot puzzle FirstOrderAE mnist 3 3 None None None 20000" \
-  TIME=8:00:00 \
-  bash sh/submit.sh
+OUT=<OUT_DIR from submit.sh output>
+tail -5 $OUT/training_history.csv                  # last 5 epochs
+ls $OUT/*.png $OUT/viz/*.png                        # every rendered PNG
+jq '.category_filter, .video_id_filter, .npz_path' $OUT/loaded_videos.json
 ```
 
-Mode `learn_plot` writes `autoencoding_{test,train}{,_shuffled}.png` + `render_{test,train}{,_shuffled}.png` + `booleans_test.png` + `test*.pdf/.gv` decision-tree at the end. Mode `reproduce_plot` does the same after picking the best entry from a pre-existing `grid_search.log` (i.e. requires a prior `learn` / `learn_plot` job in the same `OUT_DIR`). Mode `learn` skips the plotting.
+### 6.3 Re-run visualization on a saved model
+
+```bash
+python3 tools/replot.py $OUT --num 200              # original-author plot suite
+python3 viz/recon.py $OUT --num 8                   # single-glance reconstruction grid
+python3 tools/plot_training_curve.py $OUT           # loss curve
+```
+
+### 6.4 Find your finished runs
+
+```bash
+python3 tools/list_runs.py                          # sacct sweep, sorted by val_BCE_min
+```
+
+`tools/list_runs.py` reads `sacct` for the user, picks completed jobs, extracts `val_BCE_min` from `training_history.csv`, and lists them best-first.
+
+## 7. Success Criteria
+
+For every trained model, check three things.
+
+1. **Reconstruction.** Open `viz/recon_grid.png`. The reconstruction row should look like the input row. The diff row should be mostly dark. Target: mean MSE < 0.05 for realistic-image domains.
+2. **Training curve.** Open `training_curve.png`. All four panels should trend downwards and plateau. A flat line means no learning.
+3. **Boolean patterns.** Open `booleans_test.png`. Predicates should vary across states. A predicate that is always on or always off is collapsed.
+
+For a planner-eval run (Phase H), see `.claude/docs/STATUS.md §Phase H` and `tools/planner/plan_video.py`.
+
+## 8. Where to Find More
+
+- `.claude/docs/THEORY.md` — FOSAE theory and architecture.
+- `.claude/docs/AUDIT.md` — code alignment with the paper and the upstream repository. Read this before any change to `strips.py` or the loaders.
+- `.claude/docs/SPEC.md` — task grid, invariants, and gate list.
+- `.claude/docs/STATUS.md` — weekly progress and the phase timeline.
+- `.claude/docs/VIZ.md` — figure catalogue.
+- `.claude/docs/CHANGES.md` — every change from the upstream fork.
+- `.claude/docs/CLAUDE.md` — the working rules for the AI assistant.
+- `.claude/docs/STE.md` — the Simplified Technical English style guide.
+- `.claude/docs/SOURCES.md` — paper links and dataset links.
+
+## 9. Citation
+
+If you cite this work, cite the source paper and the LatPlan predecessor.
+
+- Asai, M. (2019). *Unsupervised Grounding of Plannable First-Order Logic Representation from Images*. ICAPS 2019. [arXiv:1902.08093](https://arxiv.org/abs/1902.08093).
+- Asai, M. and Fukunaga, A. (2018). *Classical Planning in Deep Latent Space: Bridging the Subsymbolic-Symbolic Boundary*. IJCAI 2018. [arXiv:1705.05787](https://arxiv.org/abs/1705.05787).
+
+## 10. Change log for this file
+
+- 2025-08-02: STE verification pass against the real `STE.md` rules. All prose sentences pass the ≤ 25-word descriptive limit (Rule 6.3). Every command block preserved verbatim (Rule 11 STE.md — code stays unchanged). Fixed L46 `which loads` → `That file loads` per GR-1 (prefer `that` conjunction; split the relative clause into a new sentence for clarity). Removed §9 duplicate `Related Files` (Section 8 `Where to Find More` already lists every file). Result: 250 → 240 lines.

@@ -125,10 +125,6 @@ def plot_autoencoding_image(ae,test,train,plotmode):
               "to render reconstructions manually.")
         return
 
-    # plot the latent states
-    # rz = np.random.randint(0,2,(6,*ae.zdim()))
-    # ae.plot_autodecode(rz,ae.local("autodecoding_random.png"),verbose=True)
-
     test_plot = test[:6]
     train_plot = train[:6]
     
@@ -206,8 +202,6 @@ def dump_states(ae,states,name="states.csv",repeat=1):
             np.savetxt(f,ae.encode(states,batch_size=1000).round().astype(int),"%d")
 
 ################################################################
-
-# note: lightsout has epoch 200
 
 def run(path,train,val,parameters,train_out=None,val_out=None,):
     if 'learn' in mode:
@@ -782,8 +776,6 @@ def main():
         print('args:',sys.argv)
         sys.argv.pop(0)
         mode = sys.argv.pop(0)
-        # Commented out dynamic assignment:
-        # sae_path = "_".join(sys.argv)
         task = sys.argv.pop(0)
 
         def myeval(str):
