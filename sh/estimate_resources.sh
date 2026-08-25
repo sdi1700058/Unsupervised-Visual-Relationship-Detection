@@ -95,7 +95,7 @@ if [[ "${DOMAIN}" == "vidvrd" ]]; then
     if [[ -d "${ANN_DIR}" && -d "${FRAMES_DIR}" ]]; then
         CAT_ARG=()
         [[ -n "${CATEGORY}" && "${CATEGORY}" != "None" ]] && CAT_ARG=(--category "${CATEGORY}")
-        OUT="$(python3 "${PROJECT_DIR}/inspect_vidvrd.py" \
+        OUT="$(python3 "${PROJECT_DIR}/tools/video/inspect_vidvrd.py" \
                 --ann-dir "${ANN_DIR}" --frames-dir "${FRAMES_DIR}" --fps "${FPS}" \
                 "${CAT_ARG[@]}" 2>/dev/null \
                 | grep -E '^(category|ALL CATEGORIES)' | head -1 || true)"

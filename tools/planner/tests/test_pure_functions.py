@@ -93,7 +93,7 @@ class TestBfs(unittest.TestCase):
         # 0->1 and 2->3 flip the same bit, so that is one delta. 1->2 changes
         # nothing and must be dropped rather than kept as a self-loop.
         z = np.array([[0, 0], [1, 0], [1, 0], [0, 0]], dtype=np.int8)
-        deltas = mine_deltas(z)
+        deltas = mine_deltas(z[:-1], z[1:])
         self.assertEqual(len(deltas), 1)
         np.testing.assert_array_equal(deltas[0], [1, 0])
 
@@ -105,7 +105,7 @@ class TestBfs(unittest.TestCase):
                       [0, 0, 1, 1],
                       [0, 1, 1, 1],
                       [1, 1, 1, 1]], dtype=np.int8)
-        deltas = mine_deltas(z)
+        deltas = mine_deltas(z[:-1], z[1:])
 
         found, trace, _ = search(z[0], z[-1], deltas, time_budget_s=5)
         self.assertTrue(found)
@@ -117,7 +117,7 @@ class TestBfs(unittest.TestCase):
         from tools.planner.bfs.planner import mine_deltas, search
 
         z = np.array([[0, 0], [1, 0]], dtype=np.int8)
-        found, trace, _ = search(z[0], z[0], mine_deltas(z), time_budget_s=5)
+        found, trace, _ = search(z[0], z[0], mine_deltas(z[:-1], z[1:]), time_budget_s=5)
         self.assertTrue(found)
         self.assertEqual(len(trace), 1)
 
@@ -137,7 +137,7 @@ class TestBfs(unittest.TestCase):
 
         z = np.array([[0, 0, 0], [1, 0, 0], [1, 1, 0], [1, 1, 1]],
                      dtype=np.int8)
-        deltas = mine_deltas(z)
+        deltas = mine_deltas(z[:-1], z[1:])
 
         first = search(z[0], z[-1], deltas, time_budget_s=5)[1]
         second = search(z[0], z[-1], deltas, time_budget_s=5)[1]
@@ -313,3 +313,168 @@ class TestMetrics(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _fake_export(tmp_dir, n_frames=12, n_bits=16, n_obj=2, linear=False):
+    """Write a synthetic export so tests can run the whole chain.
+
+    With linear=False the objects accelerate, so the straight-line baseline
+    is beatable. With linear=True they move at constant speed and the
+    baseline is exact, which is the case that carries no signal.
+    """
+    rng = np.random.default_rng(0)
+
+    latents = np.zeros((n_frames, n_bits), dtype=np.int8)
+    for t in range(1, n_frames):
+        latents[t] = latents[t - 1]
+        latents[t][t % n_bits] ^= 1
+
+    gt = np.zeros((n_frames, n_obj, 4), dtype=np.float32)
+    for t in range(n_frames):
+        x = 10 + (2.0 * t if linear else 2.0 * t * t)
+        y = 200 - (1.5 * t if linear else 1.5 * t * t)
+        gt[t, 0] = [x, 50, x + 30, 90]
+        gt[t, 1] = [y, 150, y + 40, 190]
+
+    path = Path(tmp_dir) / "export.npz"
+    np.savez_compressed(
+        path,
+        latents=latents,
+        gt_boxes=gt,
+        decoded_boxes=gt + rng.normal(0, 2, gt.shape).astype(np.float32),
+        U=4, A=2, P=4, n_bits=n_bits, model_name="test",
+        frame_ids=np.asarray([f"f{t:04d}" for t in range(n_frames)],
+                             dtype="U256"),
+        actions=np.concatenate([latents[:-1], latents[1:]], axis=1))
+    return path
+
+
+class TestExport(unittest.TestCase):
+
+    def test_export_round_trips_without_pickle(self):
+        from tools.planner.common.export import load
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export = load(_fake_export(tmp))
+
+        self.assertEqual(len(export), 12)
+        self.assertEqual(export.n_bits, 16)
+        self.assertEqual(export.parameters["U"], 4)
+
+    def test_known_latent_returns_its_own_boxes(self):
+        from tools.planner.common.export import load
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export = load(_fake_export(tmp))
+
+            boxes = export.boxes_for(export.latents[3])
+            np.testing.assert_array_equal(boxes, export.decoded_boxes[3])
+            self.assertEqual(export.fallback_count, 0)
+
+    def test_unknown_latent_falls_back_and_is_counted(self):
+        from tools.planner.common.export import load
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export = load(_fake_export(tmp))
+
+            stranger = np.ones(export.n_bits, dtype=np.int8)
+            export.boxes_for(stranger)
+            self.assertEqual(export.fallback_count, 1)
+
+    def test_transitions_prefer_the_stored_actions(self):
+        from tools.planner.common.export import load
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export = load(_fake_export(tmp))
+
+        pre, suc = export.transitions()
+        self.assertEqual(pre.shape, (11, 16))
+        self.assertEqual(suc.shape, (11, 16))
+
+
+class TestFullChain(unittest.TestCase):
+    """Run a whole window through the harness, end to end, with no keras."""
+
+    def test_bfs_scores_a_window(self):
+        from tools.planner.bfs.planner import run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export = _fake_export(tmp)
+            out = Path(tmp) / "out"
+
+            metrics = run(export_path=export, init_idx=0, goal_idx=4,
+                          out_dir=out, time_budget_s=10)
+
+            # Check the files before the temp directory goes away.
+            self.assertTrue((out / "metrics.json").exists())
+            self.assertTrue((out / "plan_trace.json").exists())
+
+        self.assertTrue(metrics["reachability"])
+        self.assertEqual(metrics["plan_length"], 4)
+        self.assertEqual(metrics["expected_plan_length"], 4)
+        self.assertTrue(metrics["plan_length_match"])
+        self.assertEqual(metrics["n_intermediate"], 3)
+        self.assertIsNotNone(metrics["bbox_mse_mean"])
+        self.assertIsNotNone(metrics["baseline_mse_mean"])
+
+    def test_linear_motion_leaves_the_ratio_undefined(self):
+        from tools.planner.bfs.planner import run
+
+        # A perfect straight line gives a zero-error baseline, so the ratio
+        # cannot be formed. The run must still finish and say so.
+        with tempfile.TemporaryDirectory() as tmp:
+            export = _fake_export(tmp, linear=True)
+            metrics = run(export_path=export, init_idx=0, goal_idx=4,
+                          out_dir=Path(tmp) / "out", time_budget_s=10)
+
+        self.assertTrue(metrics["reachability"])
+        self.assertAlmostEqual(metrics["baseline_mse_mean"], 0.0, places=3)
+        self.assertIsNone(metrics["mse_ratio"])
+
+    def test_goal_before_init_is_rejected(self):
+        from tools.planner.bfs.planner import run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export = _fake_export(tmp)
+            with self.assertRaises(ValueError):
+                run(export_path=export, init_idx=6, goal_idx=2,
+                    out_dir=Path(tmp) / "out", time_budget_s=5)
+
+    def test_window_outside_the_clip_is_rejected(self):
+        from tools.planner.bfs.planner import run
+
+        with tempfile.TemporaryDirectory() as tmp:
+            export = _fake_export(tmp)
+            with self.assertRaises(IndexError):
+                run(export_path=export, init_idx=0, goal_idx=99,
+                    out_dir=Path(tmp) / "out", time_budget_s=5)
+
+
+class TestExportDedupe(unittest.TestCase):
+
+    def test_repeated_effects_collapse_to_one_row(self):
+        from tools.planner.export_latents import _dedupe_transitions
+
+        base = np.array([
+            [0, 1, 0, 0,  1, 1, 0, 0],   # add bit 0
+            [1, 1, 0, 0,  1, 0, 0, 0],   # delete bit 1
+            [0, 1, 0, 0,  0, 1, 1, 0],   # add bit 2
+        ], dtype=np.int8)
+
+        rows = np.repeat(base, 500, axis=0)
+        kept = _dedupe_transitions(rows)
+
+        self.assertEqual(len(kept), 3)
+        np.testing.assert_array_equal(kept, base)
+
+    def test_transitions_that_change_nothing_are_dropped(self):
+        from tools.planner.export_latents import _dedupe_transitions
+
+        rows = np.array([
+            [1, 0,  1, 0],   # no-op
+            [0, 0,  1, 0],   # add bit 0
+        ], dtype=np.int8)
+
+        kept = _dedupe_transitions(rows)
+        self.assertEqual(len(kept), 1)
+        np.testing.assert_array_equal(kept[0], [0, 0, 1, 0])

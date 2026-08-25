@@ -1,3 +1,13 @@
+# requirements.txt — Sherlock venv dependencies (TF 1.x stack, Python 3.6/3.7)
+#
+# TensorFlow 1.15.2 GPU constraints:
+#   - Python 3.5–3.7
+#   - CUDA 10.0.x
+#   - cuDNN 7.4–7.6
+#
+# Numpy upper bound: TF 1.15 uses deprecated aliases (np.bool, np.int)
+# removed in numpy 1.24, causing runtime errors.
+
 tensorflow-gpu==1.15.2
 keras==2.2.5
 h5py==2.10.0            # <3.0 required for Keras 2.2.5 model weight format
@@ -13,4 +23,3 @@ keras-rectified-adam==0.9.0    # pinned to a Keras-2-compatible version
 timeout_decorator
 ansicolors
 protobuf==3.19.6       # TF 1.15 incompatible with protobuf >=3.21; 3.20.x not on PyPI for py3.6
-tqdm                   # required by data/video/actiongenome/ag_repo/tools/dump_frames.py (C1)

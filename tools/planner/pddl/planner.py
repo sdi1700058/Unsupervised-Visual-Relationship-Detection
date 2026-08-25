@@ -192,20 +192,12 @@ def call_fast_downward(domain, problem, out_dir, time_budget_s=60):
     return plan_file, time.time() - began
 
 
-def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, model_dir=None, **_):
+def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None, **_):
     import numpy as np
 
     n_bits = z_all.shape[1]
-
-    # Prefer the transitions the model itself dumped. Falling back to
-    # consecutive encoded frames loses any all_pairs structure.
-    actions_csv = Path(model_dir) / "actions.csv" if model_dir else None
-    if actions_csv and actions_csv.exists():
-        pre, suc = read_actions_csv(actions_csv)
-        print(f"read {len(pre)} transitions from {actions_csv.name}")
-    else:
-        pre, suc = z_all[:-1], z_all[1:]
-        print(f"no actions.csv; using {len(pre)} consecutive frame pairs")
+    pre, suc = export.transitions()
+    print(f"{len(pre)} transitions from the export")
 
     effects = distinct_effects(pre, suc)
     print(f"{len(effects)} distinct operators")
@@ -226,8 +218,7 @@ def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, model_dir=None, **_):
                                "plan_operators": indices}
 
 
-def run(model_dir, npz_path, init_idx, goal_idx, out_dir, **kwargs):
+def run(export_path, init_idx, goal_idx, out_dir, **kwargs):
     from tools.planner.common.harness import run_window
-    return run_window(model_dir, npz_path, init_idx, goal_idx, out_dir,
-                      solve=_solve, method="pddl",
-                      solve_kwargs={"model_dir": model_dir}, **kwargs)
+    return run_window(export_path, init_idx, goal_idx, out_dir,
+                      solve=_solve, method="pddl", **kwargs)

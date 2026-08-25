@@ -1,0 +1,13 @@
+# Dependencies for the planner evaluation only.
+#
+# This is deliberately not the training stack. Training needs TensorFlow 1.15
+# and Python 3.6/3.7, which pins the whole environment. The planner works on
+# exports produced by tools/planner/export_latents.py, so it needs neither,
+# and it runs on any modern Python.
+#
+#     python3 -m venv .venv-planner
+#     .venv-planner/bin/pip install -r tools/planner/requirements.txt
+
+numpy          # everything
+scipy          # assignment problem; there is a brute-force fallback without it
+matplotlib     # figures only, not needed to score

@@ -1,26 +1,12 @@
-import matplotlib
-matplotlib.use('Agg')
-import tensorflow as tf
-import keras.backend as K
-# K.set_floatx('float16')
-print("Default float: {}".format(K.floatx()))
+"""CPU-only variant of config.py.
 
-def load_session():
-    K.set_session(
-        tf.Session(
-            config=tf.ConfigProto(
-                allow_soft_placement=True,
-                intra_op_parallelism_threads=1,
-                inter_op_parallelism_threads=1,
-                device_count = {'CPU': 1, 'GPU': 0},
-                gpu_options =
-                tf.GPUOptions(
-                    per_process_gpu_memory_fraction=1.0,
-                    allow_growth=True,))))
+Kept as a separate module because several scripts and smoke_test.sh import it
+by name. The GPU choice is the only difference, so it sets the env var and
+hands off rather than repeating the session code.
+"""
 
-load_session()
-clear_session = K.clear_session
+import os
 
-def reload_session():
-    clear_session()
-    load_session()
+os.environ["FOSAE_GPU"] = "0"
+
+from config import load_session, clear_session, reload_session  # noqa: F401,E402

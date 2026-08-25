@@ -15,23 +15,15 @@ import time
 from collections import deque
 
 
-def mine_deltas(z_all, transitions=None):
+def mine_deltas(pre, suc):
     """Collect the distinct XOR deltas seen in the training transitions.
 
-    Without an explicit transition list we assume consecutive frames, which
-    matches TRANSITION_MODE=sequential. Sorted lexicographically so the
-    search order stays fixed across runs (SPEC V15).
+    Sorted lexicographically so the search order stays fixed across runs
+    (SPEC V15).
     """
     import numpy as np
 
-    if transitions is None:
-        pre = np.arange(len(z_all) - 1)
-        suc = pre + 1
-    else:
-        pre = np.array([p for p, _ in transitions])
-        suc = np.array([s for _, s in transitions])
-
-    diffs = (z_all[suc] ^ z_all[pre]).astype(np.int8)
+    diffs = (np.asarray(suc) ^ np.asarray(pre)).astype(np.int8)
 
     # Frames that encode to the same latent give an all-zero delta. Keeping it
     # would hand the search a self-loop that can only waste expansions.
@@ -95,14 +87,15 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0):
     return False, empty, time.time() - began
 
 
-def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, **_):
-    deltas = mine_deltas(z_all)
-    print(f"{len(deltas)} distinct deltas mined from the training transitions")
+def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None, **_):
+    pre, suc = export.transitions()
+    deltas = mine_deltas(pre=pre, suc=suc)
+    print(f"{len(deltas)} distinct deltas from {len(pre)} transitions")
     found, trace, wall = search(z_init, z_goal, deltas, time_budget_s)
     return found, trace, wall, {"n_deltas": int(len(deltas))}
 
 
-def run(model_dir, npz_path, init_idx, goal_idx, out_dir, **kwargs):
+def run(export_path, init_idx, goal_idx, out_dir, **kwargs):
     from tools.planner.common.harness import run_window
-    return run_window(model_dir, npz_path, init_idx, goal_idx, out_dir,
+    return run_window(export_path, init_idx, goal_idx, out_dir,
                       solve=_solve, method="bfs", **kwargs)

@@ -1,59 +1,40 @@
-# Route A — AMA3 via Upstream Roswell + Lisp
+# ama3
 
-**SPEC.md §T H1c.** Primary route for the thesis. Reproduces the paper's plannability evaluation using the original author's pipeline. No local reimplementation; orchestration only per SPEC.md §C C14 + C18.
+Builds the PDDL with the upstream latplan lisp code, so the domain and problem
+come from the author's own emitter rather than our reimplementation. That makes
+a result here the one to quote.
 
-## Status
+What runs where:
 
-**Skeleton only.** Implementation queued for the loop iteration after Route C smoke passes AND after the Sherlock lisp-tooling check clears.
+    lisp/ama3-domain.bin      effect CSVs -> domain.pddl    upstream
+    helper/ama3-problem.sh    init + goal -> problem.pddl   upstream
+    fast-downward.py          both files  -> a plan         ours
+    replay_plan()             plan        -> latent trace   ours
 
-## Idea
+The last two steps depart from upstream on purpose:
 
-Delegate to upstream `/home/panoslat/Dev/Thesis/FOSAE/latplan/`:
+- Upstream starts the planner through `helper/fd-latest.sh`, which shells out
+  to a `planner-scripts/` layout this checkout does not have. We call Fast
+  Downward directly with the same search configuration, so the search is
+  identical.
+- Upstream turns the plan into a state trace with `arrival` and a second lisp
+  binary. `arrival` hangs here with no output, and the step is redundant: Fast
+  Downward guarantees the plan fits the domain it solved, and we wrote the add
+  and delete sets, so replaying them gives the same trace exactly.
 
-1. `sys.path.insert(0, "/home/panoslat/Dev/Thesis/FOSAE/latplan/")` — see `upstream_bridge.py`.
-2. Encode start + goal latents locally via `common/encode.py`. Write to `latent_start.csv`, `latent_goal.csv`.
-3. `ros latplan/lisp/ama3-domain.ros <model_dir>/actions.csv <out_dir>/domain.pddl`
-    - Requires `dump_actions` to have been called during training. If missing, generate on the fly.
-4. `ros latplan/lisp/ama3-problem.ros latent_start.csv latent_goal.csv <out_dir>/problem.pddl`
-5. `latplan/helper/fd-sasgz.sh --search astar(lmcut()) <out_dir>/problem.pddl` → `<out_dir>/sas_plan`
-6. `ros latplan/lisp/ama3-read-latent-state-traces.ros <sas_plan>` → intermediate latents.
-7. `common/decode.py::decode_trace_to_bboxes` + `common/metrics.py::bbox_mse` → metrics.json.
+`ama3-domain.bin` wants the action list, the add effects and the delete
+effects as three files. That is the shape the action autoencoder dumps.
+FOSAE's own `dump_actions` writes only `pre|suc` rows (`latplan/model.py:1051`),
+so `write_domain` derives the three files from the export.
 
-## Dependencies
+Setup:
 
-| Dep | Provided by | Gate |
-|-----|-------------|------|
-| Fast Downward | `tools/planner/install_fd.sh` | H2a |
-| Roswell + SBCL | `tools/planner/install_roswell.sh` (pending) | H2b |
-| Upstream latplan sys.path bridge | `upstream_bridge.py` | H2c |
+    sudo apt-get install -y libpng-dev      # one lisp dependency needs it
+    bash tools/planner/install_fd.sh
+    bash tools/planner/install_roswell.sh   # Roswell, SBCL, lisp binaries
 
-## Sherlock feasibility (open)
+    python3 tools/planner/plan_video.py export.npz --method ama3 --init 0 --goal 4
 
-- Roswell requires SBCL. Sherlock module availability unknown. User must paste:
-    ```bash
-    ml spider sbcl 2>&1 | head -20
-    ml spider roswell 2>&1 | head -10
-    ml spider lisp 2>&1 | head -10
-    which sbcl
-    ```
-- If Sherlock lacks SBCL/Roswell, planning eval runs **local CPU only** (planning is CPU-cheap; SPEC.md §C C17).
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `run.py` | Entry called by `plan_video.py --route a`. Orchestrator. |
-| `upstream_bridge.py` | `sys.path.insert` for upstream latplan + import smoke. |
-| `README.md` | This file. |
-
-## Smoke command (H1c gate)
-
-```bash
-python3 tools/planner/plan_video.py <model_dir> --route a --plan-only
-```
-
-Gate: `sas_plan` written via upstream AMA3; `metrics.json` `reachability=true`.
-
-## Rationale
-
-Route A preserves the paper's plannability evaluation contract. bbox MSE comparisons across the two routes (A vs B vs C) surface differences between the paper's PDDL semantics and the simpler python schema.
+Sherlock has no `sbcl` and no `roswell` module, so this method runs locally
+only. Planning is cheap on CPU, so that is not a problem: export on the
+cluster, plan on the workstation. See `../README.md`.

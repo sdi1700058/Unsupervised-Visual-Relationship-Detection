@@ -5,7 +5,7 @@ Loads a trained FirstOrderSAE from `model_dir`, loads the npz the model was
 trained on (via `loaded_videos.json` manifest OR direct `--npz-path`), and
 returns encoded latents for arbitrary frame indices.
 
-Used by all three routes (A/B/C).
+Used by all three planning methods (ama3/bfs/fastdownward).
 """
 
 from __future__ import annotations

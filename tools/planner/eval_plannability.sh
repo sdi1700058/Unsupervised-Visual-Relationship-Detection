@@ -1,118 +1,159 @@
 #!/usr/bin/env bash
-# tools/planner/eval_plannability.sh — SPEC §T H3 batch driver.
+# Score planner exports on the frame interpolation task.
 #
-# Iterates over videos × available planner routes for a trained model_dir,
-# invokes `tools/planner/plan_video.py --route {a,b,c}` per (video, route),
-# and aggregates the metrics.json files into a single summary.csv.
+# Slides a window of K frames across each export. For every window the planner
+# gets the first and last frame and has to reconstruct the K-2 frames between
+# them. One CSV row per (export, method, window).
+#
+# Needs numpy alone. Make the exports first, where the model lives:
+#
+#     python3 tools/planner/export_latents.py <model_dir> -o dog.npz
 #
 # Usage
-#   bash tools/planner/eval_plannability.sh <model_dir> [videos_dir] [routes] [pairs]
+#   bash tools/planner/eval_plannability.sh <export.npz | export_dir> [options]
 #
-#   model_dir   : path to trained FirstOrderSAE (contains net0.h5 + loaded_videos.json).
-#   videos_dir  : dir with baked overfit npz files. Default: dir of manifest.npz_path.
-#   routes      : comma-separated list of routes to run. Default: `a,b,c`.
-#                 The script auto-skips a route whose entry raises NotImplementedError.
-#   pairs       : comma-separated `start:goal` pairs. Default: `0:-1`.
+#   --methods LIST    comma separated. Default: bfs,pddl,ama3.
+#                     A method that is not installed is skipped, not fatal.
+#   --window K        frames per window, K >= 3. Default: 5.
+#   --stride S        gap between window starts. Default: K-1 (no overlap).
+#   --max-windows N   cap per export. Useful for a quick look. Default: all.
+#   --budget SECONDS  planner time limit per window. Default: 60.
+#   --name NAME       output directory name. Default: taken from the input.
 #
 # Output
-#   eval/planner/<model_stem>/summary.csv
-#     columns: video_id,route,start,goal,reachability,plan_length,wall_s,bbox_mse_mean,n_deltas
-#
-# SPEC.md §C C17 (all-route metrics parity), §V V15 (determinism per route).
+#   eval/planner/<name>/summary.csv
 
-set -euo pipefail
+set -eo pipefail
 
-MODEL_DIR="${1:-}"
-if [[ -z "${MODEL_DIR}" ]]; then
-    echo "usage: $0 <model_dir> [videos_dir] [routes] [pairs]" >&2
+PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+cd "${PROJECT_DIR}"
+
+if [[ $# -lt 1 ]]; then
+    sed -n '2,26p' "$0" | sed 's/^# \?//'
     exit 1
 fi
-MODEL_DIR="$(cd "${MODEL_DIR}" && pwd)"
 
-VIDEOS_DIR="${2:-}"
-ROUTES="${3:-a,b,c}"
-PAIRS="${4:-0:-1}"
-TIME_BUDGET_S="${TIME_BUDGET_S:-60}"
+INPUT="$1"; shift
+METHODS="bfs,pddl,ama3"
+WINDOW=5
+STRIDE=""
+MAX_WINDOWS=""
+BUDGET=60
+NAME=""
 
-MODEL_STEM="$(basename "${MODEL_DIR}")"
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-SUMMARY_DIR="${PROJECT_ROOT}/eval/planner/${MODEL_STEM}"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --methods)     METHODS="$2"; shift 2 ;;
+        --window)      WINDOW="$2"; shift 2 ;;
+        --stride)      STRIDE="$2"; shift 2 ;;
+        --max-windows) MAX_WINDOWS="$2"; shift 2 ;;
+        --budget)      BUDGET="$2"; shift 2 ;;
+        --name)        NAME="$2"; shift 2 ;;
+        *) echo "unknown option: $1" >&2; exit 1 ;;
+    esac
+done
+
+[[ -z "${STRIDE}" ]] && STRIDE=$(( WINDOW - 1 ))
+
+# One export or a directory of them.
+EXPORTS=()
+if [[ -d "${INPUT}" ]]; then
+    while IFS= read -r f; do EXPORTS+=("$f"); done \
+        < <(find "${INPUT}" -maxdepth 1 -name '*.npz' | sort)
+    [[ -z "${NAME}" ]] && NAME="$(basename "${INPUT}")"
+elif [[ -f "${INPUT}" ]]; then
+    EXPORTS+=("$(cd "$(dirname "${INPUT}")" && pwd)/$(basename "${INPUT}")")
+    [[ -z "${NAME}" ]] && NAME="$(basename "${INPUT}" .npz)"
+else
+    echo "no such export or directory: ${INPUT}" >&2
+    exit 1
+fi
+
+if [[ ${#EXPORTS[@]} -eq 0 ]]; then
+    echo "no .npz exports found in ${INPUT}" >&2
+    exit 1
+fi
+
+SUMMARY_DIR="${PROJECT_DIR}/eval/planner/${NAME}"
 SUMMARY_CSV="${SUMMARY_DIR}/summary.csv"
+LOG_DIR="${SUMMARY_DIR}/logs"
+mkdir -p "${LOG_DIR}"
 
-mkdir -p "${SUMMARY_DIR}"
+echo "exports  ${#EXPORTS[@]}"
+echo "methods  ${METHODS}"
+echo "window   K=${WINDOW} stride=${STRIDE}"
+echo "summary  ${SUMMARY_CSV}"
+echo
 
-# --- 1. Collect video npz paths ---
-if [[ -z "${VIDEOS_DIR}" ]]; then
-    if [[ ! -f "${MODEL_DIR}/loaded_videos.json" ]]; then
-        echo "ERROR: no loaded_videos.json at ${MODEL_DIR} and no videos_dir arg. Pass one explicitly." >&2
-        exit 2
-    fi
-    _NPZ="$(python3 -c "import json; m=json.load(open('${MODEL_DIR}/loaded_videos.json')); print(m.get('npz_path',''))")"
-    if [[ -z "${_NPZ}" ]]; then
-        echo "ERROR: loaded_videos.json missing 'npz_path'" >&2
-        exit 2
-    fi
-    VIDEOS_DIR="$(dirname "${_NPZ}")"
-fi
+echo "export,method,init,goal,reachability,plan_length,expected_length,length_match,bbox_mse,baseline_mse,mse_ratio,beats_baseline,temporal_order,decode_fallbacks,wall_s" \
+    > "${SUMMARY_CSV}"
 
-shopt -s nullglob
-NPZS=("${VIDEOS_DIR}"/*.npz)
-shopt -u nullglob
-if (( ${#NPZS[@]} == 0 )); then
-    echo "ERROR: no *.npz in ${VIDEOS_DIR}" >&2
-    exit 3
-fi
-echo "[eval_plannability] found ${#NPZS[@]} video npz files in ${VIDEOS_DIR}"
+IFS=',' read -ra METHOD_LIST <<< "${METHODS}"
 
-# --- 2. Header ---
-echo "video_id,route,start,goal,reachability,plan_length,wall_s,bbox_mse_mean,n_deltas" > "${SUMMARY_CSV}"
+for EXPORT in "${EXPORTS[@]}"; do
+    STEM="$(basename "${EXPORT}" .npz)"
 
-# --- 3. Iterate ---
-IFS=',' read -ra ROUTE_LIST <<< "${ROUTES}"
-IFS=',' read -ra PAIR_LIST <<< "${PAIRS}"
+    WINDOWS="$(python3 - "${EXPORT}" "${WINDOW}" "${STRIDE}" "${MAX_WINDOWS}" <<'PY'
+import sys
+sys.path.insert(0, ".")
+from tools.planner.common.export import load
+from tools.planner.common.windows import make_windows
 
-for NPZ in "${NPZS[@]}"; do
-    VID_STEM="$(basename "${NPZ}" .npz)"
-    for PAIR in "${PAIR_LIST[@]}"; do
-        START="${PAIR%%:*}"
-        GOAL="${PAIR##*:}"
-        for ROUTE in "${ROUTE_LIST[@]}"; do
-            echo "[eval_plannability] ${VID_STEM} route=${ROUTE} start=${START} goal=${GOAL}"
-            OUT_DIR="${SUMMARY_DIR}/${VID_STEM}/route_${ROUTE}/plan_${START}_${GOAL}"
-            mkdir -p "${OUT_DIR}"
+export, k, stride, cap = sys.argv[1:5]
+n_frames = len(load(export))
+for w in make_windows(n_frames, int(k), int(stride), int(cap) if cap else None):
+    print(w["init"], w["goal"])
+PY
+)" || { echo "  cannot build windows for ${STEM}, skipping" >&2; continue; }
+
+    while read -r INIT GOAL; do
+        [[ -z "${INIT}" ]] && continue
+
+        for METHOD in "${METHOD_LIST[@]}"; do
+            OUT_DIR="${SUMMARY_DIR}/${STEM}/${METHOD}/win_${INIT}_${GOAL}"
+            LOG="${LOG_DIR}/${STEM}_${METHOD}_${INIT}_${GOAL}.log"
+
             set +e
-            python3 "${PROJECT_ROOT}/tools/planner/plan_video.py" "${MODEL_DIR}" \
-                --route "${ROUTE}" \
-                --npz-path "${NPZ}" \
-                --start "${START}" --goal "${GOAL}" \
-                --time-budget-s "${TIME_BUDGET_S}" \
-                > "${OUT_DIR}/stdout.log" 2> "${OUT_DIR}/stderr.log"
+            python3 tools/planner/plan_video.py "${EXPORT}" \
+                --method "${METHOD}" \
+                --init "${INIT}" --goal "${GOAL}" \
+                --time-budget-s "${BUDGET}" \
+                --out-dir "${OUT_DIR}" \
+                > "${LOG}" 2>&1
             RC=$?
             set -e
 
-            METRICS_JSON="${OUT_DIR}/metrics.json"
-            if [[ ${RC} -eq 2 || ! -f "${METRICS_JSON}" ]]; then
-                echo "  route ${ROUTE}: SKIPPED or FAILED (rc=${RC})"
-                echo "${VID_STEM},${ROUTE},${START},${GOAL},false,0,0,," >> "${SUMMARY_CSV}"
+            METRICS="${OUT_DIR}/metrics.json"
+            if [[ ${RC} -ne 0 || ! -f "${METRICS}" ]]; then
+                echo "  ${STEM} ${METHOD} ${INIT}->${GOAL}  skipped (rc=${RC})"
+                echo "${STEM},${METHOD},${INIT},${GOAL},false,0,,,,,,,,," >> "${SUMMARY_CSV}"
                 continue
             fi
 
-            # Extract metrics into one CSV row via python.
-            python3 - "${METRICS_JSON}" "${VID_STEM}" "${ROUTE}" "${START}" "${GOAL}" <<'PY' >> "${SUMMARY_CSV}"
+            python3 - "${METRICS}" "${STEM}" "${METHOD}" <<'PY' >> "${SUMMARY_CSV}"
 import json, sys
-mpath, vid, route, start, goal = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]
-with open(mpath) as f:
-    m = json.load(f)
-reach = str(m.get("reachability", False)).lower()
-plen = m.get("plan_length", 0)
-wall = m.get("wall_s", 0.0)
-bmse = m.get("bbox_mse_mean", "")
-ndel = m.get("n_deltas", m.get("n_unique_deltas", ""))
-print(f"{vid},{route},{start},{goal},{reach},{plen},{wall:.3f},{bmse},{ndel}")
+
+path, stem, method = sys.argv[1:4]
+m = json.load(open(path))
+cell = lambda k: "" if m.get(k) is None else m[k]
+
+row = [stem, method, cell("init_frame"), cell("goal_frame"),
+       cell("reachability"), cell("plan_length"), cell("expected_plan_length"),
+       cell("plan_length_match"), cell("bbox_mse_mean"),
+       cell("baseline_mse_mean"), cell("mse_ratio"), cell("beats_baseline"),
+       cell("temporal_order"), cell("decode_fallbacks"), cell("wall_s")]
+print(",".join(str(x) for x in row))
+
+ratio = m.get("mse_ratio")
+verdict = "" if ratio is None else f" ratio {ratio:.3f}"
+print(f"  {stem} {method} {m.get('init_frame')}->{m.get('goal_frame')}"
+      f"  plan {m.get('plan_length')}{verdict}", file=sys.stderr)
 PY
         done
-    done
+    done <<< "${WINDOWS}"
 done
 
-echo "[eval_plannability] wrote ${SUMMARY_CSV}"
-wc -l "${SUMMARY_CSV}"
+ROWS=$(( $(wc -l < "${SUMMARY_CSV}") - 1 ))
+echo
+echo "wrote ${ROWS} rows to ${SUMMARY_CSV}"
+echo "plot with: python3 tools/planner/viz_plannability.py ${SUMMARY_DIR}"

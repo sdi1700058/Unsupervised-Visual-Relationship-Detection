@@ -1,218 +1,208 @@
 #!/usr/bin/env python3
-"""tools/planner/viz_plannability.py — SPEC §T H4.
+"""Plot the interpolation results.
 
-Reads `eval/planner/<model_stem>/summary.csv` and writes three PNGs plus
-`.caption.md` siblings under `eval/planner/<model_stem>/viz/`:
+Reads the summary.csv that eval_plannability.sh writes and produces three
+figures under eval/planner/<model>/viz/. Each figure ships with a short
+caption file that says how to read it.
 
-    plannability_reachability_by_route.png
-        Bar chart: fraction of videos with `reachability=true` per route.
-
-    plannability_bbox_mse_hist.png
-        Histogram of per-plan bbox_mse_mean across all successful plans,
-        one series per route.
-
-    plannability_predicate_firing_heatmap.png
-        (Requires per-run bfs_trace.json / plan_latents; falls back to a
-         placeholder heading if the trace files are absent.)
-
-Determinism (SPEC §V V15): same summary.csv → same PNGs.
+    python3 tools/planner/viz_plannability.py eval/planner/<model>
 """
-
-from __future__ import annotations
 
 import argparse
 import csv
-import json
-import os
 import sys
+
+import numpy as np
 from pathlib import Path
 
 
-CAPTION_HEADER = "# {title}\n\n**What.** {what}\n\n**Why.** {why}\n\n**How to read.** {how_to_read}\n"
+def read_summary(path):
+    with open(path, newline="") as handle:
+        return list(csv.DictReader(handle))
 
 
-def _load_summary(csv_path):
-    """Return list of dicts, one per row."""
-    with open(csv_path) as f:
-        return list(csv.DictReader(f))
+def as_float(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
 
 
-def _write_caption(png_path, what, why, how_to_read):
-    md = png_path.with_suffix(".caption.md")
-    md.write_text(CAPTION_HEADER.format(
-        title=png_path.stem, what=what, why=why, how_to_read=how_to_read))
+def is_true(value):
+    return str(value).strip().lower() in ("true", "1", "yes")
 
 
-def reachability_by_route(rows, out_png):
+def write_caption(png_path, title, what, how):
+    caption = png_path.with_suffix(".caption.md")
+    caption.write_text(
+        f"# {title}\n\n**What it shows.** {what}\n\n**How to read it.** {how}\n")
+
+
+def plot_reachability(rows, out_dir):
+    """How often each method found any plan at all."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    per_route = {}
-    for r in rows:
-        route = r["route"]
-        reach = str(r.get("reachability", "false")).lower() == "true"
-        per_route.setdefault(route, []).append(reach)
-
-    routes = sorted(per_route)
-    rates = [sum(per_route[r]) / max(1, len(per_route[r])) for r in routes]
+    methods = sorted({r["method"] for r in rows})
+    rates = []
+    for method in methods:
+        subset = [r for r in rows if r["method"] == method]
+        hits = sum(1 for r in subset if is_true(r["reachability"]))
+        rates.append(hits / len(subset) if subset else 0.0)
 
     fig, ax = plt.subplots(figsize=(6, 4))
-    bars = ax.bar(routes, rates, color=["#4C78A8", "#F58518", "#54A24B"][:len(routes)])
-    for bar, rate in zip(bars, rates):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.02,
-                 f"{rate:.2f}", ha="center", va="bottom", fontsize=9)
-    ax.set_ylim(0, 1.1)
-    ax.set_ylabel("Reachability rate")
-    ax.set_xlabel("Planner route")
-    ax.set_title(f"Reachability by route (n={len(rows) // max(1, len(routes))} videos each)")
+    ax.bar(methods, rates)
+    ax.set_ylim(0, 1)
+    ax.set_ylabel("windows with a plan")
+    ax.set_title("Reachability by method")
+    for i, rate in enumerate(rates):
+        ax.text(i, rate + 0.02, f"{rate:.0%}", ha="center")
+
+    path = out_dir / "reachability_by_method.png"
     fig.tight_layout()
-    fig.savefig(out_png, dpi=120)
+    fig.savefig(path, dpi=150)
     plt.close(fig)
-    _write_caption(
-        out_png,
-        what="Fraction of videos for which each planner route returned a valid plan within the time budget.",
-        why="Compares planning capability across routes A (upstream AMA3), B (native PDDL), and C (BFS smoke).",
-        how_to_read="Higher bar = more videos solvable by that route. A route that scores 0 is not producing plans; a route that scores 1 solves every video in the eval set.",
-    )
-    return out_png
+
+    write_caption(
+        path, "Reachability by method",
+        "The share of windows where the planner returned any plan.",
+        "A low bar means the action schema does not connect the two frames. "
+        "That is a failure of the learned relations, not of the search.")
+    return path
 
 
-def bbox_mse_hist(rows, out_png):
+def plot_ratio(rows, out_dir):
+    """The headline figure: did the planner beat the straight line?"""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
-    per_route = {}
-    for r in rows:
-        if str(r.get("reachability", "false")).lower() != "true":
-            continue
-        try:
-            v = float(r.get("bbox_mse_mean", ""))
-        except (TypeError, ValueError):
-            continue
-        per_route.setdefault(r["route"], []).append(v)
+    methods = sorted({r["method"] for r in rows})
+    series = {}
+    for method in methods:
+        values = [as_float(r["mse_ratio"]) for r in rows
+                  if r["method"] == method and is_true(r["reachability"])]
+        values = [v for v in values if v is not None]
+        if values:
+            series[method] = values
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    colors = {"a": "#4C78A8", "b": "#F58518", "c": "#54A24B"}
-    for route, vals in sorted(per_route.items()):
-        if not vals:
-            continue
-        ax.hist(vals, bins=20, alpha=0.6, label=f"route {route} (n={len(vals)})",
-                 color=colors.get(route, "#888"))
-    ax.set_xlabel("bbox_mse_mean (normalized canvas coords, CANVAS=480)")
-    ax.set_ylabel("Count of successful plans")
-    ax.set_title("bbox MSE distribution across successful plans")
-    ax.legend()
+    fig, ax = plt.subplots(figsize=(7, 4))
+    if series:
+        # Outlines, not filled bars. Two methods that agree would otherwise
+        # sit exactly on top of each other and one would vanish.
+        lo = min(min(v) for v in series.values())
+        hi = max(max(v) for v in series.values())
+        edges = np.linspace(min(lo, 0.9), max(hi, 1.1), 26)
+
+        for i, (method, values) in enumerate(series.items()):
+            ax.hist(values, bins=edges, histtype="step", linewidth=2.0,
+                    linestyle=["-", "--", ":"][i % 3],
+                    label=f"{method} (n={len(values)})")
+
+        ax.axvline(1.0, color="black", linestyle="--", linewidth=1.2)
+        ax.text(1.0, ax.get_ylim()[1] * 0.95, " straight-line baseline",
+                va="top", fontsize=9)
+        ax.legend()
+    else:
+        ax.text(0.5, 0.5, "no successful plans to score",
+                ha="center", va="center", transform=ax.transAxes)
+
+    ax.set_xlabel("planner error / straight-line error")
+    ax.set_ylabel("windows")
+    ax.set_title("Did the planner beat straight-line interpolation?")
+
+    path = out_dir / "mse_ratio.png"
     fig.tight_layout()
-    fig.savefig(out_png, dpi=120)
+    fig.savefig(path, dpi=150)
     plt.close(fig)
-    _write_caption(
-        out_png,
-        what="Per-plan mean-squared error between the plan's decoded bboxes and the ground-truth video bboxes.",
-        why="Measures faithfulness: does the plan trajectory reproduce the object motion in the source video?",
-        how_to_read="Left-skewed (mass near zero) = plans reconstruct the trajectory faithfully. Right-heavy tail = plans diverge from ground truth.",
-    )
-    return out_png
+
+    write_caption(
+        path, "Planner error against the straight-line baseline",
+        "For each window, the planner's bbox error divided by the error of "
+        "drawing a straight line between the two given frames.",
+        "Mass left of the dashed line means the planner placed the objects "
+        "better than the trivial guess. Mass to the right means the endpoints "
+        "already gave the answer away and the model added nothing.")
+    return path
 
 
-def predicate_firing_heatmap(model_stem_dir, out_png):
+def plot_error_by_window(rows, out_dir):
+    """Absolute error, so the ratio has a scale behind it."""
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    import numpy as np
 
-    # Scan model_stem_dir/*/route_*/plan_*/{bfs_trace.json,metrics.json} for
-    # plan latents. Aggregate per-bit firing count across all plan steps.
-    firing_counts = None
-    n_steps = 0
-    for video_dir in Path(model_stem_dir).iterdir():
-        if not video_dir.is_dir():
+    methods = sorted({r["method"] for r in rows})
+
+    fig, ax = plt.subplots(figsize=(7, 4))
+    plotted = False
+    for method in methods:
+        subset = [r for r in rows
+                  if r["method"] == method and is_true(r["reachability"])]
+        points = [(as_float(r["init"]), as_float(r["bbox_mse"])) for r in subset]
+        points = [(x, y) for x, y in points if x is not None and y is not None]
+        if not points:
             continue
-        for route_dir in video_dir.glob("route_*"):
-            for plan_dir in route_dir.glob("plan_*"):
-                trace_file = plan_dir / "bfs_trace.json"
-                if not trace_file.exists():
-                    continue
-                with trace_file.open() as f:
-                    payload = json.load(f)
-                latents = payload.get("plan_latents")
-                if not latents:
-                    continue
-                arr = np.array(latents, dtype=np.int8)
-                if firing_counts is None:
-                    firing_counts = np.zeros(arr.shape[1], dtype=np.int64)
-                firing_counts += arr.sum(axis=0)
-                n_steps += arr.shape[0]
+        points.sort()
+        ax.plot([p[0] for p in points], [p[1] for p in points],
+                marker="o", markersize=3, linewidth=1, label=method)
+        plotted = True
 
-    if firing_counts is None or n_steps == 0:
-        # Placeholder: no plan traces yet.
-        fig, ax = plt.subplots(figsize=(6, 3))
-        ax.text(0.5, 0.5, "no plan traces yet\n(needs route c bfs_trace.json)",
-                 ha="center", va="center", transform=ax.transAxes)
-        ax.set_axis_off()
-        fig.savefig(out_png, dpi=120)
-        plt.close(fig)
-        _write_caption(
-            out_png,
-            what="Per-latent-bit firing frequency across every plan step in the eval batch.",
-            why="Shows which predicates are load-bearing during planning versus predicates that stay silent.",
-            how_to_read="Placeholder — this figure will populate once Route C plan traces exist. Rerun `eval_plannability.sh` first.",
-        )
-        return out_png
+    if plotted:
+        ax.legend()
+    else:
+        ax.text(0.5, 0.5, "no successful plans to score",
+                ha="center", va="center", transform=ax.transAxes)
 
-    # Reshape flat firing counts into (U, P) if the caller supplies U*P layout.
-    total = firing_counts.shape[0]
-    U = int(np.sqrt(total))
-    while total % U != 0 and U > 1:
-        U -= 1
-    P = total // U
-    grid = (firing_counts / n_steps).reshape(U, P)
+    ax.set_xlabel("window start frame")
+    ax.set_ylabel("bbox error, squared pixels")
+    ax.set_title("Where in the video the planner struggles")
 
-    fig, ax = plt.subplots(figsize=(6, 4))
-    im = ax.imshow(grid, aspect="auto", cmap="hot")
-    ax.set_xlabel(f"Predicate index (P={P})")
-    ax.set_ylabel(f"Unit index (U={U})")
-    ax.set_title(f"Predicate firing frequency across {n_steps} plan steps")
-    fig.colorbar(im, ax=ax, label="Firing rate")
+    path = out_dir / "error_by_window.png"
     fig.tight_layout()
-    fig.savefig(out_png, dpi=120)
+    fig.savefig(path, dpi=150)
     plt.close(fig)
-    _write_caption(
-        out_png,
-        what="Per-latent-bit firing rate across every plan step in the eval batch.",
-        why="Shows which predicates are load-bearing during planning versus predicates that stay silent.",
-        how_to_read=f"Row = predicate unit (0..{U-1}). Column = predicate index within unit (0..{P-1}). Warmer cells = predicate fires more often during plans. Solid cold rows may indicate dead units.",
-    )
-    return out_png
+
+    write_caption(
+        path, "Error across the video",
+        "Bounding box error for each window, in the order the windows appear "
+        "in the video.",
+        "A flat line means the model handles the whole clip evenly. Spikes "
+        "point at moments the model cannot follow, usually fast motion or an "
+        "object entering or leaving the frame.")
+    return path
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__,
-                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("model_stem_dir", type=Path,
-                    help="path to eval/planner/<model_stem>/ (contains summary.csv)")
+                                 formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("summary_dir", type=Path,
+                    help="eval/planner/<model>, the directory holding summary.csv")
     args = ap.parse_args(argv)
 
-    stem = args.model_stem_dir.resolve()
-    csv_path = stem / "summary.csv"
-    if not csv_path.exists():
-        sys.exit(f"no summary.csv at {csv_path}. Run eval_plannability.sh first.")
+    summary_csv = args.summary_dir / "summary.csv"
+    if not summary_csv.exists():
+        sys.exit(f"no summary.csv in {args.summary_dir}. "
+                 "Run tools/planner/eval_plannability.sh first.")
 
-    viz_dir = stem / "viz"
-    viz_dir.mkdir(exist_ok=True)
+    rows = read_summary(summary_csv)
+    if not rows:
+        sys.exit(f"{summary_csv} has no rows")
 
-    rows = _load_summary(csv_path)
-    print(f"[viz_plannability] read {len(rows)} rows from {csv_path}")
+    out_dir = args.summary_dir / "viz"
+    out_dir.mkdir(parents=True, exist_ok=True)
 
-    p1 = reachability_by_route(rows, viz_dir / "plannability_reachability_by_route.png")
-    print(f"[viz_plannability] wrote {p1}")
-    p2 = bbox_mse_hist(rows, viz_dir / "plannability_bbox_mse_hist.png")
-    print(f"[viz_plannability] wrote {p2}")
-    p3 = predicate_firing_heatmap(stem, viz_dir / "plannability_predicate_firing_heatmap.png")
-    print(f"[viz_plannability] wrote {p3}")
+    for path in (plot_reachability(rows, out_dir),
+                 plot_ratio(rows, out_dir),
+                 plot_error_by_window(rows, out_dir)):
+        print(f"wrote {path}")
 
-    print(f"[viz_plannability] all 3 PNG + 3 caption.md under {viz_dir}")
+    solved = [r for r in rows if is_true(r["reachability"])]
+    beat = [r for r in solved if is_true(r["beats_baseline"])]
+    print(f"\n{len(solved)}/{len(rows)} windows solved")
+    if solved:
+        print(f"{len(beat)}/{len(solved)} of those beat the straight line")
     return 0
 
 
