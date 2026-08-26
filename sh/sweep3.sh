@@ -42,7 +42,8 @@ source venv/bin/activate 2>/dev/null || source activate.sh
 FPS="${FPS:-30}"
 NPZ="data/npz/video/vidvrd/overfit"
 
-CLIP="dog-ILSVRC2015_train_00005005-${FPS}fps-mo3-fill"
+BASE_VID="ILSVRC2015_train_00005005"
+CLIP="dog-${BASE_VID}-${FPS}fps-mo3-fill"
 NBAKED=0; NJOBS=0; NFAILED=0
 
 bake () {
@@ -294,6 +295,46 @@ submit "dog all + zs delay"    "dog-${FPS}fps-all-mo5-fill-p8" "${BIG[@]}" \
     EPOCH=3000 ZEROSUPPRESS_DELAY=0.5 CATEGORY=dog
 submit "dog 15vids + zs delay" "dog-15vids-${FPS}fps-mo3-fill-p8" "${MID[@]}" \
     ZEROSUPPRESS_DELAY=0.5 CATEGORY=dog
+
+# ==========================================================
+section "N  more samples from the same real video"
+# The clip has ~120 training transitions and batch 1000 is full-batch on it,
+# so the model gets 2000 gradient steps total. Sample count is the one thing
+# never varied, and it may be the binding constraint.
+#
+# Every transform here is applied identically to all frames of a clip, so
+# the trajectory is moved or mirrored as a whole and the motion inside it
+# survives. Augmented clips get their own video id, so `sequential` never
+# pairs an original frame with an augmented one.
+bake "${CLIP}-p8-aug7"  dog --video-id "${BASE_VID:-ILSVRC2015_train_00005005}" \
+    --max-objects 3 --patch-size 8 --fill-annotations \
+    --augment hflip,translate,rescale,reverse --augment-copies 2
+bake "${CLIP}-p8-aug13" dog --video-id "${BASE_VID:-ILSVRC2015_train_00005005}" \
+    --max-objects 3 --patch-size 8 --fill-annotations \
+    --augment hflip,translate,rescale,reverse --augment-copies 5
+
+submit "aug 7x"            "${CLIP}-p8-aug7"  "${SMALL[@]}"
+submit "aug 13x"           "${CLIP}-p8-aug13" "${MID[@]}"
+# More data usually wants more capacity and more steps to use it.
+submit "aug 13x U80 P40"   "${CLIP}-p8-aug13" "${MID[@]}" U=80 A=2 P=40
+submit "aug 13x batch 256" "${CLIP}-p8-aug13" "${MID[@]}" BATCH=256 EPOCH=2000
+submit "aug 13x 6000ep"    "${CLIP}-p8-aug13" "${MID[@]}" EPOCH=6000
+
+# The control. jitter randomises every object in every frame independently,
+# which destroys temporal coherence by construction. It should reconstruct
+# about as well and plan much worse. If it does not, the transition model
+# was never using temporal structure — which is the more interesting result.
+bake "${CLIP}-p8-jitter" dog --video-id "${BASE_VID:-ILSVRC2015_train_00005005}" \
+    --max-objects 3 --patch-size 8 --fill-annotations \
+    --augment jitter --augment-copies 6
+submit "jitter control 7x" "${CLIP}-p8-jitter" "${SMALL[@]}"
+
+# And on a whole category, where sample count is already larger.
+bake "dog-${FPS}fps-all-mo5-fill-p8-aug3" dog \
+    --max-objects 5 --patch-size 8 --fill-annotations \
+    --augment hflip,reverse
+submit "dog all aug 3x" "dog-${FPS}fps-all-mo5-fill-p8-aug3" "${BIG[@]}" \
+    EPOCH=3000 CATEGORY=dog
 
 # ==========================================================
 section "H  whole categories, winning configuration"

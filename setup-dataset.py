@@ -212,7 +212,8 @@ def _default_video_out_name(category, video_id, fps, max_videos):
 
 def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
                     max_videos, out_name, max_objects, fill_annotations=False,
-                    patch_size=None, annotations_dir=None, frames_dir=None):
+                    patch_size=None, annotations_dir=None, frames_dir=None,
+                    augment=None, augment_copies=1):
     """Common path for video_ag / video_vidvrd bakers.
 
     Calls the loader's build_dataset(...) with video_id_filter set, then
@@ -253,6 +254,18 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
         kwargs["frames_dir"] = frames_dir
 
     images, bboxes, names, frame_ids = loader_module.build_dataset(**kwargs)
+
+    if augment:
+        from latplan.puzzles.puzzle_labeled_objects import PICSIZE
+        from latplan.util.augment import augment_dataset
+        before = len(images)
+        images, bboxes, names, frame_ids = augment_dataset(
+            images, bboxes, names, frame_ids, augment,
+            width=int(PICSIZE[1]), height=int(PICSIZE[0]),
+            copies=augment_copies)
+        print(f"[bake] augment {augment} x{augment_copies}: "
+              f"{before} -> {len(images)} states")
+
     meta = dict(loader_module.last_load_metadata)
     meta.update({
         "dataset":        dataset_name,
@@ -310,7 +323,8 @@ def _parse_category(category):
 def video_vidvrd(category=None, video_id=None, fps=3,
                  max_videos=None, out_name=None, max_objects=10,
                  fill_annotations=False, patch_size=None,
-                 annotations_dir=None, frames_dir=None):
+                 annotations_dir=None, frames_dir=None,
+                 augment=None, augment_copies=1):
     """Bake a VidVRD overfit npz for one video / category subset.
 
     fill_annotations=True : carry forward last non-empty trajectory entry into
@@ -338,7 +352,8 @@ def video_vidvrd(category=None, video_id=None, fps=3,
                            fill_annotations=fill_annotations,
                            patch_size=patch_size,
                            annotations_dir=annotations_dir,
-                           frames_dir=frames_dir)
+                           frames_dir=frames_dir,
+                           augment=augment, augment_copies=augment_copies)
 
 
 def _parse_video_args(argv):
@@ -360,6 +375,16 @@ def _parse_video_args(argv):
                         "model.py auto-detects the new patch dim from the data tensor.")
     p.add_argument("--out-name",   default=None,
                    help="Output stem (no .npz). Default: <cat>-<video_id?>-<fps>fps")
+    p.add_argument("--augment", default=None,
+                   help="comma-separated clip-consistent augmentations: "
+                        "hflip, translate, rescale, reverse. Each is applied "
+                        "to a whole clip, so motion survives. 'jitter' also "
+                        "exists but randomises every object every frame, "
+                        "which breaks the transitions the planner needs — "
+                        "use it only as a control.")
+    p.add_argument("--augment-copies", default=1, type=int,
+                   help="randomised copies per augmentation that takes a "
+                        "random parameter (translate, rescale, jitter).")
     p.add_argument("--fill-annotations", action="store_true",
                    help="VidVRD only: carry last non-empty trajectory forward into empty entries (dense per-frame supervision)")
     p.add_argument("--annotations-dir", default=None,
@@ -443,6 +468,9 @@ def main():
                       out_name=ns.out_name,
                       fill_annotations=ns.fill_annotations,
                       patch_size=ns.patch_size,
+                      augment=([a.strip() for a in ns.augment.split(",") if a.strip()]
+                               if ns.augment else None),
+                      augment_copies=ns.augment_copies,
                       annotations_dir=ns.annotations_dir,
                       frames_dir=ns.frames_dir)
             if ns.fps is not None:
