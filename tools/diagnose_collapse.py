@@ -80,6 +80,71 @@ def _read_latents(run_dir):
     return None
 
 
+def _read_fol(run_dir):
+    """Return latent statistics from the extract_fol.py output, or None.
+
+    Training itself only dumps all_states.csv in `dump` mode, but
+    run_training.sh runs extract_fol.py by default (EXTRACT_FOL=1), and its
+    predicate_analysis.json already carries the per-predicate activation
+    rates. That is the same signal, and it is present on ordinary runs.
+    """
+    fol_dir = os.path.join(run_dir, "fol_output")
+    summary_path = os.path.join(fol_dir, "predicate_analysis.json")
+    if not os.path.exists(summary_path):
+        return None
+    try:
+        with open(summary_path) as f:
+            s = json.load(f)
+    except (OSError, ValueError):
+        return None
+
+    n_states = s.get("total_states", 0)
+    on, off = s.get("num_always_on", 0), s.get("num_always_off", 0)
+    var = s.get("num_variable", 0)
+    out = {
+        "states": n_states,
+        "bits": on + off + var,
+        "dead_bits": on + off,
+        "live_bits": var,
+    }
+    rates = s.get("predicate_activation_rates")
+    if rates:
+        out["mean_rate"] = float(np.asarray(rates, dtype=float).mean())
+
+    # The per-state codes give the distinct-code count, which separates "a
+    # few bits move" from "the whole latent moves".
+    codes_path = os.path.join(fol_dir, "fol_predicates.json")
+    if os.path.exists(codes_path):
+        try:
+            with open(codes_path) as f:
+                blob = json.load(f)
+        except (OSError, ValueError):
+            blob = None
+        states = None
+        if isinstance(blob, dict):
+            for key in ("states", "results"):
+                if isinstance(blob.get(key), list):
+                    states = blob[key]
+                    break
+        elif isinstance(blob, list):
+            states = blob
+        if states:
+            codes = [tuple(st["latent_code"]) for st in states
+                     if isinstance(st, dict) and "latent_code" in st]
+            if codes:
+                out["states"] = len(codes)
+                out["distinct"] = len(set(codes))
+    if "distinct" not in out and n_states:
+        # Without the codes, bound it: a latent with no live bit has exactly
+        # one reachable code.
+        out["distinct"] = 1 if var == 0 else None
+    if out.get("distinct") is None:
+        out.pop("distinct", None)
+    if "distinct" in out and out["states"]:
+        out["distinct_frac"] = out["distinct"] / float(out["states"])
+    return out
+
+
 def _read_params(run_dir):
     path = os.path.join(run_dir, "aux.json")
     if not os.path.exists(path):
@@ -112,7 +177,12 @@ def describe(run_dir):
             out[k] = v[0] if isinstance(v, list) and v else v
 
     z = _read_latents(run_dir)
-    if z is not None:
+    if z is None:
+        fol = _read_fol(run_dir)
+        if fol is not None:
+            out.update(fol)
+            out["source"] = "fol_output"
+    else:
         n_states, n_bits = z.shape
         distinct = len(np.unique(z, axis=0))
         rate = z.mean(axis=0)
