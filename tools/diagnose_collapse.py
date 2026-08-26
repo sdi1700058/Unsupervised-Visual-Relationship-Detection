@@ -11,9 +11,17 @@ band instead of a black-and-white grid.
 This reads the dumped latents rather than the picture, so the answer comes
 back as numbers over ssh:
 
-    python3 tools/diagnose_collapse.py                 # walk out/
+    python3 tools/diagnose_collapse.py                 # walk out/, ranked best first
     python3 tools/diagnose_collapse.py out/some/run    # one model
-    python3 tools/diagnose_collapse.py --limit 5
+    python3 tools/diagnose_collapse.py --images        # also print plot paths
+
+Run directories are named by a parameter hash, so pairing a good number
+with its pictures means matching a sha1 by eye. --collect does it for you:
+
+    python3 tools/diagnose_collapse.py --limit 10 --collect eval/best
+
+writes eval/best/01_val0.1216_<settings>__autoencoding_test.png and so on,
+so the folder sorts best-run-first and every filename says what produced it.
 
 Pure standard library — no numpy, no keras, no weights. It runs on a login
 node with nothing activated, and reads only all_states.csv,
@@ -24,6 +32,7 @@ model file.
 import argparse
 import json
 import os
+import re
 import sys
 
 
@@ -229,6 +238,82 @@ def find_runs(root):
             yield dirpath
 
 
+# The pictures worth looking at first, in the order they answer questions:
+# did it reconstruct at all, did it reconstruct data it was not trained on,
+# and is the latent a grid or a band.
+PLOT_ORDER = (
+    "autoencoding_train.png",
+    "autoencoding_test.png",
+    "booleans_test.png",
+    "render_train.png",
+    "render_test.png",
+    "autoencoding_test_shuffled.png",
+)
+
+
+def images_for(run_dir):
+    """Return the run's plots, most informative first, then any others."""
+    try:
+        present = set(f for f in os.listdir(run_dir) if f.endswith(".png"))
+    except OSError:
+        return []
+    ordered = [f for f in PLOT_ORDER if f in present]
+    ordered += sorted(present - set(ordered))
+    return [os.path.join(run_dir, f) for f in ordered]
+
+
+def short_tag(d):
+    """A filename-safe label naming the run's distinguishing settings."""
+    bits = []
+    pl = d.get("preencoder_layers")
+    if pl is not None:
+        pd = d.get("preencoder_dimention")
+        bits.append(f"preenc{pl}x{pd}" if pl else "preencOFF")
+    for key, fmt in (("U", "U{}"), ("P", "P{}"), ("layer", "layer{}"),
+                     ("lr", "lr{}"), ("batch_size", "b{}"),
+                     ("zerosuppress", "zs{}"), ("max_temperature", "tmax{}"),
+                     ("min_temperature", "tmin{}")):
+        if key in d:
+            bits.append(fmt.format(d[key]))
+    # The npz stem is in the directory name between "cat" and "_fps".
+    base = os.path.basename(d["dir"])
+    m = re.search(r"_cat(.+?)_fps", base)
+    if m:
+        bits.insert(0, m.group(1))
+    tag = "_".join(str(b) for b in bits)
+    return re.sub(r"[^A-Za-z0-9._-]", "-", tag)[:150]
+
+
+def collect(found, out_dir):
+    """Copy the ranked runs' plots into one flat, readable directory.
+
+    Run directories are named by a parameter hash, so finding the pictures
+    for the run that did well means matching a sha1 by eye. This writes
+    01_val0.1216_<settings>_autoencoding_test.png instead.
+    """
+    import shutil
+    os.makedirs(out_dir, exist_ok=True)
+    n_files = 0
+    for rank, d in enumerate(found, 1):
+        imgs = images_for(d["dir"])
+        if not imgs:
+            continue
+        val = d.get("best")
+        stem = f"{rank:02d}_val{val:.4f}" if val is not None else f"{rank:02d}_valNA"
+        stem = f"{stem}_{short_tag(d)}"
+        for src in imgs:
+            dst = os.path.join(out_dir, f"{stem}__{os.path.basename(src)}")
+            try:
+                shutil.copyfile(src, dst)
+                n_files += 1
+            except OSError as e:
+                print(f"  could not copy {src}: {e}")
+        with open(os.path.join(out_dir, f"{stem}__SOURCE.txt"), "w") as f:
+            f.write(d["dir"] + "\n")
+    print(f"\ncopied {n_files} images into {out_dir}/")
+    print("browse it sorted by name — 01_ is the best run.")
+
+
 def main():
     ap = argparse.ArgumentParser(
         description="Report whether a trained latent carries information.")
@@ -237,6 +322,11 @@ def main():
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--domain", default=None,
                     help="only paths containing this string")
+    ap.add_argument("--images", action="store_true",
+                    help="print each run's plot paths")
+    ap.add_argument("--collect", metavar="DIR", default=None,
+                    help="copy the ranked runs' plots into DIR, renamed by "
+                         "rank, val_loss and settings")
     args = ap.parse_args()
 
     if not os.path.exists(args.target):
@@ -278,7 +368,13 @@ def main():
             print(f"            {d['live_bits']} of {d['bits']} bits live, "
                   f"mean on-rate {d['mean_rate']:.3f}")
         print(f"  verdict   {verdict(d)}")
+        if args.images:
+            for img in images_for(d["dir"]):
+                print(f"  image     {img}")
         print()
+
+    if args.collect:
+        collect(found, args.collect)
 
 
 if __name__ == "__main__":
