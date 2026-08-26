@@ -56,9 +56,14 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
     print(f"latents differ in {hamming} of {export.n_bits} bits; "
           f"{n_mid} frames to reconstruct")
 
+    # plan_length goes to the method because the interpolation task wants a
+    # trajectory of exactly this many steps, not the cheapest plan between
+    # the two ends. A method free to return its shortest plan will collapse a
+    # three-frame window into one action whenever the two latents are close.
     found, trace, wall, extra = solve(
         z_init=z_init, z_goal=z_goal, z_all=z_all, export=export,
         time_budget_s=time_budget_s, out_dir=out_dir,
+        plan_length=window["plan_length"],
         **(solve_kwargs or {}))
 
     plan_length = max(0, len(trace) - 1) if found else 0

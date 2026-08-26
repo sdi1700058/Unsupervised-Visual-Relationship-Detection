@@ -66,28 +66,54 @@ def distinct_effects(pre, suc):
     return effects
 
 
-def write_domain(effects, n_bits, path, name="fosae"):
+def write_domain(effects, n_bits, path, name="fosae", exact_length=None):
+    """Emit the domain. One predicate per latent bit, one operator per delta.
+
+    `exact_length` constrains the plan to that many actions. The
+    interpolation task needs it: reconstructing the k-2 frames between frame
+    i and frame i+k-1 is a trajectory of exactly k-1 steps, but A* returns
+    the *cheapest* plan, which collapses to a single action whenever the two
+    latents happen to be close. Scoring one action as a three-frame
+    trajectory measures nothing.
+
+    Propositional STRIPS has no counters, so the step index is carried by a
+    `step_s` predicate and each operator is emitted once per step. That
+    multiplies the operator count by `exact_length`, which is small here
+    (k-1, typically 4) but is the reason not to make it the default for
+    large k.
+    """
     lines = [
         f"(define (domain {name})",
         "  (:requirements :strips :negative-preconditions)",
-        "  (:predicates",
-        "    " + " ".join(f"(bit_{i})" for i in range(n_bits)),
-        "  )",
     ]
+
+    predicates = [f"(bit_{i})" for i in range(n_bits)]
+    if exact_length:
+        predicates += [f"(step_{s})" for s in range(exact_length + 1)]
+    lines += ["  (:predicates", "    " + " ".join(predicates), "  )"]
 
     for k, effect in enumerate(effects):
         pre = ([f"(not (bit_{i}))" for i in effect["add"]]
                + [f"(bit_{j})" for j in effect["del"]])
         post = ([f"(bit_{i})" for i in effect["add"]]
                 + [f"(not (bit_{j}))" for j in effect["del"]])
-        lines += [
-            f"  (:action act_{k}",
-            "    :parameters ()",
-            f"    :precondition (and {' '.join(pre)})" if pre
-            else "    :precondition ()",
-            f"    :effect (and {' '.join(post)})",
-            "  )",
-        ]
+
+        steps = range(exact_length) if exact_length else [None]
+        for s in steps:
+            tag = f"act_{k}" if s is None else f"act_{k}_s{s}"
+            p = list(pre)
+            q = list(post)
+            if s is not None:
+                p.append(f"(step_{s})")
+                q += [f"(not (step_{s}))", f"(step_{s + 1})"]
+            lines += [
+                f"  (:action {tag}",
+                "    :parameters ()",
+                f"    :precondition (and {' '.join(p)})" if p
+                else "    :precondition ()",
+                f"    :effect (and {' '.join(q)})",
+                "  )",
+            ]
 
     lines.append(")")
     Path(path).write_text("\n".join(lines) + "\n")
@@ -95,7 +121,7 @@ def write_domain(effects, n_bits, path, name="fosae"):
 
 
 def write_problem(z_init, z_goal, n_bits, path,
-                  domain="fosae", name="interpolate"):
+                  domain="fosae", name="interpolate", exact_length=None):
     """Write the problem file.
 
     The goal lists every bit, positive and negative. A partial goal would let
@@ -113,6 +139,9 @@ def write_problem(z_init, z_goal, n_bits, path,
     init = [f"(bit_{i})" for i in range(n_bits) if z_init[i]]
     goal = [f"(bit_{i})" if z_goal[i] else f"(not (bit_{i}))"
             for i in range(n_bits)]
+    if exact_length:
+        init.append("(step_0)")
+        goal.append(f"(step_{exact_length})")
 
     Path(path).write_text("\n".join([
         f"(define (problem {name})",
@@ -131,7 +160,9 @@ def read_plan(path):
     for line in Path(path).read_text().splitlines():
         line = line.strip().strip("()").strip()
         if line.startswith("act_"):
-            indices.append(int(line.split("_", 1)[1].split()[0]))
+            # act_<k> unconstrained, act_<k>_s<step> when step-counted.
+            token = line.split()[0]
+            indices.append(int(token.split("_")[1]))
     return indices
 
 
@@ -193,7 +224,8 @@ def call_fast_downward(domain, problem, out_dir, time_budget_s=60):
     return plan_file, time.time() - began
 
 
-def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None, **_):
+def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
+           plan_length=None, exact_length=True, **_):
     import numpy as np
 
     n_bits = z_all.shape[1]
@@ -201,22 +233,27 @@ def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None, **_):
     print(f"{len(pre)} transitions from the export")
 
     effects = distinct_effects(pre, suc)
-    print(f"{len(effects)} distinct operators")
+    want = plan_length if (exact_length and plan_length) else None
+    print(f"{len(effects)} distinct operators"
+          + (f", step-counted to exactly {want} actions" if want else ""))
 
     out_dir = Path(out_dir)
-    domain = write_domain(effects, n_bits, out_dir / "domain.pddl")
-    problem = write_problem(z_init, z_goal, n_bits, out_dir / "problem.pddl")
+    domain = write_domain(effects, n_bits, out_dir / "domain.pddl",
+                          exact_length=want)
+    problem = write_problem(z_init, z_goal, n_bits, out_dir / "problem.pddl",
+                            exact_length=want)
 
     plan_file, wall = call_fast_downward(domain, problem, out_dir,
                                          time_budget_s)
     if not plan_file.exists():
         return False, np.zeros((0, n_bits), dtype=np.int8), wall, {
-            "n_operators": len(effects)}
+            "n_operators": len(effects), "exact_length": bool(want)}
 
     indices = read_plan(plan_file)
     trace = replay(z_init, effects, indices)
     return True, trace, wall, {"n_operators": len(effects),
-                               "plan_operators": indices}
+                               "plan_operators": indices,
+                               "exact_length": bool(want)}
 
 
 def run(export_path, init_idx, goal_idx, out_dir, **kwargs):

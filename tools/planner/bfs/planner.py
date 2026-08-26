@@ -39,11 +39,22 @@ def mine_deltas(pre, suc):
     return distinct[np.lexsort(distinct.T[::-1])]
 
 
-def search(z_init, z_goal, deltas, time_budget_s=60.0):
+def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None):
     """Breadth-first search from z_init to z_goal.
 
     Returns (found, trace, wall_s). The trace holds the init state, every
     intermediate state and the goal state.
+
+    `exact_length` asks for a plan of exactly that many actions rather than
+    the shortest one. The interpolation task needs this: reconstructing the
+    k-2 frames between frame i and frame i+k-1 means a trajectory of exactly
+    k-1 steps. Unconstrained search returns the cheapest plan instead, which
+    on a short window is often a single action, and scoring one action as a
+    three-frame trajectory measures nothing.
+
+    Fixed-depth search cannot key `visited` on the state alone, because a
+    state reachable at depth 2 may also be needed at depth 3 on the way to a
+    longer trajectory. The key is (state, depth).
     """
     import numpy as np
 
@@ -54,45 +65,92 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0):
     start, goal = z_init.tobytes(), z_goal.tobytes()
     began = time.time()
 
-    if start == goal:
-        return True, np.stack([z_init]), 0.0
+    if exact_length is None:
+        if start == goal:
+            return True, np.stack([z_init]), 0.0
+        queue = deque([z_init])
+        parent = {start: None}
 
-    queue = deque([z_init])
-    parent = {start: None}
+        while queue:
+            if time.time() - began > time_budget_s:
+                break
+
+            state = queue.popleft()
+            for delta in deltas:
+                child = (state ^ delta).astype(np.int8)
+                key = child.tobytes()
+                if key in parent:
+                    continue
+                parent[key] = state.tobytes()
+
+                if key == goal:
+                    chain, node = [key], key
+                    while parent[node] is not None:
+                        node = parent[node]
+                        chain.append(node)
+                    chain.reverse()
+                    trace = np.stack([np.frombuffer(k, dtype=np.int8)
+                                      for k in chain])
+                    return True, trace, time.time() - began
+
+                queue.append(child)
+
+        empty = np.zeros((0, len(z_init)), dtype=np.int8)
+        return False, empty, time.time() - began
+
+    if exact_length < 0:
+        raise ValueError(f"exact_length must be >= 0; got {exact_length}")
+    if exact_length == 0:
+        # A zero-step plan is only valid when the two ends already agree.
+        if start == goal:
+            return True, np.stack([z_init]), 0.0
+        return False, np.zeros((0, len(z_init)), dtype=np.int8), 0.0
+
+    queue = deque([(z_init, 0)])
+    parent = {(start, 0): None}
 
     while queue:
         if time.time() - began > time_budget_s:
             break
 
-        state = queue.popleft()
+        state, depth = queue.popleft()
+        if depth >= exact_length:
+            continue
+
         for delta in deltas:
             child = (state ^ delta).astype(np.int8)
-            key = child.tobytes()
+            key = (child.tobytes(), depth + 1)
             if key in parent:
                 continue
-            parent[key] = state.tobytes()
+            parent[key] = (state.tobytes(), depth)
 
-            if key == goal:
+            if key[0] == goal and depth + 1 == exact_length:
                 chain, node = [key], key
                 while parent[node] is not None:
                     node = parent[node]
                     chain.append(node)
                 chain.reverse()
-                trace = np.stack([np.frombuffer(k, dtype=np.int8) for k in chain])
+                trace = np.stack([np.frombuffer(k[0], dtype=np.int8)
+                                  for k in chain])
                 return True, trace, time.time() - began
 
-            queue.append(child)
+            queue.append((child, depth + 1))
 
     empty = np.zeros((0, len(z_init)), dtype=np.int8)
     return False, empty, time.time() - began
 
 
-def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None, **_):
+def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
+           plan_length=None, exact_length=True, **_):
     pre, suc = export.transitions()
     deltas = mine_deltas(pre=pre, suc=suc)
-    print(f"{len(deltas)} distinct deltas from {len(pre)} transitions")
-    found, trace, wall = search(z_init, z_goal, deltas, time_budget_s)
-    return found, trace, wall, {"n_deltas": int(len(deltas))}
+    want = plan_length if (exact_length and plan_length) else None
+    print(f"{len(deltas)} distinct deltas from {len(pre)} transitions"
+          + (f"; searching at exactly {want} steps" if want else ""))
+    found, trace, wall = search(z_init, z_goal, deltas, time_budget_s,
+                                exact_length=want)
+    return found, trace, wall, {"n_deltas": int(len(deltas)),
+                                "exact_length": bool(want)}
 
 
 def run(export_path, init_idx, goal_idx, out_dir, **kwargs):
