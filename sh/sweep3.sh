@@ -136,16 +136,66 @@ submit "temp 5.0 -> 0.1" "${CLIP}-p8" "${SMALL[@]}" MAX_TEMPERATURE=5.0 MIN_TEMP
 submit "temp 2.0 -> 0.2" "${CLIP}-p8" "${SMALL[@]}" MAX_TEMPERATURE=2.0 MIN_TEMPERATURE=0.2
 
 # ==========================================================
-section "F  latent capacity, and the dense width"
-submit "U20 P10"    "${CLIP}-p8" "${SMALL[@]}" U=20 A=2 P=10
-submit "U80 P40"    "${CLIP}-p8" "${MID[@]}"   U=80 A=2 P=40
-# layer was hardcoded at 200, chosen for MNIST-sized inputs.
-for L in 400 1000; do
+section "F  latent structure: U, A and P"
+# These three define the representation, so they get a real study rather
+# than two spot checks. U is the number of predicate units, P the
+# predicates per unit, A the arity. The latent is U*P bits.
+#
+# U*P is also the number of PDDL propositions the planner will search over,
+# so this section serves both halves of the thesis at once: reconstruction
+# wants capacity, planning wants few bits, and the two pull opposite ways.
+# The paper's 40/2/20 is only a starting point.
+#
+# Memory is linear in U*A and flat in P (P never enters the attention
+# tensor), so the whole grid fits: worst case here is 5.1 GB at U=160.
+
+# F1. U, holding P.
+for U in 5 10 20 80 160; do
+    M=("${SMALL[@]}"); [[ ${U} -ge 80 ]] && M=("${MID[@]}")
+    submit "U ${U} (P20)" "${CLIP}-p8" "${M[@]}" U="${U}" A=2 P=20
+done
+
+# F2. P, holding U. Free in memory, so the range is wide.
+for P in 5 10 40 80 160; do
+    submit "P ${P} (U40)" "${CLIP}-p8" "${SMALL[@]}" U=40 A=2 P="${P}"
+done
+
+# F3. Arity — how many objects one predicate relates. A=2 is the only
+#     value ever run. Uses the 5-object clip so the arity is not larger
+#     than the scene.
+for A in 3 4; do
+    submit "arity ${A}" "${CLIP/-mo3-/-mo5-}-p8" "${MID[@]}" U=40 A="${A}" P=20
+done
+submit "arity 2 (mo5 control)" "${CLIP/-mo3-/-mo5-}-p8" "${SMALL[@]}" U=40 A=2 P=20
+
+# F4. Same 800 bits, five different shapes. This is the one that separates
+#     "the latent needs N bits" from "the latent needs this structure" —
+#     every arm here has identical capacity and identical PDDL state size.
+for SHAPE in 10:80 20:40 80:10 160:5; do
+    IFS=':' read -r U P <<< "${SHAPE}"
+    M=("${SMALL[@]}"); [[ ${U} -ge 80 ]] && M=("${MID[@]}")
+    submit "shape U${U} P${P} (800 bits)" "${CLIP}-p8" "${M[@]}" U="${U}" A=2 P="${P}"
+done
+
+# F5. Planner-sized latents. Fast Downward searches 2^(U*P) states, so 800
+#     propositions is a lot to ask. These are the arms most likely to plan
+#     even if they reconstruct slightly worse.
+for SHAPE in 10:5 10:10 20:10 20:20; do
+    IFS=':' read -r U P <<< "${SHAPE}"
+    submit "small U${U} P${P} (${U}x${P} bits)" "${CLIP}-p8" "${SMALL[@]}" \
+        U="${U}" A=2 P="${P}"
+done
+
+# ==========================================================
+section "G  dense width"
+# layer was hardcoded at 200, sized for MNIST puzzles. Every object vector
+# is flattened through it before any predicate forms.
+for L in 50 400 1000; do
     submit "layer ${L}" "${CLIP}-p8" "${SMALL[@]}" LAYER="${L}"
 done
 
 # ==========================================================
-section "G  whole categories, winning configuration"
+section "H  whole categories, winning configuration"
 for SPEC in bird:3 monkey:4 horse:3 antelope:3 dog:5 car:5 person:5; do
     IFS=':' read -r CAT MO <<< "${SPEC}"
     submit "category ${CAT}" "${CAT}-${FPS}fps-all-mo${MO}-fill-p8" \
@@ -153,13 +203,13 @@ for SPEC in bird:3 monkey:4 horse:3 antelope:3 dog:5 car:5 person:5; do
 done
 
 # ==========================================================
-section "H  resolution where there is data volume"
+section "I  resolution where there is data volume"
 bake "dog-${FPS}fps-all-mo5-fill-p32" dog --max-objects 5 --patch-size 32 --fill-annotations
 submit "dog all p32"    "dog-${FPS}fps-all-mo5-fill-p32"    "${BIG[@]}" EPOCH=3000 CATEGORY=dog
 submit "person all p32" "person-${FPS}fps-all-mo5-fill-p32" "${HUGE[@]}" EPOCH=3000 CATEGORY=person
 
 # ==========================================================
-section "I  across categories"
+section "J  across categories"
 # Does one predicate set cover several object types, or does each category
 # need its own? Groups share a motion style; `all` shares nothing.
 QUAD="dog,horse,antelope,zebra,sheep,cattle,elephant,lion,bear,tiger,fox"
