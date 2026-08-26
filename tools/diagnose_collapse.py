@@ -15,16 +15,16 @@ back as numbers over ssh:
     python3 tools/diagnose_collapse.py out/some/run    # one model
     python3 tools/diagnose_collapse.py --limit 5
 
-Needs numpy only. No keras, no weights — it reads all_states.csv,
-training_history.csv and aux.json, all of which survive without the model.
+Pure standard library — no numpy, no keras, no weights. It runs on a login
+node with nothing activated, and reads only all_states.csv,
+training_history.csv, aux.json and fol_output/, all of which outlive the
+model file.
 """
 
 import argparse
 import json
 import os
 import sys
-
-import numpy as np
 
 
 def _read_history(run_dir):
@@ -70,13 +70,19 @@ def _read_latents(run_dir):
     """Return the dumped binary latents as (N, bits), or None."""
     for name in ("all_states.csv", "states.csv"):
         path = os.path.join(run_dir, name)
-        if os.path.exists(path) and os.path.getsize(path) > 0:
-            try:
-                z = np.loadtxt(path, dtype=np.int8, ndmin=2)
-            except (ValueError, OSError):
-                continue
-            if z.size:
-                return z
+        if not (os.path.exists(path) and os.path.getsize(path) > 0):
+            continue
+        rows = []
+        try:
+            with open(path) as f:
+                for line in f:
+                    parts = line.split()
+                    if parts:
+                        rows.append(tuple(int(float(v)) for v in parts))
+        except (ValueError, OSError):
+            continue
+        if rows:
+            return rows
     return None
 
 
@@ -109,7 +115,9 @@ def _read_fol(run_dir):
     }
     rates = s.get("predicate_activation_rates")
     if rates:
-        out["mean_rate"] = float(np.asarray(rates, dtype=float).mean())
+        flat = [v for row in rates for v in row] if isinstance(rates[0], list) else rates
+        if flat:
+            out["mean_rate"] = sum(float(v) for v in flat) / len(flat)
 
     # The per-state codes give the distinct-code count, which separates "a
     # few bits move" from "the whole latent moves".
@@ -183,10 +191,10 @@ def describe(run_dir):
             out.update(fol)
             out["source"] = "fol_output"
     else:
-        n_states, n_bits = z.shape
-        distinct = len(np.unique(z, axis=0))
-        rate = z.mean(axis=0)
-        dead = int(np.sum((rate == 0.0) | (rate == 1.0)))
+        n_states, n_bits = len(z), len(z[0])
+        distinct = len(set(z))
+        rate = [sum(row[i] for row in z) / float(n_states) for i in range(n_bits)]
+        dead = sum(1 for r in rate if r == 0.0 or r == 1.0)
         # Bits that flip on roughly half the states carry the most; a latent
         # where every bit is stuck is the collapsed case.
         out.update({
@@ -196,7 +204,7 @@ def describe(run_dir):
             "distinct_frac": distinct / float(n_states),
             "dead_bits": dead,
             "live_bits": n_bits - dead,
-            "mean_rate": float(rate.mean()),
+            "mean_rate": sum(rate) / float(n_bits),
         })
     return out
 
