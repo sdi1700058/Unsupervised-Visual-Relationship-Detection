@@ -187,7 +187,13 @@ def _video_out_path(dataset, out_name):
 
 
 def _default_video_out_name(category, video_id, fps, max_videos):
-    parts = [str(category)]
+    if category is None:
+        head = "allcat"
+    elif isinstance(category, (list, tuple, set)):
+        head = "+".join(sorted(category))
+    else:
+        head = str(category)
+    parts = [_safe_name(head)]
     if isinstance(video_id, (list, tuple, set)):
         ids = sorted(video_id)
         if len(ids) == 1:
@@ -283,6 +289,24 @@ def video_ag(category=None, video_id=None, fps="native",
                            annotations_dir=annotations_dir, frames_dir=frames_dir)
 
 
+def _parse_category(category):
+    """Normalise the CLI category into what build_dataset expects.
+
+    'all' (or '*') means no filter at all — every video in the split.
+    A comma-separated list becomes a list of names. Anything else is
+    returned unchanged.
+    """
+    if category is None:
+        return None
+    if isinstance(category, str):
+        if category.strip().lower() in ("all", "*"):
+            return None
+        if "," in category:
+            names = [c.strip() for c in category.split(",") if c.strip()]
+            return names if len(names) > 1 else names[0]
+    return category
+
+
 def video_vidvrd(category=None, video_id=None, fps=3,
                  max_videos=None, out_name=None, max_objects=10,
                  fill_annotations=False, patch_size=None,
@@ -299,9 +323,15 @@ def video_vidvrd(category=None, video_id=None, fps=3,
 
     video_id : str | list[str] | None — comma-separated CLI list lands here as
         a Python list and is forwarded as video_id_filter.
+
+    category : one name, a comma-separated group ('dog,cat,bird'), or 'all'
+        for every video regardless of category. A group or 'all' skips the
+        per-category cache, since neither is a single cache key.
     """
     if category is None:
-        raise SystemExit("video_vidvrd: --category is required (e.g. bicycle, dog, person)")
+        raise SystemExit("video_vidvrd: --category is required "
+                         "(e.g. bicycle, dog, person, 'dog,cat,bird', or 'all')")
+    category = _parse_category(category)
     from latplan.puzzles import puzzle_vidvrd as _vv
     return _bake_video_npz(_vv, "vidvrd", category, video_id, fps,
                            max_videos, out_name, max_objects,
@@ -315,7 +345,10 @@ def _parse_video_args(argv):
     """Lightweight argparse for the two video subcommands. Returns kwargs dict."""
     import argparse
     p = argparse.ArgumentParser(prog="setup-dataset.py video_ag|video_vidvrd")
-    p.add_argument("category", help="Primary category (e.g. chair, bicycle)")
+    p.add_argument("category",
+                   help="Primary category (e.g. chair, bicycle). Accepts a "
+                        "comma-separated group ('dog,cat,bird') or 'all' for "
+                        "every video regardless of category.")
     p.add_argument("--video-id", default=None,
                    help="Restrict to one or more video-ids. Accepts a single id or a comma-separated list "
                         "(AG: '<vid>.mp4'; VidVRD: 'ILSVRC2015_…'). Multi-id triggers a <N>vids-<hash> default out-name.")

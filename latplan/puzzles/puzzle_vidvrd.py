@@ -90,7 +90,9 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
     # SPEC §V7-V9: per-category npz cache short-circuit. Bypassed when
     # max_videos or video_id_filter is set (would contaminate shared cache).
-    cache_path = npz_cache_path("video", "vidvrd", category_filter, fps) \
+    cache_path = npz_cache_path("video", "vidvrd", category_filter, fps,
+                                num_objs=num_objs, patch_size=_patch_size,
+                                fill_annotations=fill_annotations) \
         if (max_videos is None and video_id_filter is None) else None
     if cache_path is not None:
         hit = load_cached(cache_path)
@@ -117,16 +119,22 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     # would make `--max-videos N` mean "look at the first N annotation files"
     # rather than "load N videos of this category" — and since the files sort
     # by video id, a category that happens to sort late loads nothing at all.
+    # category_filter takes one category, several, or None for every video.
+    wanted_cats = None
     if category_filter is not None:
+        wanted_cats = ({category_filter} if isinstance(category_filter, str)
+                       else set(category_filter))
+
+    if wanted_cats:
         kept = []
         for ann_path in ann_files:
             with open(ann_path) as f:
                 ann = json.load(f)
             if strict:
-                match = _video_primary_category(ann) == category_filter
+                match = _video_primary_category(ann) in wanted_cats
             else:
-                match = category_filter in {obj["category"]
-                                            for obj in ann.get("subject/objects", [])}
+                match = bool(wanted_cats & {obj["category"]
+                                            for obj in ann.get("subject/objects", [])})
             if match:
                 kept.append(ann_path)
         if not kept:
@@ -136,9 +144,11 @@ def build_dataset(annotations_dir=None, frames_dir=None,
                 f"{'1' if strict else '0'}. Strict mode keeps only videos whose "
                 f"primary subject is that category; set VIDVRD_STRICT_CATEGORY=0 "
                 f"to keep any video the category appears in.")
-        print(f"[vidvrd-loader] category {category_filter!r}: {len(kept)} of "
+        print(f"[vidvrd-loader] categories {sorted(wanted_cats)}: {len(kept)} of "
               f"{len(ann_files)} videos match (strict={strict})")
         ann_files = kept
+    else:
+        print(f"[vidvrd-loader] no category filter: all {len(ann_files)} videos")
 
     if max_videos is not None:
         if max_videos < len(ann_files):

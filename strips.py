@@ -252,34 +252,42 @@ def show_summary(ae,train,test):
 
 ################################################################
 
-def _apply_env_overrides(parameters, *, knobs=("ZEROSUPPRESS","ZEROSUPPRESS_DELAY",
-                                                "MAX_TEMPERATURE","DROPOUT","NOISE","LR")):
+_ENV_KNOBS = {
+    "ZEROSUPPRESS":       ("zerosuppress",       float),
+    "ZEROSUPPRESS_DELAY": ("zerosuppress_delay", float),
+    "MAX_TEMPERATURE":    ("max_temperature",    float),
+    "MIN_TEMPERATURE":    ("min_temperature",    float),
+    "DROPOUT":            ("dropout",            float),
+    "NOISE":              ("noise",              float),
+    "LR":                 ("lr",                 float),
+    "LAYER":              ("layer",              int),
+    "BETA":               ("beta",               float),
+}
+
+
+def _apply_env_overrides(parameters, *, knobs=tuple(_ENV_KNOBS)):
     """Honor env knobs that override default hyperparameters in `parameters`.
 
     Keeps the env-knob set in one place so every domain entrypoint
     (puzzle/blocksworld/labeled_objects/vidvrd/actiongenome) honors the same
-    overrides without duplicating boilerplate.
+    overrides without duplicating boilerplate. See `_ENV_KNOBS` for the
+    env-var to parameters-key mapping and the cast applied to each.
 
-    Knob -> parameters key mapping (env var name in UPPERCASE, parameters
-    key in lowercase, all `float`-cast):
-        ZEROSUPPRESS         -> zerosuppress
-        ZEROSUPPRESS_DELAY   -> zerosuppress_delay
-        MAX_TEMPERATURE      -> max_temperature
-        DROPOUT              -> dropout
-        NOISE                -> noise
-        LR                   -> lr
+    Two of these decide whether the latent collapses:
+
+    MIN_TEMPERATURE is the floor the Gumbel temperature anneals down to.
+    The default 0.7 never gets near-discrete, so the decoder learns to read
+    fractional codes and rounding at test time destroys the reconstruction —
+    which looks like a uniform autoencoding_test.png rather than a grid.
+
+    LAYER is the width of the dense stack feeding the attention. 200 was
+    picked for MNIST puzzles; an object vector of a few thousand features
+    has to squeeze through it before any predicate is formed.
     """
-    pmap = {
-        "ZEROSUPPRESS":       "zerosuppress",
-        "ZEROSUPPRESS_DELAY": "zerosuppress_delay",
-        "MAX_TEMPERATURE":    "max_temperature",
-        "DROPOUT":            "dropout",
-        "NOISE":              "noise",
-        "LR":                 "lr",
-    }
     for k in knobs:
         if k in os.environ:
-            parameters[pmap[k]] = [float(os.environ[k])]
+            key, cast = _ENV_KNOBS[k]
+            parameters[key] = [cast(os.environ[k])]
 
 
 def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=None,num_examples=6500,comment=None):
@@ -555,16 +563,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
     parameters['preencoder_output_activation'] = [("linear", "MSE")]
     parameters['lr']                           = [float(os.environ.get('LR', 0.0001))]
-    if "ZEROSUPPRESS" in os.environ:
-        parameters['zerosuppress'] = [float(os.environ['ZEROSUPPRESS'])]
-    if "ZEROSUPPRESS_DELAY" in os.environ:
-        parameters['zerosuppress_delay'] = [float(os.environ['ZEROSUPPRESS_DELAY'])]
-    if "MAX_TEMPERATURE" in os.environ:
-        parameters['max_temperature'] = [float(os.environ['MAX_TEMPERATURE'])]
-    if "DROPOUT" in os.environ:
-        parameters['dropout'] = [float(os.environ['DROPOUT'])]
-    if "NOISE" in os.environ:
-        parameters['noise'] = [float(os.environ['NOISE'])]
+    _apply_env_overrides(parameters)
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
@@ -674,16 +673,7 @@ def actiongenome(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
     parameters['preencoder_output_activation'] = [("linear", "MSE")]
     parameters['lr']                           = [float(os.environ.get('LR', 0.0001))]
-    if "ZEROSUPPRESS" in os.environ:
-        parameters['zerosuppress'] = [float(os.environ['ZEROSUPPRESS'])]
-    if "ZEROSUPPRESS_DELAY" in os.environ:
-        parameters['zerosuppress_delay'] = [float(os.environ['ZEROSUPPRESS_DELAY'])]
-    if "MAX_TEMPERATURE" in os.environ:
-        parameters['max_temperature'] = [float(os.environ['MAX_TEMPERATURE'])]
-    if "DROPOUT" in os.environ:
-        parameters['dropout'] = [float(os.environ['DROPOUT'])]
-    if "NOISE" in os.environ:
-        parameters['noise'] = [float(os.environ['NOISE'])]
+    _apply_env_overrides(parameters)
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 
