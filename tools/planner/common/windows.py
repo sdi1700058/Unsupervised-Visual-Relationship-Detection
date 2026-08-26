@@ -25,8 +25,6 @@ The window stride is a knob. `stride=1` gives maximum samples with heavy
 overlap. `stride=k-1` gives disjoint windows.
 """
 
-from __future__ import annotations
-
 
 def make_windows(n_frames, k, stride=1, max_windows=None):
     """Return the list of (init_idx, goal_idx, intermediate_indices) tuples.

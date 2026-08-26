@@ -9,8 +9,6 @@ This module extracts the bbox portion and converts the onehot bins back to
 pixel coordinates.
 """
 
-from __future__ import annotations
-
 
 def _picsize_grid():
     import numpy as np

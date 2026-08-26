@@ -7,8 +7,6 @@ per C18, then verify that `latplan.util.planner` is importable.
 Read-only per C14: this module NEVER edits upstream.
 """
 
-from __future__ import annotations
-
 import os
 import sys
 

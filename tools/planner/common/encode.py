@@ -8,8 +8,6 @@ returns encoded latents for arbitrary frame indices.
 Used by all three planning methods (ama3/bfs/fastdownward).
 """
 
-from __future__ import annotations
-
 import json
 import os
 from pathlib import Path
