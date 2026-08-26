@@ -111,13 +111,43 @@ def build_dataset(annotations_dir=None, frames_dir=None,
                      if os.path.splitext(os.path.basename(f))[0] in wanted]
         if not ann_files:
             raise RuntimeError(f"video_id_filter {video_id_filter!r} matched 0 annotation JSONs in {annotations_dir}")
+    strict = os.environ.get("VIDVRD_STRICT_CATEGORY", "1") == "1"
+
+    # The category filter runs before max_videos, not after. Slicing first
+    # would make `--max-videos N` mean "look at the first N annotation files"
+    # rather than "load N videos of this category" — and since the files sort
+    # by video id, a category that happens to sort late loads nothing at all.
+    if category_filter is not None:
+        kept = []
+        for ann_path in ann_files:
+            with open(ann_path) as f:
+                ann = json.load(f)
+            if strict:
+                match = _video_primary_category(ann) == category_filter
+            else:
+                match = category_filter in {obj["category"]
+                                            for obj in ann.get("subject/objects", [])}
+            if match:
+                kept.append(ann_path)
+        if not kept:
+            raise RuntimeError(
+                f"category_filter {category_filter!r} matched 0 videos in "
+                f"{annotations_dir} with VIDVRD_STRICT_CATEGORY="
+                f"{'1' if strict else '0'}. Strict mode keeps only videos whose "
+                f"primary subject is that category; set VIDVRD_STRICT_CATEGORY=0 "
+                f"to keep any video the category appears in.")
+        print(f"[vidvrd-loader] category {category_filter!r}: {len(kept)} of "
+              f"{len(ann_files)} videos match (strict={strict})")
+        ann_files = kept
+
     if max_videos is not None:
+        if max_videos < len(ann_files):
+            print(f"[vidvrd-loader] capping at {max_videos} of {len(ann_files)} videos")
         ann_files = ann_files[:max_videos]
 
     images_list, bboxes_list, all_names, frame_ids = [], [], [], []
     loaded_video_ids = []
     loaded_primary   = {}
-    strict = os.environ.get("VIDVRD_STRICT_CATEGORY", "1") == "1"
 
     for ann_path in ann_files:
         with open(ann_path) as f:
@@ -127,14 +157,6 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         W, H   = ann["width"], ann["height"]
         tid_to_cat = {obj["tid"]: obj["category"] for obj in ann.get("subject/objects", [])}
         primary    = _video_primary_category(ann)
-
-        if category_filter is not None:
-            if strict:
-                if primary != category_filter:
-                    continue
-            else:
-                if category_filter not in set(tid_to_cat.values()):
-                    continue
 
         vid_frames_dir = os.path.join(frames_dir, vid_id)
 

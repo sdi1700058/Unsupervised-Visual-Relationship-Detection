@@ -187,7 +187,8 @@ def call_fast_downward(domain, problem, out_dir, time_budget_s=60):
          "--plan-file", str(plan_file),
          str(domain), str(problem),
          "--search", "astar(lmcut())"],
-        capture_output=True, text=True, cwd=str(out_dir))
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+        universal_newlines=True, cwd=str(out_dir))
 
     return plan_file, time.time() - began
 
