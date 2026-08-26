@@ -160,9 +160,11 @@ for P in 5 10 40 80 160; do
     submit "P ${P} (U40)" "${CLIP}-p8" "${SMALL[@]}" U=40 A=2 P="${P}"
 done
 
-# F3. Arity — how many objects one predicate relates. A=2 is the only
-#     value ever run. Uses the 5-object clip so the arity is not larger
-#     than the scene.
+# F3. Arity — how many objects one predicate relates. The paper reports
+#     the result is insensitive to A, so this is a confirmation arm rather
+#     than a search: worth knowing it also holds on real video, where the
+#     relations are not hand-designed. Uses the 5-object clip so the arity
+#     is never larger than the scene.
 for A in 3 4; do
     submit "arity ${A}" "${CLIP/-mo3-/-mo5-}-p8" "${MID[@]}" U=40 A="${A}" P=20
 done
@@ -193,6 +195,105 @@ section "G  dense width"
 for L in 50 400 1000; do
     submit "layer ${L}" "${CLIP}-p8" "${SMALL[@]}" LAYER="${L}"
 done
+
+# ==========================================================
+section "K  batch size, with the two things that broke it"
+# All three batch=32 runs in sweep2 collapsed, but every one of them also
+# had preencoder_layers=0, so they say nothing about the batch size. Two
+# real confounds were never controlled:
+#
+#   Steps. The clip has ~120 training transitions, so batch 1000 is
+#   FULL-BATCH descent — one gradient step per epoch. batch 32 takes four,
+#   so at equal epochs it does 4x the updates, and batch 8 does 15x. The
+#   winning run is a full-batch run; that is likely why it is stable.
+#
+#   Learning rate. lr=0.001 was tuned at full batch. The linear scaling
+#   rule puts batch 32 at 3.2e-5, thirty times lower than what it was given.
+#
+# So each batch gets two arms: equal gradient steps at the base lr, and
+# equal steps at the scaled lr. If it still collapses at both, that is a
+# result about batch size. Until then it is a result about step counts.
+
+epochs_for () {   # batch -> epochs giving ~2000 steps on the ~120-sample clip
+    case "$1" in
+        8)   echo 134  ;;
+        16)  echo 250  ;;
+        32)  echo 500  ;;
+        64)  echo 1000 ;;
+        *)   echo 2000 ;;   # batch >= 128 is already full-batch here
+    esac
+}
+
+scaled_lr () {    # batch -> lr under the linear scaling rule from 1000/0.001
+    python3 -c "print('%.3g' % (0.001 * $1 / 1000))"
+}
+
+for B in 8 16 32 64 128 256 512 2000; do
+    E="$(epochs_for "${B}")"
+    L="$(scaled_lr "${B}")"
+    submit "batch ${B} steps-equalised" "${CLIP}-p8" "${SMALL[@]}" \
+        BATCH="${B}" EPOCH="${E}"
+    submit "batch ${B} steps+lr ${L}" "${CLIP}-p8" "${SMALL[@]}" \
+        BATCH="${B}" EPOCH="${E}" LR="${L}"
+done
+
+# And the original failing point, kept honestly: batch 32 at 2000 epochs
+# and lr 0.001, the exact arm that collapsed, now with the pre-encoder on.
+# If the pre-encoder alone rescues it, that is worth knowing.
+submit "batch 32 as-it-failed" "${CLIP}-p8" "${SMALL[@]}" BATCH=32 EPOCH=2000
+
+# ==========================================================
+section "L  delayed zero-suppression"
+# zerosuppress_delay is the fraction of training before the sparsity
+# penalty switches on, and it defaults to 0.05 — the penalty starts almost
+# immediately, before the latent has formed anything to keep. That is the
+# textbook recipe for a dead code, and it matches what the runs show:
+# zerosuppress=0.05 kept 0-30 of 800 bits, zerosuppress=0 kept 97-184.
+# Letting the autoencoder learn first, then tightening, is the standard fix
+# and it has never been tried here.
+for Z in 0.05 0.1 0.2; do
+    for DL in 0.3 0.5; do
+        submit "zs ${Z} delay ${DL}" "${CLIP}-p8" "${SMALL[@]}" \
+            ZEROSUPPRESS="${Z}" ZEROSUPPRESS_DELAY="${DL}"
+    done
+done
+
+# ==========================================================
+section "M  rescues for everything that collapsed in sweep2"
+# Each of these failed once. None of them failed with a reason established,
+# and all of them ran with the pre-encoder off. Each arm below pairs the
+# failed setting with a stated fix.
+
+# lr 0.003 collapsed at full batch. Too large a step for one update per
+# epoch; give it more, smaller updates instead of a smaller lr.
+submit "lr 0.003 + batch 32" "${CLIP}-p8" "${SMALL[@]}" LR=0.003 BATCH=32 EPOCH=500
+
+# max_temperature 5.0 left the latent soft for the whole run, because
+# min_temperature floors at 0.7. Give it somewhere to anneal to.
+submit "tmax 5.0 -> tmin 0.1 slow" "${CLIP}-p8" "${SMALL[@]}" \
+    MAX_TEMPERATURE=5.0 MIN_TEMPERATURE=0.1 EPOCH=6000
+
+# max_temperature 0.5 was annealing UPWARD into the 0.7 floor. Invert it.
+submit "tmax 0.5 -> tmin 0.05" "${CLIP}-p8" "${SMALL[@]}" \
+    MAX_TEMPERATURE=0.5 MIN_TEMPERATURE=0.05
+
+# mo5 and mo8 both died at U=40. More object slots means more relations to
+# represent, so give the extra objects extra units rather than assuming 40
+# covers every scene size.
+submit "mo5 + U60"  "${CLIP/-mo3-/-mo5-}-p8" "${MID[@]}" U=60 A=2 P=20
+submit "mo8 + U80"  "${CLIP/-mo3-/-mo8-}-p8" "${MID[@]}" U=80 A=2 P=20
+submit "mo8 + U80 P40" "${CLIP/-mo3-/-mo8-}-p8" "${MID[@]}" U=80 A=2 P=40
+
+# nofill has far fewer states, so 2000 full-batch epochs is 2000 updates on
+# a much smaller set. Give it more.
+submit "nofill 8000 epochs" "${CLIP/-fill/-nofill}-p8" "${SMALL[@]}" EPOCH=8000
+
+# dog-all kept 3 of 800 bits and dog-15vids kept 6. Both are the sparsity
+# penalty biting a harder dataset. Delay it.
+submit "dog all + zs delay"    "dog-${FPS}fps-all-mo5-fill-p8" "${BIG[@]}" \
+    EPOCH=3000 ZEROSUPPRESS_DELAY=0.5 CATEGORY=dog
+submit "dog 15vids + zs delay" "dog-15vids-${FPS}fps-mo3-fill-p8" "${MID[@]}" \
+    ZEROSUPPRESS_DELAY=0.5 CATEGORY=dog
 
 # ==========================================================
 section "H  whole categories, winning configuration"
