@@ -322,6 +322,15 @@ def main():
     ap.add_argument("--limit", type=int, default=20)
     ap.add_argument("--domain", default=None,
                     help="only paths containing this string")
+    ap.add_argument("--sort", choices=("loss", "distinct"), default="loss",
+                    help="loss ranks by best val_loss, the usual question. "
+                         "distinct ranks by how much of the latent actually "
+                         "moves, which is the question the planner asks: a "
+                         "model can reach a low val_loss with one code for "
+                         "every state, and that model cannot plan.")
+    ap.add_argument("--healthy", action="store_true",
+                    help="drop runs whose verdict is collapsed or "
+                         "near-collapse")
     ap.add_argument("--images", action="store_true",
                     help="print each run's plot paths")
     ap.add_argument("--collect", metavar="DIR", default=None,
@@ -345,7 +354,23 @@ def main():
         sys.exit(f"no runs with training_history.csv or all_states.csv under {args.target}")
 
     found = [describe(r) for r in runs]
-    found.sort(key=lambda d: d.get("best", float("inf")))
+
+    if args.healthy:
+        before = len(found)
+        found = [d for d in found
+                 if not verdict(d).startswith(("COLLAPSED", "near-collapse",
+                                               "no latents"))]
+        print(f"{before - len(found)} run(s) dropped as collapsed or "
+              f"undumped\n")
+
+    if args.sort == "distinct":
+        # How much of the latent moves matters more than the last decimal of
+        # val_loss: a run with one code for every state cannot plan, whatever
+        # its loss says.
+        found.sort(key=lambda d: (-d.get("distinct_frac", 0.0),
+                                  d.get("best", float("inf"))))
+    else:
+        found.sort(key=lambda d: d.get("best", float("inf")))
     found = found[:args.limit]
 
     print(f"{len(runs)} run(s) found, showing {len(found)}\n")
