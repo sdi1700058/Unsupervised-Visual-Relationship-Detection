@@ -195,8 +195,12 @@ PARTITION="${PARTITION:-gpu}"
 
 # Auto-estimate resources for vidvrd (sacct-driven). Other domains: caller sets.
 if [[ "${AUTO_RESOURCES:-1}" == "1" && "${DOMAIN}" == "vidvrd" ]]; then
+    # JOB_NAME gates Mode 1 of the estimator, which sizes a job from what
+    # past runs of the same name actually used. It was set above but never
+    # passed, so that mode has never once fired and every estimate has come
+    # from the heuristic fallback.
     if _EST="$(DOMAIN="${DOMAIN}" CATEGORY="${CATEGORY}" FPS="${FPS}" \
-                EPOCH="${EPOCH}" \
+                EPOCH="${EPOCH}" JOB_NAME="${JOB_NAME}" \
                 BATCH="${BATCH/None/1000}" \
                 FORMAT=env bash "${PROJECT_DIR}/sh/estimate_resources.sh" 2>/dev/null)"; then
         eval "_${_EST}"
