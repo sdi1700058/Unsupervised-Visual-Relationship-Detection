@@ -44,6 +44,13 @@ ARXIV_API = "http://export.arxiv.org/api/query"
 S2_API = "https://api.semanticscholar.org/graph/v1/paper/search"
 UA = {"User-Agent": "thesis-lit-search/1.0 (academic use)"}
 
+# Semantic Scholar rate-limits anonymous callers with 429. Once it has
+# refused this many times in a row, stop asking: each further call costs the
+# whole retry-and-backoff budget and returns nothing. A run of 25 titles once
+# made no progress in 35 minutes this way. arXiv alone resolves most titles.
+S2_STRIKES_ALLOWED = 3
+_s2_strikes = [0]
+
 
 def _get(url, tries=3, pause=2.0):
     for attempt in range(tries):
@@ -54,9 +61,11 @@ def _get(url, tries=3, pause=2.0):
         except Exception as e:
             code = getattr(e, "code", None)
             # Semantic Scholar rate-limits hard without a key. Back off.
-            if code == 429 and attempt < tries - 1:
-                time.sleep(pause * (attempt + 2) * 3)
-                continue
+            if code == 429:
+                _s2_strikes[0] += 1
+                if attempt < tries - 1:
+                    time.sleep(pause * (attempt + 1))
+                    continue
             if attempt < tries - 1:
                 time.sleep(pause)
                 continue
@@ -127,6 +136,8 @@ def search_arxiv(title):
 
 
 def search_s2(title):
+    if _s2_strikes[0] >= S2_STRIKES_ALLOWED:
+        return None
     q = urllib.parse.quote(title)
     fields = "title,year,authors,openAccessPdf,externalIds,venue"
     raw = _get(f"{S2_API}?query={q}&limit=5&fields={fields}")
@@ -159,6 +170,7 @@ def find(title, author=None, year=None):
     for fn in (search_arxiv, search_s2):
         hit = fn(title)
         if hit and meta_matches(hit, author, year):
+            _s2_strikes[0] = 0            # a success closes the breaker
             return hit
         time.sleep(1.0)
     return None
