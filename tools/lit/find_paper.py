@@ -231,7 +231,7 @@ def main(argv=None):
         t, author, year = parse_line(line)
         hit = find(t, author, year)
         if not hit:
-            print(f"MISS  {t[:70]}")
+            print(f"MISS  {t[:70]}", flush=True)
             missing.append(line)
             continue
         note = ""
@@ -239,7 +239,7 @@ def main(argv=None):
             path, note = download(hit, args.download, t)
             note = f"  -> {os.path.basename(path)} ({note})" if path \
                 else f"  -> download failed: {note}"
-        print(f"FOUND {t[:60]}\n      [{hit['source']}] {hit['pdf']}{note}")
+        print(f"FOUND {t[:60]}\n      [{hit['source']}] {hit['pdf']}{note}", flush=True)
         time.sleep(1.0)
 
     if missing:
