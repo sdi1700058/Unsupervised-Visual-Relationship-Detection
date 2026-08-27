@@ -38,3 +38,20 @@ venv-detect/
 data/video/videonet/raw/
 data/video/videonet/videos/
 data/video/videonet/frames_*
+# Evaluation outputs and planner exports. Data, not code.
+# Model exports are the one exception and they are deliberate: there is no scp
+# to Sherlock, so git is the only transport. Force-add a single export when it
+# must cross machines, then untrack it once it has been consumed.
+eval/
+
+# Shell and editor files that live in the working copy but belong to the user.
+.bash_profile
+.bashrc
+.gitconfig
+.gitmodules
+.idea/
+.mcp.json
+.profile
+.ripgreprc
+.zprofile
+.zshrc
