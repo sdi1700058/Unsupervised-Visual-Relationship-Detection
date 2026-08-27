@@ -62,6 +62,29 @@ def _dedupe_transitions(rows):
     return rows[keep]
 
 
+def _assert_initialized():
+    """Fail loudly when the session still holds uninitialized variables.
+
+    Initializing them here would be worse than crashing: the weights would be
+    replaced by random values and the export would look fine while being
+    meaningless. So report and stop.
+    """
+    try:
+        import keras.backend as K
+        import tensorflow as tf
+    except ImportError:
+        return
+    names = K.get_session().run(tf.report_uninitialized_variables())
+    if len(names):
+        shown = ", ".join(n.decode() if isinstance(n, bytes) else str(n)
+                          for n in names[:6])
+        raise SystemExit(
+            f"{len(names)} uninitialized variables after loading the model "
+            f"({shown}...). A TensorFlow session was created after the "
+            "weights were loaded. Check the import order in export(): the "
+            "data must load before the model.")
+
+
 def export(model_dir, npz_path=None, out_path=None):
     import numpy as np
 
@@ -70,11 +93,21 @@ def export(model_dir, npz_path=None, out_path=None):
     from tools.planner.common.decode import decode_trace_to_bboxes
 
     model_dir = Path(model_dir).resolve()
-    print(f"loading {model_dir}")
-    net = load_model(model_dir)
 
+    # Load the data BEFORE the model, and do not reorder these two.
+    # load_npz_states imports strips, which imports config, and config.py
+    # calls load_session() at module level. Creating a TensorFlow session
+    # after the weights are already loaded leaves the new session with
+    # uninitialized variables, and predict then dies with
+    #   FailedPreconditionError: Attempting to use uninitialized value
+    #                            temperature_1
+    # Loading the data first means the session exists before the model does.
     states, gt_boxes, _names, frame_ids = load_npz_states(model_dir, npz_path)
     print(f"{len(states)} frames, {states.shape[1]} object slots")
+
+    print(f"loading {model_dir}")
+    net = load_model(model_dir)
+    _assert_initialized()
 
     latents = encode_all(net, states)
     print(f"latents {latents.shape}, {int(latents.sum())} bits set")
