@@ -168,6 +168,73 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     return float((d * d).sum(axis=-1).mean())
 
 
+def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
+    """Read one VidVRD annotation JSON into canvas-space boxes.
+
+    Lets the ceiling be measured on real trajectories rather than on a
+    synthetic curve, without needing the extracted frames, keras, or the
+    cluster. Only the annotation JSON is read.
+
+    The canvas scaling comes from `puzzle_labeled_objects` rather than being
+    copied here (SPEC V5). That import pulls the latplan package chain, so
+    this one function needs the project environment even though the rest of
+    the module needs only numpy.
+
+    `fill` carries the last non-empty frame forward through frames the
+    dataset left unannotated, matching `--fill-annotations` in the loader.
+
+    Returns (boxes, meta) with boxes shaped (n_frames, num_objs, 4).
+    """
+    import json
+
+    try:
+        from latplan.puzzles.puzzle_labeled_objects import (
+            _scale_bbox_to_canvas, CANVAS_W as W, CANVAS_H as H)
+    except ImportError as e:
+        raise SystemExit(
+            "reading VidVRD annotations needs the project environment "
+            f"(latplan imports failed: {e}). Run this under the venv or the "
+            "conda env; the rest of oracle.py needs only numpy.")
+
+    with open(ann_path) as f:
+        ann = json.load(f)
+
+    src_w, src_h = ann["width"], ann["height"]
+    trajectories = ann.get("trajectories", [])
+
+    rows, last = [], None
+    for frame in trajectories:
+        objs = frame if frame else None
+        if objs is None:
+            if fill and last is not None:
+                objs = last
+            else:
+                continue
+        else:
+            last = objs
+
+        # Biggest boxes first, so the slot assignment is stable frame to
+        # frame the same way the loader orders them.
+        def area(o):
+            b = o["bbox"]
+            return (b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"])
+
+        chosen = sorted(objs, key=area, reverse=True)[:num_objs]
+        row = np.zeros((num_objs, 4), dtype=np.float32)
+        for i, o in enumerate(chosen):
+            b = o["bbox"]
+            row[i] = _scale_bbox_to_canvas(
+                (b["xmin"], b["ymin"], b["xmax"], b["ymax"]), src_w, src_h)
+        rows.append(row)
+
+    if not rows:
+        raise SystemExit(f"{ann_path}: no annotated frames")
+
+    meta = {"video_id": ann.get("video_id"), "fps": ann.get("fps"),
+            "frames": len(rows), "source_size": (src_w, src_h)}
+    return np.stack(rows), meta
+
+
 def _load_boxes(path):
     """Return (gt_boxes, frame_ids) from either an export or a dataset npz."""
     # allow_pickle is needed only for frame_ids, which numpy stores as an
@@ -241,14 +308,18 @@ def main(argv=None):
         description="Build a planner export from ground-truth boxes, with no "
                     "model in the loop, to measure the planning ceiling.")
     ap.add_argument("source",
-                    help="a baked dataset npz (bboxes) or a planner export "
-                         "(gt_boxes)")
+                    help="a baked dataset npz (bboxes), a planner export "
+                         "(gt_boxes), or a VidVRD annotation .json")
     ap.add_argument("--out", required=True, help="path for the oracle export")
     ap.add_argument("--bins", type=int, default=None,
                     help="bins per axis. Default matches the real decoder: "
                          f"{DEFAULT_BINS_X} in x, {DEFAULT_BINS_Y} in y. A "
                          "smaller value shrinks the PDDL state space, at the "
                          "cost of coarser boxes.")
+    ap.add_argument("--max-objects", type=int, default=3,
+                    help="object slots when reading a VidVRD annotation json")
+    ap.add_argument("--no-fill", action="store_true",
+                    help="do not carry the last annotated frame forward")
     ap.add_argument("--limit", type=int, default=None,
                     help="use only the first N states")
     args = ap.parse_args(argv)
@@ -256,7 +327,16 @@ def main(argv=None):
     bins_x = args.bins if args.bins else DEFAULT_BINS_X
     bins_y = args.bins if args.bins else DEFAULT_BINS_Y
 
-    boxes, frame_ids = _load_boxes(args.source)
+    if args.source.endswith(".json"):
+        boxes, ann_meta = boxes_from_vidvrd(args.source,
+                                            num_objs=args.max_objects,
+                                            fill=not args.no_fill)
+        frame_ids = None
+        print(f"read {ann_meta['frames']} annotated frames from "
+              f"{ann_meta['video_id']} ({ann_meta['source_size'][0]}x"
+              f"{ann_meta['source_size'][1]})")
+    else:
+        boxes, frame_ids = _load_boxes(args.source)
     if args.limit:
         boxes = boxes[:args.limit]
         if frame_ids is not None:
