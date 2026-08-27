@@ -90,7 +90,7 @@ def export(model_dir, npz_path=None, out_path=None):
 
     from tools.planner.common.encode import (
         load_model, load_npz_states, encode_all)
-    from tools.planner.common.decode import decode_trace_to_bboxes
+    from tools.planner.common.decode import features_to_bboxes
 
     model_dir = Path(model_dir).resolve()
 
@@ -112,8 +112,22 @@ def export(model_dir, npz_path=None, out_path=None):
     latents = encode_all(net, states)
     print(f"latents {latents.shape}, {int(latents.sum())} bits set")
 
-    # Decode every frame now so the scoring stage never needs the decoder.
-    decoded = decode_trace_to_bboxes(net, latents)
+    # Decode every frame now, so the scoring stage never needs the decoder.
+    #
+    # Via autoencode rather than decode. FirstOrderSAE's standalone decoder is
+    # not a self-contained latent-to-output graph: it still references the
+    # autoencoder's input placeholder, so decoder.predict(z) dies with
+    #   InvalidArgumentError: You must feed a value for placeholder tensor
+    #                         'autoencoder' with dtype float and shape [?,3,392]
+    # Fixing that would mean editing latplan/model.py, which SPEC C2 forbids.
+    #
+    # It is also unnecessary. Every latent in this table came from the state
+    # at the same index, so decode(encode(x)) is autoencode(x) and the boxes
+    # are identical. The planner never decodes a latent that is not already in
+    # the table either — common/export.py looks boxes up by latent and falls
+    # back to the nearest row by Hamming distance.
+    recon = np.asarray(net.autoencode(states))
+    decoded = features_to_bboxes(recon)
     print(f"decoded boxes {decoded.shape}")
 
     payload = {
