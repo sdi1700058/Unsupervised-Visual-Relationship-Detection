@@ -337,6 +337,40 @@ class TestBfs(unittest.TestCase):
         track = {i: (float(i), 0.0, 1.0, 1.0) for i in (0, 1, 2, 5, 6, 7)}
         self.assertIsNone(window_nonlinearity({0: track}, window=5))
 
+    def test_crossover_ratio_is_below_one_when_motion_is_large(self):
+        """`EVAL.md` §4.2's criterion, computed per clip from annotation alone.
+
+        `mse_ratio < 1` is arithmetically unreachable while the quantisation
+        floor exceeds the linear-interpolation baseline. Both sides are
+        computable without a model, so a clip can be judged before it is baked.
+        """
+        from tools.video.screen_vidvrd import window_crossover
+
+        # A big detour: the object goes far off the straight line between the
+        # endpoints, so interpolation is badly wrong and the floor is small
+        # relative to it.
+        xs = [0., 0., 0., 0., 200., 0., 0., 0., 0.]
+        track = {i: (x, 0.0, x + 20.0, 20.0) for i, x in enumerate(xs)}
+        ratio = window_crossover({0: track}, width=640, height=480, window=8)
+        self.assertIsNotNone(ratio)
+        self.assertLess(ratio, 1.0)
+
+    def test_crossover_ratio_is_large_when_motion_is_a_straight_line(self):
+        from tools.video.screen_vidvrd import window_crossover
+
+        # Constant velocity: interpolation is exact, so the baseline error is
+        # ~0 and the floor dominates however small it is.
+        track = {i: (float(i), 0.0, float(i) + 20.0, 20.0) for i in range(9)}
+        ratio = window_crossover({0: track}, width=640, height=480, window=8)
+        self.assertGreater(ratio, 1.0)
+
+    def test_crossover_returns_none_without_a_contiguous_window(self):
+        from tools.video.screen_vidvrd import window_crossover
+
+        track = {i: (float(i), 0.0, 1.0, 1.0) for i in (0, 1, 2, 9, 10)}
+        self.assertIsNone(window_crossover({0: track}, width=64,
+                                           height=48, window=8))
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 

@@ -34,6 +34,11 @@ import json
 import os
 import sys
 
+# Running this as a script puts tools/video on sys.path, not the repo root,
+# and `window_crossover` imports the quantisation floor from the planner.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
+    os.path.abspath(__file__)))))
+
 
 def clip_stats(doc, window=8):
     """Per-clip annotation statistics, or None when the clip has no boxes.
@@ -73,9 +78,12 @@ def clip_stats(doc, window=8):
                     - np.array(frames[a], dtype=np.float64)).sum()))
 
     nonlinearity = window_nonlinearity(per_object, window=window)
+    crossover = window_crossover(per_object, doc.get("width", 1) or 1,
+                                 doc.get("height", 1) or 1, window=window)
 
     return {
         "nonlinearity": nonlinearity,
+        "crossover": crossover,
         "video_id": doc.get("video_id", "?"),
         "frames": n_frames,
         "annotated": annotated,
@@ -125,6 +133,59 @@ def window_nonlinearity(per_object, window=8):
     return float(np.median(scores)) if scores else None
 
 
+def window_crossover(per_object, width, height, window=8):
+    """`EVAL.md` §4.2's criterion, per clip, from annotation alone.
+
+    `mse_ratio < 1` is arithmetically unreachable while the quantisation floor
+    exceeds the linear-interpolation baseline, however good the model is. Both
+    sides are computable without a model, a canvas or a planner, so a clip can
+    be judged before it is baked.
+
+    Returns `floor / baseline`. **Below 1 means the clip is winnable**; above 1
+    means no representation at this bin resolution can beat the straight line
+    at this window.
+
+    Everything is in the video's own pixels, with the decoder's 60x40 grid
+    mapped onto them, so one bin here is one bin there. The floor comes from
+    `tools/planner/oracle.py`, which needs numpy alone.
+    """
+    import numpy as np
+
+    from tools.planner.oracle import (
+        DEFAULT_BINS_X, DEFAULT_BINS_Y, round_trip_error)
+
+    ids = sorted(per_object)
+    frames = sorted({f for track in per_object.values() for f in track})
+    if len(frames) < window + 1:
+        return None
+
+    def boxes_at(frame):
+        # A slot with no annotation in this frame pads with zeros, matching
+        # what the loader does.
+        return np.array([per_object[t].get(frame, (0, 0, 0, 0)) for t in ids],
+                        dtype=np.float64)
+
+    floor = round_trip_error(np.stack([boxes_at(f) for f in frames]),
+                             DEFAULT_BINS_X, DEFAULT_BINS_Y,
+                             width=width, height=height)
+
+    errors = []
+    stride = max(1, (len(frames) - window) // 10)
+    for start in range(0, max(1, len(frames) - window), stride):
+        run = frames[start:start + window + 1]
+        if len(run) < window + 1 or run[-1] - run[0] != window:
+            continue                          # not contiguous, skip
+        a, b = boxes_at(run[0]), boxes_at(run[-1])
+        for step, frame in enumerate(run[1:-1], start=1):
+            predicted = a + (step / float(window)) * (b - a)
+            errors.append(float(
+                ((predicted - boxes_at(frame)) ** 2).sum(axis=-1).mean()))
+
+    if not errors:
+        return None
+    return floor / max(float(np.mean(errors)), 1e-9)
+
+
 def main(argv=None):
     import numpy as np
 
@@ -145,12 +206,16 @@ def main(argv=None):
                          "(EVAL.md 4.9)")
     ap.add_argument("--window", type=int, default=8,
                     help="window used for the non-linearity measure")
-    ap.add_argument("--sort", choices=("nonlinearity", "disp", "annotated"),
-                    default="nonlinearity",
-                    help="ranking key. Default is non-linearity, because that "
-                         "is what decides whether a planner can beat the "
-                         "linear baseline; speed alone does not (measured "
-                         "Spearman between the two is only +0.59)")
+    ap.add_argument("--sort",
+                    choices=("crossover", "nonlinearity", "disp", "annotated"),
+                    default="crossover",
+                    help="ranking key. Default is the crossover ratio, which "
+                         "is EVAL.md 4.2's criterion computed directly: below "
+                         "1 the clip is winnable. Speed is the wrong axis "
+                         "(Spearman with non-linearity only +0.59)")
+    ap.add_argument("--winnable-only", action="store_true",
+                    help="keep only clips whose crossover ratio is below 1, "
+                         "so mse_ratio < 1 is arithmetically reachable")
     ap.add_argument("--top", type=int, default=20,
                     help="how many rows to print")
     ap.add_argument("--list", help="write the surviving video ids here")
@@ -197,13 +262,25 @@ def main(argv=None):
         print("    (share of an object diagonal that a straight line between "
               "the window\n     endpoints already fails to explain; 0 means "
               "interpolation is exact)")
+    cx = np.array([r["crossover"] for r in rows if r["crossover"] is not None])
+    if len(cx):
+        print(f"  crossover floor/baseline    median {np.median(cx):.3f}   "
+              f"winnable {int((cx < 1).sum())} of {len(cx)} "
+              f"({100 * (cx < 1).mean():.0f}%)")
+        print("    (EVAL.md 4.2: below 1, mse_ratio < 1 is arithmetically "
+              "reachable)")
 
     kept = [r for r in rows
             if (not args.no_fill_only or r["fill_frac"] == 0.0)
             and r["mean_disp"] >= args.min_disp
             and r["annotated"] >= args.min_frames
-            and (r["nonlinearity"] or 0.0) >= args.min_nonlinearity]
-    keys = {"nonlinearity": lambda r: -(r["nonlinearity"] or 0.0),
+            and (r["nonlinearity"] or 0.0) >= args.min_nonlinearity
+            and (not args.winnable_only
+                 or (r["crossover"] is not None and r["crossover"] < 1.0))]
+    keys = {"crossover": lambda r: (r["crossover"] is None,
+                                    r["crossover"] if r["crossover"]
+                                    is not None else 0.0),
+            "nonlinearity": lambda r: -(r["nonlinearity"] or 0.0),
             "disp": lambda r: -r["mean_disp"],
             "annotated": lambda r: -r["annotated"]}
     kept.sort(key=keys[args.sort])
@@ -211,12 +288,13 @@ def main(argv=None):
     print(f"\n{len(kept)} clips pass the filter. "
           f"Transitions available: {sum(r['annotated'] - 1 for r in kept)}\n")
     print(f"{'video_id':32} {'annot':>6} {'fill':>6} {'objs':>5} "
-          f"{'px/step':>8} {'nonlin':>8}")
+          f"{'px/step':>8} {'nonlin':>8} {'crossover':>10}")
     for r in kept[:args.top]:
         nl = "     n/a" if r["nonlinearity"] is None else f"{r['nonlinearity']:>8.3f}"
+        cx = "       n/a" if r["crossover"] is None else f"{r['crossover']:>10.3f}"
         print(f"{r['video_id']:32} {r['annotated']:>6} "
               f"{r['fill_frac']:>6.2f} {r['n_objects']:>5} "
-              f"{r['mean_disp']:>8.1f} {nl}")
+              f"{r['mean_disp']:>8.1f} {nl} {cx}")
 
     if args.list:
         os.makedirs(os.path.dirname(args.list) or ".", exist_ok=True)
@@ -229,11 +307,12 @@ def main(argv=None):
         os.makedirs(os.path.dirname(args.csv) or ".", exist_ok=True)
         with open(args.csv, "w") as fh:
             fh.write("video_id,frames,annotated,fill_frac,mean_disp,"
-                     "nonlinearity,n_objects,width,height\n")
+                     "nonlinearity,crossover,n_objects,width,height\n")
             for r in rows:
                 nl = "" if r["nonlinearity"] is None else f"{r['nonlinearity']:.5f}"
+                cx = "" if r["crossover"] is None else f"{r['crossover']:.5f}"
                 fh.write(f"{r['video_id']},{r['frames']},{r['annotated']},"
-                         f"{r['fill_frac']:.4f},{r['mean_disp']:.4f},{nl},"
+                         f"{r['fill_frac']:.4f},{r['mean_disp']:.4f},{nl},{cx},"
                          f"{r['n_objects']},{r['width']},{r['height']}\n")
         print(f"wrote {args.csv}")
     return 0
