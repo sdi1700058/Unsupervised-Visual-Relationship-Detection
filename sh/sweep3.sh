@@ -46,47 +46,13 @@ BASE_VID="ILSVRC2015_train_00005005"
 CLIP="dog-${BASE_VID}-${FPS}fps-mo3-fill"
 NBAKED=0; NJOBS=0; NFAILED=0
 
-bake () {
-    local name="$1" cat="$2"; shift 2
-    [[ -f "${NPZ}/${name}.npz" ]] && { echo "have  ${name}"; return 0; }
-    echo "bake  ${name}"
-    if python3 setup-dataset.py video_vidvrd "${cat}" \
-           --fps "${FPS}" --out-name "${name}" "$@"; then
-        NBAKED=$((NBAKED + 1))
-    else
-        echo "  BAKE FAILED ${name}"; NFAILED=$((NFAILED + 1))
-    fi
-}
+source sh/sweep_lib.sh
 
-# submit <tag> <npz_stem> <mem> <time> [VAR=val ...]
-#
 # The defaults here ARE the winning configuration. An arm only names what it
 # changes, so anything not listed is the 0.1216 run.
-submit () {
-    local tag="$1" stem="$2" mem="$3" time="$4"; shift 4
-    local f="${NPZ}/${stem}.npz"
-    if [[ ! -f "${f}" ]]; then
-        echo "SKIP  ${tag}  (no ${stem}.npz)"; return 0
-    fi
-    echo "--- ${tag}"
-    local out
-    if out="$(env NPZ_PATH="${PWD}/${f}" FPS="${FPS}" \
-                  DOMAIN=vidvrd NO_EARLYSTOP=1 AUTO_RESOURCES=0 \
-                  MEM="${mem}" TIME="${time}" \
-                  EPOCH=2000 LR=0.001 BATCH=1000 \
-                  PREENC_LAYERS=2 PREENC_DIM=1000 \
-                  MAX_TEMPERATURE=1.0 TRANSITION_MODE=sequential \
-                  "$@" \
-                  bash sh/submit.sh 2>&1)"; then
-        echo "${out}" | grep -E "Submitted|OUT_DIR" || echo "${out}" | tail -2
-        NJOBS=$((NJOBS + 1))
-    else
-        echo "  SUBMIT FAILED:"; echo "${out}" | tail -5 | sed 's/^/    /'
-        NFAILED=$((NFAILED + 1))
-    fi
-}
-
-section () { echo; echo "=========================================="; echo "$*"; echo "=========================================="; }
+SWEEP_DEFAULTS=(EPOCH=2000 LR=0.001 BATCH=1000
+                PREENC_LAYERS=2 PREENC_DIM=1000
+                MAX_TEMPERATURE=1.0 TRANSITION_MODE=sequential)
 
 SMALL=(16G 2:00:00); MID=(32G 4:00:00); BIG=(48G 8:00:00); HUGE=(64G 16:00:00)
 
