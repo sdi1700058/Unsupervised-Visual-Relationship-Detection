@@ -154,35 +154,52 @@ def window_crossover(per_object, width, height, window=8):
     from tools.planner.oracle import (
         DEFAULT_BINS_X, DEFAULT_BINS_Y, round_trip_error)
 
-    ids = sorted(per_object)
     frames = sorted({f for track in per_object.values() for f in track})
     if len(frames) < window + 1:
         return None
 
-    def boxes_at(frame):
-        # A slot with no annotation in this frame pads with zeros, matching
-        # what the loader does.
-        return np.array([per_object[t].get(frame, (0, 0, 0, 0)) for t in ids],
-                        dtype=np.float64)
+    # An object that disappears is padded with a zero box by the loader, so a
+    # naive computation reads that as a jump to the origin and inflates the
+    # baseline. Measured on real data: the three clips this ranked highest all
+    # had an object present in only 50-67% of frames, and their apparent
+    # winnability was that artefact rather than motion. So an object enters a
+    # window only when it is present in every frame of it.
+    def present(track, run):
+        return all(f in track for f in run)
 
-    floor = round_trip_error(np.stack([boxes_at(f) for f in frames]),
-                             DEFAULT_BINS_X, DEFAULT_BINS_Y,
-                             width=width, height=height)
+    def boxes_for(tracks, run_frames, at):
+        return np.array([t[at] for t in tracks], dtype=np.float64)
 
-    errors = []
+    floor_boxes, errors = [], []
     stride = max(1, (len(frames) - window) // 10)
     for start in range(0, max(1, len(frames) - window), stride):
         run = frames[start:start + window + 1]
         if len(run) < window + 1 or run[-1] - run[0] != window:
             continue                          # not contiguous, skip
-        a, b = boxes_at(run[0]), boxes_at(run[-1])
+        tracks = [t for t in per_object.values() if present(t, run)]
+        if not tracks:
+            continue                          # nothing stable to score
+        a = boxes_for(tracks, run, run[0])
+        b = boxes_for(tracks, run, run[-1])
+        for f in run:
+            # One row per box. Quantisation error is independent per box, so
+            # flattening here keeps the floor correct while letting the object
+            # count differ between windows.
+            floor_boxes.extend(boxes_for(tracks, run, f))
         for step, frame in enumerate(run[1:-1], start=1):
             predicted = a + (step / float(window)) * (b - a)
-            errors.append(float(
-                ((predicted - boxes_at(frame)) ** 2).sum(axis=-1).mean()))
+            errors.append(float(((predicted - boxes_for(tracks, run, frame))
+                                 ** 2).sum(axis=-1).mean()))
 
     if not errors:
         return None
+
+    # The floor is measured on exactly the boxes the baseline was measured on,
+    # so the two sides of the ratio describe the same frames.
+    floor = round_trip_error(np.array(floor_boxes,
+                                      dtype=np.float64)[:, None, :],
+                             DEFAULT_BINS_X, DEFAULT_BINS_Y,
+                             width=width, height=height)
     return floor / max(float(np.mean(errors)), 1e-9)
 
 

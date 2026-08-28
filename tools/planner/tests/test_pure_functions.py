@@ -364,6 +364,31 @@ class TestBfs(unittest.TestCase):
         ratio = window_crossover({0: track}, width=640, height=480, window=8)
         self.assertGreater(ratio, 1.0)
 
+    def test_crossover_ignores_windows_where_an_object_comes_and_goes(self):
+        """An object that disappears must not be scored as a huge movement.
+
+        The loader pads a missing object with a zero box, so a naive
+        computation sees the box jump from its real position to the origin.
+        That inflates the linear-interpolation baseline and makes a slow clip
+        look winnable. Measured on real data: the three top-ranked clips all
+        had an object present in only 50-67% of frames.
+        """
+        from tools.video.screen_vidvrd import window_crossover
+
+        # tid 0 is present throughout and barely moves, so a straight line
+        # predicts it almost exactly. tid 1 vanishes half way.
+        steady = {i: (100.0 + i, 100.0, 120.0 + i, 120.0) for i in range(9)}
+        vanishing = {i: (300.0, 300.0, 320.0, 320.0) for i in range(5)}
+
+        both = window_crossover({0: steady, 1: vanishing},
+                                width=640, height=480, window=8)
+        alone = window_crossover({0: steady}, width=640, height=480, window=8)
+
+        # Scoring only the object that is present throughout must give the
+        # same answer as if the vanishing one had never been in the file.
+        self.assertIsNotNone(both)
+        self.assertAlmostEqual(both, alone, places=6)
+
     def test_crossover_returns_none_without_a_contiguous_window(self):
         from tools.video.screen_vidvrd import window_crossover
 
