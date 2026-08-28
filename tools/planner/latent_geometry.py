@@ -25,6 +25,25 @@ windows (see .claude/docs/EVAL.md 4.8):
     oracle       spearman +0.651   nn error  2.57 px   planner mse  13.67
     trained P10  spearman +0.356   nn error  6.10 px   planner mse 101.44
     trained P20  spearman +0.343   nn error 10.16 px   not measurable
+
+IT IS A SCREEN, NOT A RANKING. That was tested rather than assumed. Across six
+oracle variants differing only in bin count, spearman correlates +0.934 with
+planner error in the WRONG direction: coarse bins make the code a coarse
+position, which raises the correlation and raises the quantisation floor
+together. Within one encoding family the floor predicts error at +0.985 and
+this metric does not.
+
+    bins     floor   spearman   planner mse
+    20x14    41.06    +0.740        58.85
+    30x20    21.43    +0.727        34.22
+    45x30    11.01    +0.682        28.24
+    60x40     5.40    +0.651        13.67
+    90x60     3.08    +0.652        13.85
+    120x80    1.53    +0.615         7.28
+
+So use it to catch a code that does not encode position at all, which is what
+the trained models do at +0.34. Do not use it to choose between two codes of
+the same kind, where a higher score usually just means coarser bins.
 """
 
 import argparse
@@ -98,8 +117,13 @@ def main(argv=None):
         print(f"{r['export'][:52]:52} {r['n_bits']:>6} {r['distinct']:>9} "
               f"{rho:>9} {r['nearest_box_error']:>10.2f}")
 
-    print("\nHigher spearman and lower nn_err_px both mean the fallback decode "
-          "lands\nnearer the truth. Neither is visible in reconstruction loss.")
+    print("\nA screen, not a ranking. Below roughly +0.5 the code does not "
+          "order frames the\nway the world does, so the fallback decode is "
+          "arbitrary — which is what the\ntrained models do at +0.34, and it "
+          "is invisible to reconstruction loss.\n\nAbove that, do NOT rank by "
+          "this. Across oracle variants a higher score just\nmeans coarser "
+          "bins and tracks planner error the wrong way; use the\n"
+          "quantisation floor printed by tools/planner/oracle.py instead.")
 
     if args.csv:
         os.makedirs(os.path.dirname(args.csv) or ".", exist_ok=True)

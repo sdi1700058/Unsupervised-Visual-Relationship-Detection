@@ -206,6 +206,18 @@ def latent_geometry(latents, gt_boxes, max_pairs=4000, seed=0):
         trained P10  spearman +0.356                                6.10 px
         trained P20  spearman +0.343                               10.16 px
 
+    **This is a screen, not a ranking**, and the distinction was measured
+    rather than assumed. Across six oracle variants differing only in bin
+    count, `spearman` correlates +0.934 with planner error *in the wrong
+    direction*: coarse bins make the code a coarse position, which raises the
+    correlation and raises the quantisation floor together. Within one
+    encoding family the floor predicts error at +0.985 and this does not.
+
+    - **Use it to catch a code that does not encode position at all.** The
+      trained models sit at +0.34; no oracle variant falls below +0.53.
+    - **Do not use it to choose between two codes of the same kind.** Higher
+      there usually means coarser. Use the quantisation floor instead.
+
     Returns `spearman` (None when no pair of latents differs, since the
     correlation is then undefined rather than zero) and `nearest_box_error`,
     the mean positional error incurred by decoding a frame as its
