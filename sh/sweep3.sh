@@ -149,6 +149,17 @@ done
 # F5. Planner-sized latents. Fast Downward searches 2^(U*P) states, so 800
 #     propositions is a lot to ask. These are the arms most likely to plan
 #     even if they reconstruct slightly worse.
+#
+#     Measured on 2026-08-28, and it is not a small effect. The two exported
+#     sweep3 models were scored on the interpolation task at window 8:
+#
+#       U40 A2 P10, 400 bits -> 17 of 19 windows solved
+#       U40 A2 P20, 800 bits ->  3 of 19 windows solved
+#
+#     Same clip, same planner, same budget. Halving the latent turned an
+#     unplannable model into a plannable one. Reconstruction loss alone would
+#     never have shown this, so these arms rank above the wide ones whenever
+#     the planning half of the thesis is what is being served. See EVAL.md 4.8.
 for SHAPE in 10:5 10:10 20:10 20:20; do
     IFS=':' read -r U P <<< "${SHAPE}"
     submit "small U${U} P${P} (${U}x${P} bits)" "${CLIP}-p8" "${SMALL[@]}" \
