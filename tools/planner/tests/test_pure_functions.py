@@ -262,6 +262,52 @@ class TestBfs(unittest.TestCase):
         g = latent_geometry(z, boxes)
         self.assertIsNone(g["spearman"])
 
+    def test_clip_stats_counts_filled_frames_and_real_motion(self):
+        """Frames with no annotation are the ones `--fill-annotations` invents.
+
+        VidVRD annotates a subset of frames. Carrying the last box forward
+        into the rest makes those transitions identical on both sides, so they
+        teach "nothing changed". The statistic has to separate annotated
+        frames from filled ones, and measure motion only across annotated
+        pairs.
+        """
+        from tools.video.screen_vidvrd import clip_stats
+
+        # Six frames; frames 2 and 3 carry no annotation at all.
+        def box(x):
+            return {"tid": 0, "bbox": {"xmin": x, "ymin": 0,
+                                       "xmax": x + 10, "ymax": 10}}
+        trajectories = [[box(0)], [box(5)], [], [], [box(40)], [box(50)]]
+
+        s = clip_stats({"video_id": "v", "trajectories": trajectories,
+                        "width": 100, "height": 100})
+        self.assertEqual(s["frames"], 6)
+        self.assertEqual(s["annotated"], 4)
+        self.assertAlmostEqual(s["fill_frac"], 2 / 6.0)
+        self.assertEqual(s["n_objects"], 1)
+        # Consecutive annotated pairs are 0->1 and 4->5. Each corner moves by
+        # 5 and 10, so the summed absolute displacement is 10 and 20.
+        self.assertAlmostEqual(s["mean_disp"], 15.0)
+
+    def test_clip_stats_on_a_fully_annotated_clip_reports_no_fill(self):
+        from tools.video.screen_vidvrd import clip_stats
+
+        def box(x):
+            return {"tid": 0, "bbox": {"xmin": x, "ymin": 0,
+                                       "xmax": x + 1, "ymax": 1}}
+        s = clip_stats({"video_id": "v",
+                        "trajectories": [[box(i)] for i in range(5)],
+                        "width": 10, "height": 10})
+        self.assertEqual(s["fill_frac"], 0.0)
+        self.assertEqual(s["annotated"], 5)
+
+    def test_clip_stats_survives_a_clip_with_no_boxes(self):
+        from tools.video.screen_vidvrd import clip_stats
+
+        s = clip_stats({"video_id": "v", "trajectories": [[], []],
+                        "width": 10, "height": 10})
+        self.assertIsNone(s)
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 
