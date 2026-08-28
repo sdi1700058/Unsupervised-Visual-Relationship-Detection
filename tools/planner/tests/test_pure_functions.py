@@ -551,6 +551,46 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(result["skipped_absent"], 3)
         self.assertEqual(result["mean_mse"], 0.0)
 
+    def test_score_window_drops_objects_absent_at_an_endpoint(self):
+        """The baseline cannot be formed from an endpoint that does not exist.
+
+        `linear_interp_bboxes` interpolates raw boxes. If an object is absent
+        at a window endpoint its box is zeros, so the straight line starts at
+        the origin and the baseline error is enormous — which **flatters the
+        planner**. Those object-frames are unscoreable for both sides, not just
+        for one, so the exclusion has to be shared.
+        """
+        from tools.planner.common.metrics import score_window
+
+        # Two objects. Object 1 is absent at the init endpoint.
+        init = np.array([[0., 0., 10., 10.], [0., 0., 0., 0.]])
+        goal = np.array([[20., 0., 30., 10.], [50., 50., 60., 60.]])
+        gt = np.array([
+            [[10., 0., 20., 10.], [40., 40., 50., 50.]],
+        ])
+        pred = np.array([
+            [[10., 0., 20., 10.], [99., 99., 109., 109.]],
+        ])
+        baseline = np.array([
+            [[10., 0., 20., 10.], [25., 25., 30., 30.]],
+        ])
+
+        scored = score_window(pred, gt, baseline, matching="fixed",
+                              endpoints=(init, goal))
+        # Only object 0 is scoreable, and both sides predict it exactly.
+        self.assertEqual(scored["planner"]["mean_mse"], 0.0)
+        self.assertEqual(scored["baseline_linear"]["mean_mse"], 0.0)
+
+    def test_score_window_without_endpoints_scores_everything(self):
+        from tools.planner.common.metrics import score_window
+
+        gt = np.array([[[10., 0., 20., 10.]]])
+        pred = np.array([[[10., 0., 20., 10.]]])
+        base = np.array([[[12., 0., 22., 10.]]])
+        scored = score_window(pred, gt, base, matching="fixed")
+        self.assertEqual(scored["planner"]["mean_mse"], 0.0)
+        self.assertGreater(scored["baseline_linear"]["mean_mse"], 0.0)
+
     def test_error_is_zero_when_the_prediction_is_exact(self):
         from tools.planner.common.metrics import bbox_mse
 

@@ -105,7 +105,9 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
         baseline = linear_interp_bboxes(
             export.gt_boxes[init_idx], export.gt_boxes[goal_idx], n_mid)
 
-        scores = score_window(pred_boxes, gt_window, baseline, matching)
+        scores = score_window(pred_boxes, gt_window, baseline, matching,
+                              endpoints=(export.gt_boxes[init_idx],
+                                         export.gt_boxes[goal_idx]))
         scores["resample_free"] = exact
 
         (out_dir / "plan_trace.json").write_text(json.dumps({

@@ -92,7 +92,7 @@ echo "length   ${LENGTH_MODE}"
 echo "summary  ${SUMMARY_CSV}"
 echo
 
-echo "export,method,init,goal,reachability,plan_length,expected_length,moving_steps,moving_gt_steps,length_match,bbox_mse,baseline_mse,mse_ratio,beats_baseline,bbox_iou,baseline_iou,temporal_order,decode_fallbacks,wall_s" \
+echo "export,method,init,goal,reachability,plan_length,expected_length,moving_steps,moving_gt_steps,skipped_absent,length_match,bbox_mse,baseline_mse,mse_ratio,beats_baseline,bbox_iou,baseline_iou,temporal_order,decode_fallbacks,wall_s" \
     > "${SUMMARY_CSV}"
 
 IFS=',' read -ra METHOD_LIST <<< "${METHODS}"
@@ -134,7 +134,7 @@ PY
             METRICS="${OUT_DIR}/metrics.json"
             if [[ ${RC} -ne 0 || ! -f "${METRICS}" ]]; then
                 echo "  ${STEM} ${METHOD} ${INIT}->${GOAL}  skipped (rc=${RC})"
-                echo "${STEM},${METHOD},${INIT},${GOAL},false,0,,,,,,,,,,,,," >> "${SUMMARY_CSV}"
+                echo "${STEM},${METHOD},${INIT},${GOAL},false,0,,,,,,,,,,,,,," >> "${SUMMARY_CSV}"
                 continue
             fi
 
@@ -147,7 +147,7 @@ cell = lambda k: "" if m.get(k) is None else m[k]
 
 row = [stem, method, cell("init_frame"), cell("goal_frame"),
        cell("reachability"), cell("plan_length"), cell("expected_plan_length"),
-       cell("moving_steps"), cell("moving_gt_steps"), cell("plan_length_match"), cell("bbox_mse_mean"),
+       cell("moving_steps"), cell("moving_gt_steps"), cell("skipped_absent"), cell("plan_length_match"), cell("bbox_mse_mean"),
        cell("baseline_mse_mean"), cell("mse_ratio"), cell("beats_baseline"),
        cell("bbox_iou_mean"), cell("baseline_iou_mean"),
        cell("temporal_order"), cell("decode_fallbacks"), cell("wall_s")]

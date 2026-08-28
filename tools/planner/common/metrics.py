@@ -73,7 +73,7 @@ def match_slots(pred_boxes, gt_boxes):
     return mapping
 
 
-def bbox_mse(pred_trace, gt_boxes, matching="hungarian"):
+def bbox_mse(pred_trace, gt_boxes, matching="hungarian", scoreable=None):
     """Mean squared bbox error over a window, in canvas pixels.
 
     pred_trace and gt_boxes both have shape (T, num_objs, 4) and cover the
@@ -110,6 +110,8 @@ def bbox_mse(pred_trace, gt_boxes, matching="hungarian"):
         if j < 0:
             continue
         present = np.abs(gt[:, j, :]).sum(axis=-1) > 0
+        if scoreable is not None:
+            present = present & bool(scoreable[j])
         d = pred[:, i, :] - gt[:, j, :]
         sq[:, i] = np.where(present, np.sum(d * d, axis=-1), 0.0)
         scored[:, i] = present
@@ -346,14 +348,29 @@ def temporal_order(pred_trace, gt_boxes):
 
 
 def score_window(pred_trace, gt_boxes, baseline_trace=None,
-                 matching="hungarian"):
+                 matching="hungarian", endpoints=None):
     """Score one interpolation window against the real frames.
 
     baseline_trace is the linear-interpolation prediction. When given, the
     result carries the baseline error and the ratio between the two. A ratio
     below 1 means the planner beat the straight line.
+
+    `endpoints` is the (init, goal) ground-truth box pair. When supplied, any
+    object absent at either endpoint is dropped from **both** metrics.
+    `linear_interp_bboxes` interpolates raw boxes, so an object missing at an
+    endpoint has its straight line drawn from the origin, and the resulting
+    baseline error is enormous — which flatters the planner. The exclusion has
+    to be shared, or the two sides are measured on different frames.
     """
-    result = {"planner": bbox_mse(pred_trace, gt_boxes, matching)}
+    import numpy as np
+
+    scoreable = None
+    if endpoints is not None:
+        init, goal = (np.asarray(e, dtype=np.float64) for e in endpoints)
+        scoreable = ((np.abs(init).sum(axis=-1) > 0)
+                     & (np.abs(goal).sum(axis=-1) > 0))
+
+    result = {"planner": bbox_mse(pred_trace, gt_boxes, matching, scoreable)}
     result["temporal_order"] = temporal_order(pred_trace, gt_boxes)
 
     # Same slot pairing as the error, so the two describe one assignment.
@@ -361,7 +378,7 @@ def score_window(pred_trace, gt_boxes, baseline_trace=None,
     result["planner_iou"] = bbox_iou(pred_trace, gt_boxes, mapping=mapping)
 
     if baseline_trace is not None:
-        base = bbox_mse(baseline_trace, gt_boxes, matching)
+        base = bbox_mse(baseline_trace, gt_boxes, matching, scoreable)
         result["baseline_linear"] = base
         result["baseline_iou"] = bbox_iou(baseline_trace, gt_boxes,
                                           mapping=base["mapping"])
@@ -390,6 +407,7 @@ def summarize(found, plan_length, wall_s, window=None, scores=None, extra=None):
 
     if scores is not None:
         out["bbox_mse_mean"] = scores["planner"]["mean_mse"]
+        out["skipped_absent"] = scores["planner"].get("skipped_absent")
         out["bbox_mse_per_frame"] = scores["planner"]["per_frame_mse"]
         out["hungarian_mapping"] = scores["planner"]["mapping"]
         out["matching_mode"] = scores["planner"]["matching_mode"]
