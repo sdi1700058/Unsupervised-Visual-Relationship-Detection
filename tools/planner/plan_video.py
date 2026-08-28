@@ -52,6 +52,10 @@ def main(argv=None):
     ap.add_argument("--matching", choices=("hungarian", "fixed"),
                     default="hungarian",
                     help="how to pair decoded object slots with annotations")
+    ap.add_argument("--length-mode", choices=("max", "exact", "free"),
+                    default="max",
+                    help="ask for the shortest plan within k-1 actions (max), "
+                         "exactly k-1 (exact), or an unbounded search (free)")
     ap.add_argument("--plan-only", action="store_true",
                     help="stop after the plan; skip scoring")
     ap.add_argument("--out-dir", type=Path,
@@ -85,6 +89,7 @@ def main(argv=None):
                     out_dir=out_dir,
                     time_budget_s=args.time_budget_s,
                     matching=args.matching,
+                    length_mode=args.length_mode,
                     plan_only=args.plan_only)
     except NotImplementedError as exc:
         print(f"method {args.method} is not ready: {exc}", file=sys.stderr)

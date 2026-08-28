@@ -18,6 +18,10 @@
 #   --stride S        gap between window starts. Default: K-1 (no overlap).
 #   --max-windows N   cap per export. Useful for a quick look. Default: all.
 #   --budget SECONDS  planner time limit per window. Default: 60.
+#   --length-mode M   max (shortest plan within k-1 actions, the default),
+#                     exact (exactly k-1), or free (unbounded). Trained models
+#                     merge frames into one latent, so exact is usually
+#                     unsatisfiable for them; the oracle export wants exact.
 #   --name NAME       output directory name. Default: taken from the input.
 #
 # Output
@@ -39,6 +43,7 @@ WINDOW=5
 STRIDE=""
 MAX_WINDOWS=""
 BUDGET=60
+LENGTH_MODE="max"
 NAME=""
 
 while [[ $# -gt 0 ]]; do
@@ -48,6 +53,7 @@ while [[ $# -gt 0 ]]; do
         --stride)      STRIDE="$2"; shift 2 ;;
         --max-windows) MAX_WINDOWS="$2"; shift 2 ;;
         --budget)      BUDGET="$2"; shift 2 ;;
+        --length-mode) LENGTH_MODE="$2"; shift 2 ;;
         --name)        NAME="$2"; shift 2 ;;
         *) echo "unknown option: $1" >&2; exit 1 ;;
     esac
@@ -82,10 +88,11 @@ mkdir -p "${LOG_DIR}"
 echo "exports  ${#EXPORTS[@]}"
 echo "methods  ${METHODS}"
 echo "window   K=${WINDOW} stride=${STRIDE}"
+echo "length   ${LENGTH_MODE}"
 echo "summary  ${SUMMARY_CSV}"
 echo
 
-echo "export,method,init,goal,reachability,plan_length,expected_length,length_match,bbox_mse,baseline_mse,mse_ratio,beats_baseline,temporal_order,decode_fallbacks,wall_s" \
+echo "export,method,init,goal,reachability,plan_length,expected_length,moving_steps,length_match,bbox_mse,baseline_mse,mse_ratio,beats_baseline,bbox_iou,baseline_iou,temporal_order,decode_fallbacks,wall_s" \
     > "${SUMMARY_CSV}"
 
 IFS=',' read -ra METHOD_LIST <<< "${METHODS}"
@@ -118,6 +125,7 @@ PY
                 --method "${METHOD}" \
                 --init "${INIT}" --goal "${GOAL}" \
                 --time-budget-s "${BUDGET}" \
+                --length-mode "${LENGTH_MODE}" \
                 --out-dir "${OUT_DIR}" \
                 > "${LOG}" 2>&1
             RC=$?
@@ -126,7 +134,7 @@ PY
             METRICS="${OUT_DIR}/metrics.json"
             if [[ ${RC} -ne 0 || ! -f "${METRICS}" ]]; then
                 echo "  ${STEM} ${METHOD} ${INIT}->${GOAL}  skipped (rc=${RC})"
-                echo "${STEM},${METHOD},${INIT},${GOAL},false,0,,,,,,,,," >> "${SUMMARY_CSV}"
+                echo "${STEM},${METHOD},${INIT},${GOAL},false,0,,,,,,,,,,,," >> "${SUMMARY_CSV}"
                 continue
             fi
 
@@ -139,8 +147,9 @@ cell = lambda k: "" if m.get(k) is None else m[k]
 
 row = [stem, method, cell("init_frame"), cell("goal_frame"),
        cell("reachability"), cell("plan_length"), cell("expected_plan_length"),
-       cell("plan_length_match"), cell("bbox_mse_mean"),
+       cell("moving_steps"), cell("plan_length_match"), cell("bbox_mse_mean"),
        cell("baseline_mse_mean"), cell("mse_ratio"), cell("beats_baseline"),
+       cell("bbox_iou_mean"), cell("baseline_iou_mean"),
        cell("temporal_order"), cell("decode_fallbacks"), cell("wall_s")]
 print(",".join(str(x) for x in row))
 

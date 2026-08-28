@@ -225,7 +225,7 @@ def call_fast_downward(domain, problem, out_dir, time_budget_s=60):
 
 
 def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
-           plan_length=None, exact_length=True, **_):
+           plan_length=None, length_mode="max", **_):
     import numpy as np
 
     n_bits = z_all.shape[1]
@@ -233,7 +233,11 @@ def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
     print(f"{len(pre)} transitions from the export")
 
     effects = distinct_effects(pre, suc)
-    want = plan_length if (exact_length and plan_length) else None
+    # The step counter forces an exact action count, so it only serves the
+    # `exact` mode. Under `max` the search runs free and Fast Downward's own
+    # cost bound keeps the plan short, which is the same question asked a
+    # cheaper way: no operator copy per step, so the domain stays small.
+    want = plan_length if (length_mode == "exact" and plan_length) else None
     print(f"{len(effects)} distinct operators"
           + (f", step-counted to exactly {want} actions" if want else ""))
 
@@ -247,13 +251,12 @@ def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
                                          time_budget_s)
     if not plan_file.exists():
         return False, np.zeros((0, n_bits), dtype=np.int8), wall, {
-            "n_operators": len(effects), "exact_length": bool(want)}
+            "n_operators": len(effects)}
 
     indices = read_plan(plan_file)
     trace = replay(z_init, effects, indices)
     return True, trace, wall, {"n_operators": len(effects),
-                               "plan_operators": indices,
-                               "exact_length": bool(want)}
+                               "plan_operators": indices}
 
 
 def run(export_path, init_idx, goal_idx, out_dir, **kwargs):

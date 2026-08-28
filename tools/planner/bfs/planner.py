@@ -39,24 +39,36 @@ def mine_deltas(pre, suc):
     return distinct[np.lexsort(distinct.T[::-1])]
 
 
-def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None):
+def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None,
+           max_length=None):
     """Breadth-first search from z_init to z_goal.
 
     Returns (found, trace, wall_s). The trace holds the init state, every
     intermediate state and the goal state.
 
     `exact_length` asks for a plan of exactly that many actions rather than
-    the shortest one. The interpolation task needs this: reconstructing the
-    k-2 frames between frame i and frame i+k-1 means a trajectory of exactly
-    k-1 steps. Unconstrained search returns the cheapest plan instead, which
-    on a short window is often a single action, and scoring one action as a
+    the shortest one. The interpolation task appears to need this:
+    reconstructing the k-2 frames between frame i and frame i+k-1 looks like a
+    trajectory of exactly k-1 steps, and scoring a one-action plan as a
     three-frame trajectory measures nothing.
+
+    `max_length` asks for the shortest plan that fits inside k-1 actions, and
+    it is the right question for a trained model. `exact_length` assumes the
+    latent moves once per frame. A trained encoder does not oblige: it maps
+    runs of consecutive frames to one code, so a k-frame window holds fewer
+    than k-1 real transitions and no k-1-step plan exists except by padding,
+    which the search cannot afford to find. Measured on the first two trained
+    exports, four of seven steps in a window changed nothing at all.
 
     Fixed-depth search cannot key `visited` on the state alone, because a
     state reachable at depth 2 may also be needed at depth 3 on the way to a
-    longer trajectory. The key is (state, depth).
+    longer trajectory. There the key is (state, depth). Depth-capped search
+    keys on the state, which is what keeps it affordable.
     """
     import numpy as np
+
+    if exact_length is not None and max_length is not None:
+        raise ValueError("pass exact_length or max_length, not both")
 
     z_init = np.asarray(z_init, dtype=np.int8).reshape(-1)
     z_goal = np.asarray(z_goal, dtype=np.int8).reshape(-1)
@@ -66,16 +78,24 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None):
     began = time.time()
 
     if exact_length is None:
+        if max_length is not None and max_length < 0:
+            raise ValueError(f"max_length must be >= 0; got {max_length}")
         if start == goal:
             return True, np.stack([z_init]), 0.0
-        queue = deque([z_init])
+        if max_length == 0:
+            return False, np.zeros((0, len(z_init)), dtype=np.int8), 0.0
+
+        queue = deque([(z_init, 0)])
         parent = {start: None}
 
         while queue:
             if time.time() - began > time_budget_s:
                 break
 
-            state = queue.popleft()
+            state, depth = queue.popleft()
+            if max_length is not None and depth >= max_length:
+                continue
+
             for delta in deltas:
                 child = (state ^ delta).astype(np.int8)
                 key = child.tobytes()
@@ -93,7 +113,7 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None):
                                       for k in chain])
                     return True, trace, time.time() - began
 
-                queue.append(child)
+                queue.append((child, depth + 1))
 
         empty = np.zeros((0, len(z_init)), dtype=np.int8)
         return False, empty, time.time() - began
@@ -141,16 +161,23 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None):
 
 
 def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
-           plan_length=None, exact_length=True, **_):
+           plan_length=None, length_mode="max", **_):
     pre, suc = export.transitions()
     deltas = mine_deltas(pre=pre, suc=suc)
-    want = plan_length if (exact_length and plan_length) else None
-    print(f"{len(deltas)} distinct deltas from {len(pre)} transitions"
-          + (f"; searching at exactly {want} steps" if want else ""))
+
+    exact = plan_length if (length_mode == "exact" and plan_length) else None
+    cap = plan_length if (length_mode == "max" and plan_length) else None
+    if length_mode == "exact":
+        how = f"; searching at exactly {exact} steps"
+    elif length_mode == "max":
+        how = f"; searching within {cap} steps"
+    else:
+        how = "; unbounded search"
+    print(f"{len(deltas)} distinct deltas from {len(pre)} transitions" + how)
+
     found, trace, wall = search(z_init, z_goal, deltas, time_budget_s,
-                                exact_length=want)
-    return found, trace, wall, {"n_deltas": int(len(deltas)),
-                                "exact_length": bool(want)}
+                                exact_length=exact, max_length=cap)
+    return found, trace, wall, {"n_deltas": int(len(deltas))}
 
 
 def run(export_path, init_idx, goal_idx, out_dir, **kwargs):

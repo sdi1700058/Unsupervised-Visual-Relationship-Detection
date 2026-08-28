@@ -15,12 +15,22 @@ from pathlib import Path
 
 def run_window(export_path, init_idx, goal_idx, out_dir, solve,
                time_budget_s=60, matching="hungarian", plan_only=False,
-               method="unknown", solve_kwargs=None):
+               method="unknown", solve_kwargs=None, length_mode="max"):
     """Plan across one window and score it.
 
     `solve` is called as solve(z_init, z_goal, z_all, time_budget_s, out_dir,
     **solve_kwargs) and returns (found, trace, wall_s, extra). The trace holds
     the init state, the states between, and the goal state.
+
+    `length_mode` decides what the method is asked for:
+
+    - `max` asks for the shortest plan of at most k-1 actions. This is the
+      default because a trained encoder maps runs of consecutive frames to one
+      code, so most windows hold fewer than k-1 real transitions.
+    - `exact` asks for exactly k-1 actions. Right for the oracle export, whose
+      encoding changes on every frame by construction.
+    - `free` removes the constraint. Kept for comparison only; an unbounded
+      search over a wide latent is expensive and can exhaust memory.
     """
     import numpy as np
 
@@ -56,19 +66,26 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
     print(f"latents differ in {hamming} of {export.n_bits} bits; "
           f"{n_mid} frames to reconstruct")
 
-    # plan_length goes to the method because the interpolation task wants a
-    # trajectory of exactly this many steps, not the cheapest plan between
-    # the two ends. A method free to return its shortest plan will collapse a
+    # plan_length goes to the method because the interpolation task constrains
+    # the trajectory rather than asking for the cheapest plan between the two
+    # ends. A method free to return its shortest plan will collapse a
     # three-frame window into one action whenever the two latents are close.
     found, trace, wall, extra = solve(
         z_init=z_init, z_goal=z_goal, z_all=z_all, export=export,
         time_budget_s=time_budget_s, out_dir=out_dir,
-        plan_length=window["plan_length"],
+        plan_length=window["plan_length"], length_mode=length_mode,
         **(solve_kwargs or {}))
 
     plan_length = max(0, len(trace) - 1) if found else 0
     print(f"plan length {plan_length} (expected {window['plan_length']}) "
           f"in {wall:.2f}s")
+
+    # How many of the window's frame steps actually move the latent. When this
+    # is below k-1 the encoder has merged frames, and a k-1-step plan cannot
+    # exist except by padding. Recorded so a short plan is readable as a
+    # property of the model rather than a failure of the search.
+    span = z_all[init_idx:goal_idx + 1]
+    moving_steps = int((span[1:] ^ span[:-1]).any(axis=1).sum())
 
     scores = None
     if found and not plan_only and n_mid > 0:
@@ -90,6 +107,8 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
     metrics = summarize(found, plan_length, wall, window, scores,
                         extra={"method": method,
                                "hamming_init_goal": hamming,
+                               "length_mode": length_mode,
+                               "moving_steps": moving_steps,
                                "decode_fallbacks": export.fallback_count,
                                **(extra or {})})
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))

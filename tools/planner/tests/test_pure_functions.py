@@ -132,6 +132,58 @@ class TestBfs(unittest.TestCase):
         self.assertFalse(found)
         self.assertEqual(len(trace), 0)
 
+    def test_repeated_frames_do_not_make_the_window_unplannable(self):
+        """A window whose latents repeat still has a plan, a shorter one.
+
+        The trained models encode several consecutive frames to one latent, so
+        a k-frame window holds fewer than k-1 real transitions. Demanding
+        exactly k-1 actions rejects the true plan and sends the search after a
+        padded one it cannot afford. `max_length` asks for the shortest plan
+        that fits inside the window instead.
+        """
+        from tools.planner.bfs.planner import mine_deltas, search
+
+        # Eight frames, but the latent only moves on three of the seven steps.
+        z = np.array([[0, 0, 0, 0],
+                      [0, 0, 0, 1],
+                      [0, 0, 0, 1],
+                      [0, 0, 1, 1],
+                      [0, 0, 1, 1],
+                      [0, 0, 1, 1],
+                      [0, 1, 1, 1],
+                      [0, 1, 1, 1]], dtype=np.int8)
+        deltas = mine_deltas(z[:-1], z[1:])
+
+        # The window is 8 frames, so the old code asked for exactly 7 actions.
+        # Here that is satisfiable only by padding: the plan wanders away and
+        # comes back, because a delta applied twice is the identity. On the
+        # real exports the delta set is large enough that the same search runs
+        # out of budget instead, which is the failure this fixes.
+        found, padded, _ = search(z[0], z[-1], deltas, time_budget_s=5,
+                                  exact_length=7)
+        self.assertTrue(found)
+        self.assertEqual(len(padded) - 1, 7)
+        self.assertLess(len({row.tobytes() for row in padded}), len(padded),
+                        "a padded plan has to revisit a state")
+
+        # The honest question is whether the goal is reachable within 7.
+        found, trace, _ = search(z[0], z[-1], deltas, time_budget_s=5,
+                                 max_length=7)
+        self.assertTrue(found)
+        self.assertEqual(len(trace) - 1, 3)
+        np.testing.assert_array_equal(trace[0], z[0])
+        np.testing.assert_array_equal(trace[-1], z[-1])
+
+    def test_max_length_refuses_a_plan_that_does_not_fit(self):
+        from tools.planner.bfs.planner import search
+
+        # Three separate bits to set, one delta each, so no plan under three.
+        deltas = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]], dtype=np.int8)
+        found, _, _ = search(np.zeros(3, dtype=np.int8),
+                             np.ones(3, dtype=np.int8),
+                             deltas, time_budget_s=2, max_length=2)
+        self.assertFalse(found)
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 
