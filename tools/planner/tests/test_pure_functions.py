@@ -216,6 +216,52 @@ class TestBfs(unittest.TestCase):
         self.assertEqual(moving_gt_steps(boxes), 0)
         self.assertEqual(moving_gt_steps(boxes, tol=0.0), 1)
 
+    def test_latent_geometry_rewards_a_position_aligned_code(self):
+        """A code whose Hamming distance tracks position scores near 1.
+
+        This is what decides whether a plan's intermediate states decode to
+        sensible boxes. Those states are almost never latents the model
+        produced, so `Export.boxes_for` falls back to the Hamming-nearest
+        observed latent. If Hamming distance tracks position that fallback is
+        harmless; if it does not, the decoded box is arbitrary.
+        """
+        from tools.planner.common.metrics import latent_geometry
+
+        # A unary code: frame i has i bits set, and its box sits at x = i.
+        n = 8
+        z = np.array([[1] * i + [0] * (n - i) for i in range(n)], dtype=np.int8)
+        boxes = np.array([[[float(i), 0., float(i) + 1., 1.]] for i in range(n)])
+
+        g = latent_geometry(z, boxes)
+        self.assertGreater(g["spearman"], 0.9)
+        # Every frame's Hamming-nearest neighbour is an adjacent frame, one
+        # unit away in x, so the corner distance is sqrt(1 + 1) over two
+        # corners moved by 1 each.
+        self.assertLess(g["nearest_box_error"], 2.0)
+
+    def test_latent_geometry_penalises_a_shuffled_code(self):
+        from tools.planner.common.metrics import latent_geometry
+
+        n = 8
+        # Same boxes, but the codes are assigned in an order unrelated to x.
+        order = [0, 5, 2, 7, 4, 1, 6, 3]
+        z = np.array([[1] * order[i] + [0] * (n - order[i]) for i in range(n)],
+                     dtype=np.int8)
+        boxes = np.array([[[float(i), 0., float(i) + 1., 1.]] for i in range(n)])
+
+        shuffled = latent_geometry(z, boxes)
+        self.assertLess(shuffled["spearman"], 0.6)
+
+    def test_latent_geometry_handles_a_degenerate_code(self):
+        from tools.planner.common.metrics import latent_geometry
+
+        # Every frame encodes identically. No pair carries information, so the
+        # correlation is undefined rather than zero.
+        z = np.zeros((5, 4), dtype=np.int8)
+        boxes = np.array([[[float(i), 0., 1., 1.]] for i in range(5)])
+        g = latent_geometry(z, boxes)
+        self.assertIsNone(g["spearman"])
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 

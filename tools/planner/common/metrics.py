@@ -179,6 +179,81 @@ def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
     }
 
 
+def _rank(a):
+    import numpy as np
+    order = a.argsort()
+    r = np.empty(len(a), dtype=np.float64)
+    r[order] = np.arange(len(a))
+    return r
+
+
+def latent_geometry(latents, gt_boxes, max_pairs=4000, seed=0):
+    """Does Hamming distance in the latent track distance in the world?
+
+    This decides whether a plan decodes to sensible boxes, and it is
+    measurable from an export alone — no planner, no search, no budget.
+
+    The reason it matters is `Export.boxes_for`. A plan's intermediate states
+    are almost never latents the model actually produced, so they are decoded
+    by falling back to the **Hamming-nearest observed latent**. If Hamming
+    distance tracks position, that fallback lands near the truth. If it does
+    not, the decoded box is arbitrary and no amount of search quality helps.
+
+    Measured on `ILSVRC2015_train_00005005`, where the oracle's planner error
+    is 13.67 and the trained model's is 101.44:
+
+        oracle       spearman +0.651   nearest-neighbour box error  2.57 px
+        trained P10  spearman +0.356                                6.10 px
+        trained P20  spearman +0.343                               10.16 px
+
+    Returns `spearman` (None when no pair of latents differs, since the
+    correlation is then undefined rather than zero) and `nearest_box_error`,
+    the mean positional error incurred by decoding a frame as its
+    Hamming-nearest neighbour.
+    """
+    import numpy as np
+
+    z = np.asarray(latents, dtype=np.int16)
+    b = np.asarray(gt_boxes, dtype=np.float64)
+    n = len(z)
+    if n < 2:
+        return {"spearman": None, "nearest_box_error": None, "n_frames": n}
+
+    pairs = [(i, j) for i in range(n) for j in range(i + 1, n)]
+    if len(pairs) > max_pairs:
+        rng = np.random.RandomState(seed)
+        pairs = [pairs[k] for k in rng.choice(len(pairs), max_pairs,
+                                              replace=False)]
+
+    ham = np.array([int((z[i] ^ z[j]).sum()) for i, j in pairs],
+                   dtype=np.float64)
+    pos = np.array([float(np.sqrt(((b[i] - b[j]) ** 2).sum()))
+                    for i, j in pairs])
+
+    # A code where every frame is identical carries no information, and a
+    # correlation over a constant is undefined, not zero.
+    if ham.std() == 0 or pos.std() == 0:
+        rho = None
+    else:
+        rh, rp = _rank(ham), _rank(pos)
+        rh -= rh.mean()
+        rp -= rp.mean()
+        denom = np.sqrt((rh ** 2).sum() * (rp ** 2).sum())
+        rho = float((rh * rp).sum() / denom) if denom > 0 else None
+
+    big = float(10 ** 9)
+    total = 0.0
+    for i in range(n):
+        h = np.array([int((z[i] ^ z[j]).sum()) if j != i else big
+                      for j in range(n)])
+        total += float(np.sqrt(((b[i] - b[int(h.argmin())]) ** 2).sum()))
+
+    return {"spearman": rho,
+            "nearest_box_error": total / n,
+            "n_frames": n,
+            "n_pairs": len(pairs)}
+
+
 def moving_gt_steps(gt_boxes, tol=1e-3):
     """Frame steps in the window where the annotated boxes actually move.
 
