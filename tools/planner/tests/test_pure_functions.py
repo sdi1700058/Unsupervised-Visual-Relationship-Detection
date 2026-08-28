@@ -308,6 +308,35 @@ class TestBfs(unittest.TestCase):
                         "width": 10, "height": 10})
         self.assertIsNone(s)
 
+    def test_nonlinearity_is_zero_for_constant_velocity(self):
+        """Straight-line motion is exactly what interpolation predicts.
+
+        `EVAL.md` §4.9: a planner can only beat linear interpolation where the
+        motion is not linear. This scores how much of a clip's motion the
+        straight line already explains, so clips can be screened for the
+        property before any are baked.
+        """
+        from tools.video.screen_vidvrd import window_nonlinearity
+
+        # One object, constant velocity: interpolation is exact.
+        track = {i: (float(i), 0.0, float(i) + 10.0, 10.0) for i in range(9)}
+        self.assertAlmostEqual(window_nonlinearity({0: track}, window=5), 0.0)
+
+    def test_nonlinearity_is_positive_for_a_step_change(self):
+        from tools.video.screen_vidvrd import window_nonlinearity
+
+        # Still, then one jump, then still. Interpolation smears the jump.
+        xs = [0., 0., 0., 0., 40., 40., 40., 40., 40.]
+        track = {i: (x, 0.0, x + 10.0, 10.0) for i, x in enumerate(xs)}
+        self.assertGreater(window_nonlinearity({0: track}, window=5), 0.05)
+
+    def test_nonlinearity_ignores_windows_that_are_not_contiguous(self):
+        from tools.video.screen_vidvrd import window_nonlinearity
+
+        # Frames 3 and 4 are missing, so no window of 5 is contiguous.
+        track = {i: (float(i), 0.0, 1.0, 1.0) for i in (0, 1, 2, 5, 6, 7)}
+        self.assertIsNone(window_nonlinearity({0: track}, window=5))
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 
