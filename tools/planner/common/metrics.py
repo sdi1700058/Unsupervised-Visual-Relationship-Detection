@@ -115,6 +115,70 @@ def bbox_mse(pred_trace, gt_boxes, matching="hungarian"):
     }
 
 
+def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
+    """Mean intersection-over-union between predicted and annotated boxes.
+
+    Reported alongside `bbox_mse` because squared pixel error is not
+    comparable across clips. A large box displaced by ten pixels and a small
+    box displaced by ten pixels score the same under MSE, and the same
+    absolute error means something different on a dog filling the frame than
+    on a bird crossing it. IoU is scale-invariant and bounded in [0, 1].
+
+    It is also the quantity the video relation literature localises with: the
+    standard protocol thresholds volumetric IoU over a box trajectory at 0.5
+    (see `.claude/docs/EVAL_CONSIDERED.md`). Reporting it makes the result
+    legible to readers calibrated to that convention rather than to pixel MSE.
+
+    `mapping` reuses the slot assignment already solved by `bbox_mse`, so the
+    two metrics describe the same pairing.
+    """
+    import numpy as np
+
+    pred = np.asarray(pred_trace, dtype=np.float64)
+    gt = np.asarray(gt_boxes, dtype=np.float64)
+    if pred.shape != gt.shape:
+        raise ValueError(f"shape mismatch: pred {pred.shape} vs gt {gt.shape}")
+
+    n_frames, n_objs, _ = pred.shape
+    if mapping is None:
+        if matching == "hungarian":
+            mapping = match_slots(pred[0], gt[0])
+        else:
+            mapping = np.arange(n_objs, dtype=np.int64)
+    mapping = np.asarray(mapping)
+
+    per_frame = np.zeros(n_frames)
+    counted = 0
+    ious = np.zeros((n_frames, n_objs))
+    for i in range(n_objs):
+        j = int(mapping[i])
+        if j < 0:
+            continue
+        counted += 1
+        p, g = pred[:, i, :], gt[:, j, :]
+        x1 = np.maximum(p[:, 0], g[:, 0])
+        y1 = np.maximum(p[:, 1], g[:, 1])
+        x2 = np.minimum(p[:, 2], g[:, 2])
+        y2 = np.minimum(p[:, 3], g[:, 3])
+        inter = np.clip(x2 - x1, 0, None) * np.clip(y2 - y1, 0, None)
+        area_p = np.clip(p[:, 2] - p[:, 0], 0, None) * np.clip(p[:, 3] - p[:, 1], 0, None)
+        area_g = np.clip(g[:, 2] - g[:, 0], 0, None) * np.clip(g[:, 3] - g[:, 1], 0, None)
+        union = area_p + area_g - inter
+        # A padded slot is an all-zero box on both sides. Union zero means
+        # there is nothing to score, not a perfect overlap.
+        ious[:, i] = np.where(union > 0, inter / np.maximum(union, 1e-9), 0.0)
+
+    if counted:
+        per_frame = ious.sum(axis=1) / counted
+
+    return {
+        "mean_iou": float(per_frame.mean()) if n_frames else 0.0,
+        "per_frame_iou": [float(v) for v in per_frame],
+        "frames_above_0.5": int((per_frame >= 0.5).sum()),
+        "n_frames": int(n_frames),
+    }
+
+
 def temporal_order(pred_trace, gt_boxes):
     """Spearman correlation between plan step and closest real frame.
 
@@ -165,9 +229,15 @@ def score_window(pred_trace, gt_boxes, baseline_trace=None,
     result = {"planner": bbox_mse(pred_trace, gt_boxes, matching)}
     result["temporal_order"] = temporal_order(pred_trace, gt_boxes)
 
+    # Same slot pairing as the error, so the two describe one assignment.
+    mapping = result["planner"]["mapping"]
+    result["planner_iou"] = bbox_iou(pred_trace, gt_boxes, mapping=mapping)
+
     if baseline_trace is not None:
         base = bbox_mse(baseline_trace, gt_boxes, matching)
         result["baseline_linear"] = base
+        result["baseline_iou"] = bbox_iou(baseline_trace, gt_boxes,
+                                          mapping=base["mapping"])
         planner_mse = result["planner"]["mean_mse"]
         base_mse = base["mean_mse"]
         result["mse_ratio"] = (planner_mse / base_mse) if base_mse > 0 else None
@@ -197,6 +267,11 @@ def summarize(found, plan_length, wall_s, window=None, scores=None, extra=None):
         out["hungarian_mapping"] = scores["planner"]["mapping"]
         out["matching_mode"] = scores["planner"]["matching_mode"]
         out["temporal_order"] = scores.get("temporal_order")
+        if "planner_iou" in scores:
+            out["bbox_iou_mean"] = scores["planner_iou"]["mean_iou"]
+            out["frames_iou_above_half"] = scores["planner_iou"]["frames_above_0.5"]
+        if "baseline_iou" in scores:
+            out["baseline_iou_mean"] = scores["baseline_iou"]["mean_iou"]
         if "baseline_linear" in scores:
             out["baseline_mse_mean"] = scores["baseline_linear"]["mean_mse"]
             out["mse_ratio"] = scores.get("mse_ratio")

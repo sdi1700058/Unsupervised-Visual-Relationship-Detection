@@ -184,5 +184,78 @@ class TestBuildExport(unittest.TestCase):
             self.assertEqual(info["transitions"], 0)
 
 
+
+class TestBboxIoU(unittest.TestCase):
+    """IoU is reported next to bbox_mse because MSE is not scale-invariant."""
+
+    def _iou(self, pred, gt, **kw):
+        from tools.planner.common.metrics import bbox_iou
+        return bbox_iou(np.asarray(pred, dtype=float),
+                        np.asarray(gt, dtype=float), **kw)
+
+    def test_identical_boxes_score_one(self):
+        b = [[[10.0, 10.0, 20.0, 20.0]]]
+        r = self._iou(b, b, mapping=[0])
+        self.assertAlmostEqual(r["mean_iou"], 1.0)
+
+    def test_disjoint_boxes_score_zero(self):
+        p = [[[0.0, 0.0, 10.0, 10.0]]]
+        g = [[[50.0, 50.0, 60.0, 60.0]]]
+        self.assertAlmostEqual(self._iou(p, g, mapping=[0])["mean_iou"], 0.0)
+
+    def test_half_overlap(self):
+        # Two 10x10 boxes sharing a 5x10 strip: intersection 50, union 150.
+        p = [[[0.0, 0.0, 10.0, 10.0]]]
+        g = [[[5.0, 0.0, 15.0, 10.0]]]
+        self.assertAlmostEqual(self._iou(p, g, mapping=[0])["mean_iou"],
+                               50.0 / 150.0, places=6)
+
+    def test_padded_slot_scores_zero_not_one(self):
+        """An all-zero box on both sides has zero union and must not count
+        as a perfect overlap."""
+        p = [[[0.0, 0.0, 0.0, 0.0]]]
+        r = self._iou(p, p, mapping=[0])
+        self.assertAlmostEqual(r["mean_iou"], 0.0)
+
+    def test_scale_invariance_is_the_point(self):
+        """The property MSE lacks: the same relative error on a big and a
+        small box scores the same."""
+        small_p = [[[0.0, 0.0, 10.0, 10.0]]]
+        small_g = [[[1.0, 0.0, 11.0, 10.0]]]
+        big_p = [[[0.0, 0.0, 100.0, 100.0]]]
+        big_g = [[[10.0, 0.0, 110.0, 100.0]]]
+        a = self._iou(small_p, small_g, mapping=[0])["mean_iou"]
+        b = self._iou(big_p, big_g, mapping=[0])["mean_iou"]
+        self.assertAlmostEqual(a, b, places=6)
+
+    def test_unmatched_slot_is_skipped(self):
+        p = [[[0.0, 0.0, 10.0, 10.0], [0.0, 0.0, 10.0, 10.0]]]
+        g = [[[0.0, 0.0, 10.0, 10.0], [90.0, 90.0, 99.0, 99.0]]]
+        r = self._iou(p, g, mapping=[0, -1])
+        self.assertAlmostEqual(r["mean_iou"], 1.0)
+
+    def test_counts_frames_over_the_half_threshold(self):
+        p = [[[0.0, 0.0, 10.0, 10.0]], [[0.0, 0.0, 10.0, 10.0]]]
+        g = [[[0.0, 0.0, 10.0, 10.0]], [[50.0, 50.0, 60.0, 60.0]]]
+        r = self._iou(p, g, mapping=[0])
+        self.assertEqual(r["frames_above_0.5"], 1)
+        self.assertEqual(r["n_frames"], 2)
+
+    def test_shape_mismatch_raises(self):
+        with self.assertRaises(ValueError):
+            self._iou([[[0.0, 0, 1, 1]]], [[[0.0, 0, 1, 1], [0, 0, 1, 1]]])
+
+    def test_score_window_reports_both_metrics(self):
+        from tools.planner.common.metrics import score_window
+        pred = np.array([[[0.0, 0, 10, 10]], [[5.0, 0, 15, 10]]])
+        gt = np.array([[[0.0, 0, 10, 10]], [[0.0, 0, 10, 10]]])
+        base = np.array([[[0.0, 0, 10, 10]], [[0.0, 0, 10, 10]]])
+        r = score_window(pred, gt, base, matching="fixed")
+        self.assertIn("planner_iou", r)
+        self.assertIn("baseline_iou", r)
+        self.assertAlmostEqual(r["baseline_iou"]["mean_iou"], 1.0)
+        self.assertLess(r["planner_iou"]["mean_iou"], 1.0)
+
+
 if __name__ == "__main__":
     unittest.main()
