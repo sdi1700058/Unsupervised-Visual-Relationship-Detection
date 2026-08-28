@@ -517,6 +517,40 @@ class TestMetrics(unittest.TestCase):
         gt = np.array([[0., 0., 10., 10.], [50., 50., 60., 60.]])
         np.testing.assert_array_equal(match_slots(gt[::-1], gt), [1, 0])
 
+    def test_mse_does_not_score_a_frame_where_the_object_is_absent(self):
+        """An absent object is a zero box, and that is not a position.
+
+        `bbox_iou` already refuses to score a padded slot; `bbox_mse` used to
+        square the difference against the origin and call it error. On 23% of
+        the winnable VidVRD clips at least one object does not span every
+        frame, so this is not a corner case.
+        """
+        from tools.planner.common.metrics import bbox_mse
+
+        gt = np.array([
+            [[10., 10., 20., 20.]],
+            [[0., 0., 0., 0.]],        # object absent in this frame
+            [[30., 30., 40., 40.]],
+        ])
+        pred = np.array([
+            [[10., 10., 20., 20.]],    # exact
+            [[99., 99., 99., 99.]],    # scored against nothing
+            [[30., 30., 40., 40.]],    # exact
+        ])
+
+        result = bbox_mse(pred, gt, matching="fixed")
+        self.assertEqual(result["mean_mse"], 0.0)
+        self.assertEqual(result["skipped_absent"], 1)
+
+    def test_mse_reports_when_every_frame_is_absent(self):
+        from tools.planner.common.metrics import bbox_mse
+
+        gt = np.zeros((3, 1, 4))
+        pred = np.ones((3, 1, 4)) * 5.0
+        result = bbox_mse(pred, gt, matching="fixed")
+        self.assertEqual(result["skipped_absent"], 3)
+        self.assertEqual(result["mean_mse"], 0.0)
+
     def test_error_is_zero_when_the_prediction_is_exact(self):
         from tools.planner.common.metrics import bbox_mse
 

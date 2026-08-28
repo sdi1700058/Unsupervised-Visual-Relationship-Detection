@@ -98,20 +98,37 @@ def bbox_mse(pred_trace, gt_boxes, matching="hungarian"):
     if not (mapping >= 0).any():
         raise RuntimeError("no slot could be paired with an annotated object")
 
+    # A ground-truth box of all zeros means the object is not in that frame,
+    # not that it sits at the origin. Squaring the distance to it would score
+    # a prediction against nothing, which is what `bbox_iou` already refuses
+    # to do. On 23% of the winnable VidVRD clips at least one object does not
+    # span every frame, so this is not a corner case.
     sq = np.zeros((n_frames, n_objs))
+    scored = np.zeros((n_frames, n_objs), dtype=bool)
     for i in range(n_objs):
         j = int(mapping[i])
         if j < 0:
             continue
+        present = np.abs(gt[:, j, :]).sum(axis=-1) > 0
         d = pred[:, i, :] - gt[:, j, :]
-        sq[:, i] = np.sum(d * d, axis=-1)
+        sq[:, i] = np.where(present, np.sum(d * d, axis=-1), 0.0)
+        scored[:, i] = present
+
+    n_scored = int(scored.sum())
+    per_frame = np.divide(sq.sum(axis=1), scored.sum(axis=1),
+                          out=np.zeros(n_frames),
+                          where=scored.sum(axis=1) > 0)
+    per_object = np.divide(sq.sum(axis=0), scored.sum(axis=0),
+                           out=np.zeros(n_objs),
+                           where=scored.sum(axis=0) > 0)
 
     return {
-        "mean_mse": float(sq.mean()),
-        "per_frame_mse": [float(v) for v in sq.mean(axis=1)],
-        "per_object_mse": [float(v) for v in sq.mean(axis=0)],
+        "mean_mse": float(sq.sum() / n_scored) if n_scored else 0.0,
+        "per_frame_mse": [float(v) for v in per_frame],
+        "per_object_mse": [float(v) for v in per_object],
         "mapping": [int(v) for v in mapping],
         "matching_mode": matching,
+        "skipped_absent": int(scored.size - n_scored),
     }
 
 
