@@ -35,7 +35,8 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
     import numpy as np
 
     from tools.planner.common.export import load as load_export
-    from tools.planner.common.metrics import score_window, summarize
+    from tools.planner.common.metrics import (
+        moving_gt_steps, score_window, summarize)
     from tools.planner.common.windows import (
         extract_intermediate_states, linear_interp_bboxes)
 
@@ -87,6 +88,15 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
     span = z_all[init_idx:goal_idx + 1]
     moving_steps = int((span[1:] ^ span[:-1]).any(axis=1).sum())
 
+    # The same count taken from the annotations. When it is 0 the objects
+    # stand still, linear interpolation is exact, and `mse_ratio` divides by
+    # noise -- the window cannot separate a good model from a bad one and has
+    # to be dropped when the results are aggregated.
+    moving_gt = moving_gt_steps(export.gt_boxes[init_idx:goal_idx + 1])
+    if moving_gt == 0:
+        print("warning: the annotated boxes do not move in this window; "
+              "any ratio from it is noise")
+
     scores = None
     if found and not plan_only and n_mid > 0:
         mid_latents, exact = extract_intermediate_states(trace, n_mid)
@@ -109,6 +119,7 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
                                "hamming_init_goal": hamming,
                                "length_mode": length_mode,
                                "moving_steps": moving_steps,
+                               "moving_gt_steps": moving_gt,
                                "decode_fallbacks": export.fallback_count,
                                **(extra or {})})
     (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))

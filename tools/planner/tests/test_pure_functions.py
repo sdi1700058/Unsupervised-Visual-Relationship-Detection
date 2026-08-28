@@ -184,6 +184,38 @@ class TestBfs(unittest.TestCase):
                              deltas, time_budget_s=2, max_length=2)
         self.assertFalse(found)
 
+    def test_moving_gt_steps_counts_frames_where_the_boxes_move(self):
+        """A window whose annotated boxes never move cannot measure anything.
+
+        Clip 00005005 opens with 60 consecutive frame pairs of completely
+        motionless boxes, so the first eight windows of that export score
+        nothing but quantisation noise. The count has to come from the
+        annotations, not from the latents: a model can change its code while
+        the objects stand still.
+        """
+        from tools.planner.common.metrics import moving_gt_steps
+
+        boxes = np.array([
+            [[0., 0., 10., 10.]],
+            [[0., 0., 10., 10.]],   # still
+            [[2., 0., 12., 10.]],   # moved
+            [[2., 0., 12., 10.]],   # still
+            [[5., 1., 15., 11.]],   # moved
+        ])
+        self.assertEqual(moving_gt_steps(boxes), 2)
+        self.assertEqual(moving_gt_steps(boxes[:2]), 0)
+        self.assertEqual(moving_gt_steps(boxes[:1]), 0)
+
+    def test_moving_gt_steps_ignores_movement_below_the_tolerance(self):
+        from tools.planner.common.metrics import moving_gt_steps
+
+        boxes = np.array([
+            [[0., 0., 10., 10.]],
+            [[0.0001, 0., 10., 10.]],
+        ])
+        self.assertEqual(moving_gt_steps(boxes), 0)
+        self.assertEqual(moving_gt_steps(boxes, tol=0.0), 1)
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 

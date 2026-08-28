@@ -179,6 +179,29 @@ def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
     }
 
 
+def moving_gt_steps(gt_boxes, tol=1e-3):
+    """Frame steps in the window where the annotated boxes actually move.
+
+    A window whose objects stand still measures nothing. Linear interpolation
+    is exact there, so `mse_ratio` divides by a number near zero and reports a
+    ratio in the millions that says only that the denominator was small. Clip
+    `00005005` opens with sixty consecutive motionless frame pairs, which is
+    eight windows of pure noise at window 8.
+
+    This counts from the **annotations**, not from the latents, which is the
+    whole point of having it beside `moving_steps`: a model can change its code
+    while the objects stand still, and that is a fact about the model rather
+    than about the window being measurable.
+    """
+    import numpy as np
+
+    gt = np.asarray(gt_boxes, dtype=np.float64)
+    if len(gt) < 2:
+        return 0
+    step = np.abs(np.diff(gt, axis=0)).sum(axis=tuple(range(1, gt.ndim)))
+    return int((step > tol).sum())
+
+
 def temporal_order(pred_trace, gt_boxes):
     """Spearman correlation between plan step and closest real frame.
 
