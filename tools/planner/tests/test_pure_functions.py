@@ -551,6 +551,57 @@ class TestBfs(unittest.TestCase):
         self.assertEqual(s["solved"], 1)
         self.assertEqual(s["scored"], 0)
 
+    @unittest.skipUnless(_has_pillow(), "pillow is not installed in this "
+                         "interpreter; run under .venv-local")
+    def test_something_else_frames_keep_slot_identity(self):
+        """`standard_category` is the slot id, and it must drive the columns.
+
+        Something-Else labels each box with `standard_category` — `0000`,
+        `0001`, `hand`. Ordering columns by anything else (list position, say)
+        would let a slot swap between frames, which the Hungarian matching
+        would then have to undo, and it would silently corrupt every
+        trajectory.
+        """
+        from tools.planner.oracle import boxes_from_something_else_frames
+
+        def box(x, cat):
+            return {"box2d": {"x1": x, "y1": 0.0, "x2": x + 10.0, "y2": 10.0},
+                    "standard_category": cat}
+
+        # The hand is listed first in one frame and second in the next.
+        frames = [
+            {"labels": [box(0, "0000"), box(50, "hand")], "nr_instances": 2},
+            {"labels": [box(60, "hand"), box(10, "0000")], "nr_instances": 2},
+        ]
+        boxes, meta = boxes_from_something_else_frames(
+            frames, width=100, height=100, num_objs=2)
+
+        self.assertEqual(boxes.shape, (2, 2, 4))
+        self.assertEqual(meta["slots"], ["0000", "hand"])
+        # Slot 0 is the object, which moved 0 -> 10, not the hand.
+        self.assertLess(boxes[0][0][0], boxes[1][0][0])
+        self.assertGreater(boxes[0][1][0], boxes[0][0][0])
+
+    @unittest.skipUnless(_has_pillow(), "pillow is not installed in this "
+                         "interpreter; run under .venv-local")
+    def test_something_else_absent_slot_is_zero(self):
+        """A slot missing from a frame stays all-zero, meaning 'not here'."""
+        from tools.planner.oracle import boxes_from_something_else_frames
+
+        frames = [
+            {"labels": [{"box2d": {"x1": 1., "y1": 1., "x2": 9., "y2": 9.},
+                         "standard_category": "0000"},
+                        {"box2d": {"x1": 20., "y1": 1., "x2": 30., "y2": 9.},
+                         "standard_category": "hand"}]},
+            {"labels": [{"box2d": {"x1": 2., "y1": 1., "x2": 9., "y2": 9.},
+                         "standard_category": "0000"}]},
+        ]
+        boxes, meta = boxes_from_something_else_frames(
+            frames, width=100, height=100, num_objs=2)
+        hand = meta["slots"].index("hand")
+        self.assertEqual(list(boxes[1][hand]), [0, 0, 0, 0])
+        self.assertEqual(meta["absent"], 1)
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 

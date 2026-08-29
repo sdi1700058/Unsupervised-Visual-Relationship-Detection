@@ -211,6 +211,87 @@ def load_canvas_scaler():
     return (module._scale_bbox_to_canvas, module.CANVAS_W, module.CANVAS_H)
 
 
+def boxes_from_something_else_frames(frames, width, height, num_objs=3):
+    """Convert one Something-Else video's annotations into canvas boxes.
+
+    Something-Else adds per-frame boxes to Something-Something v2: 180,049
+    videos, 8.18M annotated frames, MIT licensed, and every clip an instance of
+    a named action (`DATASETS_CONSIDERED.md`). Each label carries `box2d` with
+    `x1, y1, x2, y2` and a `standard_category` that is a **per-video slot id** —
+    `0000`, `0001`, `hand`.
+
+    Columns are ordered by that slot id, not by list position. The order inside
+    a frame's `labels` is not stable, so keying on position would let a slot
+    swap between frames and silently corrupt every trajectory.
+
+    A slot absent from a frame stays all-zero, which the metrics read as "not
+    in this frame" rather than "at the origin". That case is normal here: on
+    the median sample clip the least-present slot covers only 78% of frames.
+
+    Returns (boxes, meta) with boxes shaped (n_frames, num_objs, 4).
+    """
+    import numpy as np
+
+    scale, canvas_w, canvas_h = load_canvas_scaler()
+
+    slots = []
+    for frame in frames:
+        for label in frame.get("labels") or []:
+            cat = label.get("standard_category")
+            if cat is not None and cat not in slots:
+                slots.append(cat)
+    # Objects first in id order, hand last: the hand is a participant in nearly
+    # every clip, so putting it last keeps object slots stable as num_objs
+    # varies.
+    slots.sort(key=lambda c: (c == "hand", c))
+    slots = slots[:num_objs]
+
+    boxes = np.zeros((len(frames), num_objs, 4), dtype=np.float32)
+    absent = 0
+    for i, frame in enumerate(frames):
+        present = {}
+        for label in frame.get("labels") or []:
+            cat = label.get("standard_category")
+            if cat in slots:
+                b = label["box2d"]
+                present[cat] = scale([b["x1"], b["y1"], b["x2"], b["y2"]],
+                                     width, height)
+        for j, slot in enumerate(slots):
+            if slot in present:
+                boxes[i, j] = present[slot]
+            else:
+                absent += 1
+
+    return boxes, {"frames": len(frames), "slots": slots, "absent": absent,
+                   "source_size": (width, height),
+                   "canvas": (canvas_w, canvas_h)}
+
+
+def boxes_from_something_else(path, video_id=None, num_objs=3,
+                              width=None, height=None):
+    """Read one video out of a Something-Else annotation file.
+
+    The released annotations are a dict mapping video id to a list of
+    per-frame records. Something-Something v2 frames are 240 pixels high with
+    a variable width; the sample records carry no size, so `width`/`height`
+    default to the 427x240 that the release documents.
+    """
+    import json
+
+    with open(path) as fh:
+        data = json.load(fh)
+    if video_id is None:
+        video_id = sorted(data)[0]
+    if video_id not in data:
+        raise SystemExit("video %s is not in %s (it holds %d videos)"
+                         % (video_id, path, len(data)))
+
+    boxes, meta = boxes_from_something_else_frames(
+        data[video_id], width or 427, height or 240, num_objs=num_objs)
+    meta["video_id"] = video_id
+    return boxes, meta
+
+
 def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
     """Read one VidVRD annotation JSON into canvas-space boxes.
 
@@ -358,12 +439,26 @@ def main(argv=None):
                     help="do not carry the last annotated frame forward")
     ap.add_argument("--limit", type=int, default=None,
                     help="use only the first N states")
+    ap.add_argument("--something-else", action="store_true",
+                    help="read the source as a Something-Else annotation file "
+                         "rather than a VidVRD one")
+    ap.add_argument("--video-id", default=None,
+                    help="which video to read from a Something-Else file; "
+                         "defaults to the first")
     args = ap.parse_args(argv)
 
     bins_x = args.bins if args.bins else DEFAULT_BINS_X
     bins_y = args.bins if args.bins else DEFAULT_BINS_Y
 
-    if args.source.endswith(".json"):
+    if args.source.endswith(".json") and args.something_else:
+        boxes, ann_meta = boxes_from_something_else(
+            args.source, video_id=args.video_id,
+            num_objs=args.max_objects)
+        frame_ids = None
+        print(f"read {ann_meta['frames']} frames of Something-Else video "
+              f"{ann_meta['video_id']}; slots {ann_meta['slots']}, "
+              f"{ann_meta['absent']} slot-frames absent")
+    elif args.source.endswith(".json"):
         boxes, ann_meta = boxes_from_vidvrd(args.source,
                                             num_objs=args.max_objects,
                                             fill=not args.no_fill)
