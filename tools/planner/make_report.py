@@ -279,6 +279,25 @@ scored.</footer>
     out = os.path.join(run_dir, "report.html")
     with open(out, "w") as fh:
         fh.write(body)
+
+    # The chart is also written on its own, because an image file beside the
+    # data is what actually gets looked at later. SVG opens in any browser or
+    # image viewer and needs no matplotlib, so this works in a bare sandbox and
+    # on Sherlock's Python 3.6 alike.
+    chart = _bars(s["scored_rows"])
+    if chart.startswith("<svg"):
+        standalone = chart.replace(
+            '<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ', 1)
+        style = ('<style>.axis{stroke:#c9ced8}.plan{fill:#1f6feb}'
+                 '.base{fill:#c9ced8}.tick{fill:#5b6270;font:9px sans-serif;'
+                 'text-anchor:middle}'
+                 'text.title{fill:#16181d;font:600 12px sans-serif;'
+                 'text-anchor:start}</style>')
+        title = ('<text x="4" y="9" class="title">%s &mdash; planner (blue) vs '
+                 'baseline, log scale</text>' % html.escape(name))
+        standalone = standalone.replace('>', '>' + style + title, 1)
+        with open(os.path.join(run_dir, "chart.svg"), "w") as fh:
+            fh.write(standalone)
     return out
 
 
