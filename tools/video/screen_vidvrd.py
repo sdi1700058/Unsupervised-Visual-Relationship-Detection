@@ -40,6 +40,78 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 
 
+# --------------------------------------------------------------------------
+# Criterion 0: does the clip's subject obey rules FOSAE could detect?
+#
+# `DATASETS.md` Criterion 0 outranks annotation density. FOSAE worked on the
+# 8-puzzle and blocksworld because those worlds constrain what happens next.
+# A clip qualifies when one object's motion **depends on** another's, not when
+# the two merely occupy positions relative to each other.
+#
+# VidVRD names its predicates `<verb>_<relation>`, and the *relation* decides:
+# `walk_toward` couples two trajectories, `walk_behind` only says where they
+# are. Measured over all 800 training clips: 71.3% of relation instances are
+# configurational, 17.3% coupled, 11.4% attributes, and the median clip holds
+# just 2 coupled instances.
+#
+# **This classification is a judgement, not a measurement.** It is laid out as
+# a table so it can be argued with and edited; the counts derived from it are
+# only as good as it is.
+# --------------------------------------------------------------------------
+
+PREDICATE_TIERS = {
+    # One object's motion is defined against the other's changing position.
+    "coupled_suffix": ("toward", "away", "with", "past"),
+    "coupled_whole": ("chase", "follow", "bite", "fight", "ride", "hold",
+                      "pull", "feed", "kick", "drive", "play", "touch",
+                      "fall_off"),
+    # Where the two sit. True of a photograph as much as of a video.
+    "configurational_suffix": ("right", "left", "front", "behind", "above",
+                               "beneath", "next_to", "inside"),
+    # Properties of the pair, carrying no motion at all.
+    "attribute": ("larger", "taller", "faster", "watch"),
+}
+
+
+def predicate_tier(predicate):
+    """Classify one VidVRD predicate. See `PREDICATE_TIERS` for the argument.
+
+    Returns `coupled`, `configurational`, or `attribute`. A coupled suffix
+    beats a configurational one, and both beat the verb: `walk_past` is motion
+    against a moving reference, so it counts as coupled even though `walk`
+    alone would not.
+    """
+    if predicate in PREDICATE_TIERS["attribute"]:
+        return "attribute"
+    if predicate in PREDICATE_TIERS["coupled_whole"]:
+        return "coupled"
+    for suffix in PREDICATE_TIERS["coupled_suffix"]:
+        if predicate == suffix or predicate.endswith("_" + suffix):
+            return "coupled"
+    for suffix in PREDICATE_TIERS["configurational_suffix"]:
+        if predicate == suffix or predicate.endswith("_" + suffix):
+            return "configurational"
+    return "other"
+
+
+def coupled_coverage(doc):
+    """Share of a clip's frames spanned by at least one coupled relation.
+
+    Instance counts reward a clip with many brief interactions; this rewards a
+    clip whose subject is governed by a rule for most of its duration, which is
+    what Criterion 0 actually asks for.
+    """
+    n_frames = len(doc.get("trajectories") or [])
+    if not n_frames:
+        return 0.0
+    covered = set()
+    for rel in doc.get("relation_instances") or []:
+        if predicate_tier(rel["predicate"]) == "coupled":
+            covered.update(range(rel["begin_fid"],
+                                 min(rel["end_fid"], n_frames)))
+    return len(covered) / float(n_frames)
+
+
 def clip_stats(doc, window=8):
     """Per-clip annotation statistics, or None when the clip has no boxes.
 
@@ -84,6 +156,7 @@ def clip_stats(doc, window=8):
     return {
         "nonlinearity": nonlinearity,
         "crossover": crossover,
+        "coupled_coverage": coupled_coverage(doc),
         "video_id": doc.get("video_id", "?"),
         "frames": n_frames,
         "annotated": annotated,
@@ -224,12 +297,17 @@ def main(argv=None):
     ap.add_argument("--window", type=int, default=8,
                     help="window used for the non-linearity measure")
     ap.add_argument("--sort",
-                    choices=("crossover", "nonlinearity", "disp", "annotated"),
+                    choices=("crossover", "nonlinearity", "disp",
+                             "annotated", "structure"),
                     default="crossover",
                     help="ranking key. Default is the crossover ratio, which "
                          "is EVAL.md 4.2's criterion computed directly: below "
                          "1 the clip is winnable. Speed is the wrong axis "
                          "(Spearman with non-linearity only +0.59)")
+    ap.add_argument("--min-structure", type=float, default=0.0,
+                    help="minimum coupled-relation coverage (DATASETS.md "
+                         "Criterion 0). 0.5 keeps clips whose subject is "
+                         "rule-governed for at least half their duration")
     ap.add_argument("--winnable-only", action="store_true",
                     help="keep only clips whose crossover ratio is below 1, "
                          "so mse_ratio < 1 is arithmetically reachable")
@@ -286,12 +364,20 @@ def main(argv=None):
               f"({100 * (cx < 1).mean():.0f}%)")
         print("    (EVAL.md 4.2: below 1, mse_ratio < 1 is arithmetically "
               "reachable)")
+    st = np.array([r["coupled_coverage"] for r in rows])
+    print(f"  structure, coupled coverage median {np.median(st):.3f}   "
+          f"above 0.5: {int((st > 0.5).sum())} of {len(st)} "
+          f"({100 * (st > 0.5).mean():.0f}%)")
+    print("    (DATASETS.md Criterion 0: share of frames where one object's "
+          "motion\n     is governed by another's, rather than merely placed "
+          "beside it)")
 
     kept = [r for r in rows
             if (not args.no_fill_only or r["fill_frac"] == 0.0)
             and r["mean_disp"] >= args.min_disp
             and r["annotated"] >= args.min_frames
             and (r["nonlinearity"] or 0.0) >= args.min_nonlinearity
+            and r["coupled_coverage"] >= args.min_structure
             and (not args.winnable_only
                  or (r["crossover"] is not None and r["crossover"] < 1.0))]
     keys = {"crossover": lambda r: (r["crossover"] is None,
@@ -299,19 +385,21 @@ def main(argv=None):
                                     is not None else 0.0),
             "nonlinearity": lambda r: -(r["nonlinearity"] or 0.0),
             "disp": lambda r: -r["mean_disp"],
-            "annotated": lambda r: -r["annotated"]}
+            "annotated": lambda r: -r["annotated"],
+            "structure": lambda r: -r["coupled_coverage"]}
     kept.sort(key=keys[args.sort])
 
     print(f"\n{len(kept)} clips pass the filter. "
           f"Transitions available: {sum(r['annotated'] - 1 for r in kept)}\n")
     print(f"{'video_id':32} {'annot':>6} {'fill':>6} {'objs':>5} "
-          f"{'px/step':>8} {'nonlin':>8} {'crossover':>10}")
+          f"{'px/step':>8} {'nonlin':>8} {'crossover':>10} {'struct':>7}")
     for r in kept[:args.top]:
         nl = "     n/a" if r["nonlinearity"] is None else f"{r['nonlinearity']:>8.3f}"
         cx = "       n/a" if r["crossover"] is None else f"{r['crossover']:>10.3f}"
         print(f"{r['video_id']:32} {r['annotated']:>6} "
               f"{r['fill_frac']:>6.2f} {r['n_objects']:>5} "
-              f"{r['mean_disp']:>8.1f} {nl} {cx}")
+              f"{r['mean_disp']:>8.1f} {nl} {cx} "
+              f"{r['coupled_coverage']:>7.2f}")
 
     if args.list:
         os.makedirs(os.path.dirname(args.list) or ".", exist_ok=True)
@@ -324,12 +412,14 @@ def main(argv=None):
         os.makedirs(os.path.dirname(args.csv) or ".", exist_ok=True)
         with open(args.csv, "w") as fh:
             fh.write("video_id,frames,annotated,fill_frac,mean_disp,"
-                     "nonlinearity,crossover,n_objects,width,height\n")
+                     "nonlinearity,crossover,coupled_coverage,"
+                     "n_objects,width,height\n")
             for r in rows:
                 nl = "" if r["nonlinearity"] is None else f"{r['nonlinearity']:.5f}"
                 cx = "" if r["crossover"] is None else f"{r['crossover']:.5f}"
                 fh.write(f"{r['video_id']},{r['frames']},{r['annotated']},"
                          f"{r['fill_frac']:.4f},{r['mean_disp']:.4f},{nl},{cx},"
+                         f"{r['coupled_coverage']:.4f},"
                          f"{r['n_objects']},{r['width']},{r['height']}\n")
         print(f"wrote {args.csv}")
     return 0

@@ -396,6 +396,66 @@ class TestBfs(unittest.TestCase):
         self.assertIsNone(window_crossover({0: track}, width=64,
                                            height=48, window=8))
 
+    def test_predicate_tier_separates_coupled_from_configurational(self):
+        """Criterion 0: does one object's motion depend on the other's?
+
+        A coupled predicate defines A's motion relative to B's *changing*
+        position, so it implies a rule. A configurational one only says where
+        the two sit. FOSAE needs the first kind; VidVRD is mostly the second.
+        """
+        from tools.video.screen_vidvrd import predicate_tier
+
+        for p in ("chase", "follow", "move_toward", "walk_away", "run_past",
+                  "move_with", "bite", "ride", "fight", "toward", "away"):
+            self.assertEqual(predicate_tier(p), "coupled", p)
+
+        for p in ("stand_left", "walk_behind", "sit_above", "next_to",
+                  "lie_beneath", "stand_inside", "front", "right"):
+            self.assertEqual(predicate_tier(p), "configurational", p)
+
+        for p in ("larger", "taller", "faster"):
+            self.assertEqual(predicate_tier(p), "attribute", p)
+
+    def test_predicate_tier_prefers_the_coupled_reading(self):
+        """`walk_past` is motion relative to a moving reference, not a place.
+
+        The suffix decides, and a coupled suffix wins over the verb. This is
+        the judgement most likely to be wrong, so it is pinned by a test where
+        it can be found and changed.
+        """
+        from tools.video.screen_vidvrd import predicate_tier
+
+        self.assertEqual(predicate_tier("walk_past"), "coupled")
+        self.assertEqual(predicate_tier("stand_next_to"), "configurational")
+
+    def test_every_predicate_classifies(self):
+        from tools.video.screen_vidvrd import predicate_tier, PREDICATE_TIERS
+
+        # No predicate may fall through to "other": an unclassified predicate
+        # is silently excluded from the structure score.
+        for group in PREDICATE_TIERS.values():
+            for p in group:
+                self.assertIn(predicate_tier(p),
+                              ("coupled", "configurational", "attribute"))
+
+    def test_coupled_coverage_is_a_fraction_of_the_clip(self):
+        from tools.video.screen_vidvrd import coupled_coverage
+
+        # A ten-frame clip with one coupled relation over frames 2..6.
+        doc = {"trajectories": [[]] * 10,
+               "relation_instances": [
+                   {"predicate": "chase", "begin_fid": 2, "end_fid": 7},
+                   {"predicate": "stand_left", "begin_fid": 0, "end_fid": 10}]}
+        self.assertAlmostEqual(coupled_coverage(doc), 0.5)
+
+    def test_coupled_coverage_is_zero_without_coupled_relations(self):
+        from tools.video.screen_vidvrd import coupled_coverage
+
+        doc = {"trajectories": [[]] * 8,
+               "relation_instances": [
+                   {"predicate": "taller", "begin_fid": 0, "end_fid": 8}]}
+        self.assertEqual(coupled_coverage(doc), 0.0)
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 
