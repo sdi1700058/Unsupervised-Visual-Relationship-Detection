@@ -198,6 +198,68 @@ def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
     }
 
 
+def action_effect_consistency(pre, suc, labels):
+    """Does the same named action flip the same bits wherever it applies?
+
+    **A second evaluation method, independent of frame interpolation.** The
+    planning literature is unanimous that this is what makes a learned
+    representation usable: a STRIPS operator has one add list and one delete
+    list, so an action's effect must be constant. `RELATED_WORK.md` A6
+    (Cube-Space AE) adds a training prior to enforce it; A4 rejects
+    auto-encoding objectives precisely because they do not; A7 (DeepSym)
+    grounds its symbols in action effects rather than reconstruction.
+
+    Nothing in this pipeline measured it. A model could reconstruct every
+    frame, score well on `val_loss`, and still give every transition its own
+    idiosyncratic effect — in which case `pddl/planner.py` is not recovering an
+    action model but memorising a list of observed jumps.
+
+    The measure is the Jaccard overlap of the XOR deltas:
+
+    - `within`  — mean overlap between deltas carrying the **same** label
+    - `between` — mean overlap between deltas carrying **different** labels
+    - `consistency` — `within - between`, clipped at 0
+
+    1.0 means every instance of an action has an identical effect and different
+    actions do not overlap: a clean operator set. 0.0 means the label predicts
+    nothing about the effect, so there are no operators to find.
+
+    `consistency` is None when no label repeats, since there is then nothing to
+    compare within an action.
+    """
+    import numpy as np
+    from itertools import combinations
+
+    pre = np.asarray(pre, dtype=np.int8)
+    suc = np.asarray(suc, dtype=np.int8)
+    labels = list(labels)
+    if len(pre) != len(suc) or len(pre) != len(labels):
+        raise ValueError("pre, suc and labels must be the same length")
+
+    deltas = (pre ^ suc).astype(bool)
+    keep = [i for i in range(len(deltas)) if deltas[i].any()]
+    if len(keep) < 2:
+        return {"within": None, "between": None, "consistency": None,
+                "n_transitions": len(keep), "n_actions": 0}
+
+    def jaccard(a, b):
+        union = int((a | b).sum())
+        return float((a & b).sum()) / union if union else 0.0
+
+    within, between = [], []
+    for i, j in combinations(keep, 2):
+        score = jaccard(deltas[i], deltas[j])
+        (within if labels[i] == labels[j] else between).append(score)
+
+    w = float(np.mean(within)) if within else None
+    b = float(np.mean(between)) if between else 0.0
+    consistency = None if w is None else max(0.0, w - b)
+
+    return {"within": w, "between": b, "consistency": consistency,
+            "n_transitions": len(keep),
+            "n_actions": len({labels[i] for i in keep})}
+
+
 def _rank(a):
     import numpy as np
     order = a.argsort()

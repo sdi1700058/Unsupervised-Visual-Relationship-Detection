@@ -602,6 +602,53 @@ class TestBfs(unittest.TestCase):
         self.assertEqual(list(boxes[1][hand]), [0, 0, 0, 0])
         self.assertEqual(meta["absent"], 1)
 
+    def test_action_effect_consistency_is_high_when_effects_repeat(self):
+        """A STRIPS operator has one effect. This measures whether one exists.
+
+        `RELATED_WORK.md` A4, A6 and A7 all argue a representation is
+        plannable when the same action flips the same bits wherever it
+        applies. Nothing in the pipeline measured that, so a model could score
+        well on reconstruction while its "actions" were all idiosyncratic.
+        """
+        from tools.planner.common.metrics import action_effect_consistency
+
+        # Two actions. Each flips its own pair of bits, every time.
+        z = np.array([
+            [0, 0, 0, 0], [1, 1, 0, 0],   # action A
+            [0, 0, 1, 1], [1, 1, 1, 1],   # action A again, same effect
+            [0, 0, 0, 0], [0, 0, 1, 1],   # action B
+            [1, 1, 0, 0], [1, 1, 1, 1],   # action B again
+        ], dtype=np.int8)
+        pre, suc = z[0::2], z[1::2]
+        labels = ["A", "A", "B", "B"]
+
+        r = action_effect_consistency(pre, suc, labels)
+        self.assertAlmostEqual(r["within"], 1.0, places=6)
+        self.assertAlmostEqual(r["between"], 0.0, places=6)
+        self.assertAlmostEqual(r["consistency"], 1.0, places=6)
+
+    def test_action_effect_consistency_is_low_when_effects_are_arbitrary(self):
+        from tools.planner.common.metrics import action_effect_consistency
+
+        # The same label, but every transition flips different bits.
+        z = np.array([
+            [0, 0, 0, 0], [1, 0, 0, 0],
+            [0, 0, 0, 0], [0, 1, 0, 0],
+            [0, 0, 0, 0], [0, 0, 1, 0],
+            [0, 0, 0, 0], [0, 0, 0, 1],
+        ], dtype=np.int8)
+        r = action_effect_consistency(z[0::2], z[1::2], ["A"] * 4)
+        self.assertAlmostEqual(r["within"], 0.0, places=6)
+        self.assertLess(r["consistency"], 0.01)
+
+    def test_action_effect_consistency_needs_a_repeated_label(self):
+        from tools.planner.common.metrics import action_effect_consistency
+
+        z = np.array([[0, 0], [1, 0], [0, 0], [0, 1]], dtype=np.int8)
+        r = action_effect_consistency(z[0::2], z[1::2], ["A", "B"])
+        # One transition per label: nothing to compare within an action.
+        self.assertIsNone(r["consistency"])
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 
