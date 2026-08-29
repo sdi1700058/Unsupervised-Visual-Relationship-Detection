@@ -649,6 +649,68 @@ class TestBfs(unittest.TestCase):
         # One transition per label: nothing to compare within an action.
         self.assertIsNone(r["consistency"])
 
+    def test_binary_encoding_round_trips_like_one_hot(self):
+        """A second positional code, chosen because one-hot is the worst.
+
+        `EVAL.md` measures one-hot at action-effect consistency 0.000 — every
+        start position gives "move one bin" a different bit-effect — against
+        0.298 for a binary code. This adds the binary option so the claim can
+        be tested end to end. Both codes must decode to the same boxes.
+        """
+        from tools.planner.oracle import boxes_to_latents, latents_to_boxes
+
+        boxes = np.array([[[10., 20., 60., 80.], [100., 30., 150., 90.]]])
+        for encoding in ("onehot", "binary"):
+            z = boxes_to_latents(boxes, 60, 40, encoding=encoding)
+            back = latents_to_boxes(z, 2, 60, 40, encoding=encoding)
+            self.assertEqual(back.shape, boxes.shape, encoding)
+            # Within one bin: 300/60 = 5 px in x, 200/40 = 5 px in y.
+            self.assertTrue(np.all(np.abs(back - boxes) <= 6), encoding)
+
+    def test_binary_encoding_is_far_smaller(self):
+        from tools.planner.oracle import boxes_to_latents
+
+        boxes = np.zeros((1, 2, 4))
+        boxes[0, 0] = [10., 20., 60., 80.]
+        wide = boxes_to_latents(boxes, 60, 40, encoding="onehot")
+        tight = boxes_to_latents(boxes, 60, 40, encoding="binary")
+        # 200 bits per object against 24: fewer propositions for the planner.
+        self.assertEqual(wide.shape[1], 2 * 200)
+        self.assertLess(tight.shape[1], wide.shape[1] // 4)
+
+    def test_binary_encoding_keeps_an_absent_slot_empty(self):
+        """A padded slot must stay all-zero, or the oracle invents an object."""
+        from tools.planner.oracle import boxes_to_latents
+
+        boxes = np.array([[[10., 20., 60., 80.], [0., 0., 0., 0.]]])
+        z = boxes_to_latents(boxes, 60, 40, encoding="binary")
+        per = z.shape[1] // 2
+        self.assertEqual(int(z[0, per:].sum()), 0)
+        self.assertGreater(int(z[0, :per].sum()), 0)
+
+    def test_binary_encoding_gives_an_action_one_effect_more_often(self):
+        """The point of the option, stated as a test."""
+        from tools.planner.oracle import boxes_to_latents
+        from tools.planner.common.metrics import action_effect_consistency
+
+        # One object sliding right one bin at a time, from many start points.
+        pre, suc, labels = [], [], []
+        for start in range(0, 40):
+            a = np.array([[[start * 5., 50., start * 5. + 20., 90.]]])
+            b = np.array([[[(start + 1) * 5., 50., (start + 1) * 5. + 20., 90.]]])
+            pre.append(a)
+            suc.append(b)
+            labels.append("right")
+
+        scores = {}
+        for encoding in ("onehot", "binary"):
+            p = np.concatenate([boxes_to_latents(x, 60, 40, encoding=encoding)
+                                for x in pre])
+            s = np.concatenate([boxes_to_latents(x, 60, 40, encoding=encoding)
+                                for x in suc])
+            scores[encoding] = action_effect_consistency(p, s, labels)["within"]
+        self.assertGreater(scores["binary"], scores["onehot"])
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 

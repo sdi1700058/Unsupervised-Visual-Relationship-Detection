@@ -70,12 +70,29 @@ def dequantise(idx, n_bins, extent):
     return (idx + 0.5) * (float(extent) / n_bins)
 
 
-def bits_per_object(bins_x, bins_y):
-    return 2 * bins_x + 2 * bins_y
+def _code_width(n_bins):
+    """Bits needed to hold a bin index in a plain binary code."""
+    return max(1, int(np.ceil(np.log2(max(n_bins, 2)))))
+
+
+def bits_per_object(bins_x, bins_y, encoding="onehot"):
+    """Latent bits one object occupies under the chosen positional code.
+
+    `onehot` matches `common/decode.py`: four runs, x1 | y1 | x2 | y2, one bit
+    per bin. `binary` writes each bin index as a plain binary number, which is
+    far narrower and — measured in `EVAL.md` — far better behaved as an action
+    model: one-hot gives "move one bin" a different effect at all 31 start
+    positions, binary gives it 5.
+    """
+    if encoding == "onehot":
+        return 2 * bins_x + 2 * bins_y
+    if encoding == "binary":
+        return 2 * _code_width(bins_x) + 2 * _code_width(bins_y)
+    raise ValueError("unknown encoding %r; use onehot or binary" % encoding)
 
 
 def boxes_to_latents(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
-                     width=CANVAS_W, height=CANVAS_H):
+                     width=CANVAS_W, height=CANVAS_H, encoding="onehot"):
     """Encode (N, num_objs, 4) pixel boxes as (N, num_objs*bits) binary.
 
     Each object contributes four one-hot runs laid out x1 | y1 | x2 | y2,
@@ -91,7 +108,7 @@ def boxes_to_latents(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
         raise ValueError(f"boxes must be (N, num_objs, 4); got {boxes.shape}")
 
     n_states, n_objs, _ = boxes.shape
-    per_obj = bits_per_object(bins_x, bins_y)
+    per_obj = bits_per_object(bins_x, bins_y, encoding)
     out = np.zeros((n_states, n_objs * per_obj), dtype=np.int8)
 
     occupied = np.abs(boxes).sum(axis=-1) > 0        # (N, num_objs)
@@ -106,16 +123,26 @@ def boxes_to_latents(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     for o in range(n_objs):
         base = o * per_obj
         offset = 0
+        rows = np.nonzero(occupied[:, o])[0]
         for coord, n_bins, extent in runs:
             idx = quantise(boxes[:, o, coord], n_bins, extent)
-            rows = np.nonzero(occupied[:, o])[0]
-            out[rows, base + offset + idx[rows]] = 1
-            offset += n_bins
+            if encoding == "onehot":
+                out[rows, base + offset + idx[rows]] = 1
+                offset += n_bins
+            else:
+                width_bits = _code_width(n_bins)
+                # +1 so that bin 0 is not the all-zero word, which would be
+                # indistinguishable from an absent slot.
+                for bit in range(width_bits):
+                    set_rows = rows[(((idx[rows] + 1) >> bit) & 1) == 1]
+                    out[set_rows, base + offset + bit] = 1
+                offset += width_bits
     return out
 
 
 def latents_to_boxes(latents, n_objs, bins_x=DEFAULT_BINS_X,
-                     bins_y=DEFAULT_BINS_Y, width=CANVAS_W, height=CANVAS_H):
+                     bins_y=DEFAULT_BINS_Y, width=CANVAS_W, height=CANVAS_H,
+                     encoding="onehot"):
     """Decode binary latents back to (N, num_objs, 4) pixel boxes.
 
     argmax per run, exactly as `common/decode.py` does, so a run with no
@@ -126,7 +153,7 @@ def latents_to_boxes(latents, n_objs, bins_x=DEFAULT_BINS_X,
     if latents.ndim == 1:
         latents = latents[None, :]
     n_states = latents.shape[0]
-    per_obj = bits_per_object(bins_x, bins_y)
+    per_obj = bits_per_object(bins_x, bins_y, encoding)
     expected = n_objs * per_obj
     if latents.shape[1] != expected:
         raise ValueError(
@@ -146,15 +173,25 @@ def latents_to_boxes(latents, n_objs, bins_x=DEFAULT_BINS_X,
         empty = block.sum(axis=1) == 0
         offset = 0
         for coord, n_bins, extent in runs:
-            run = block[:, offset:offset + n_bins]
-            boxes[:, o, coord] = dequantise(run.argmax(axis=1), n_bins, extent)
-            offset += n_bins
+            if encoding == "onehot":
+                run = block[:, offset:offset + n_bins]
+                idx = run.argmax(axis=1)
+                offset += n_bins
+            else:
+                width_bits = _code_width(n_bins)
+                run = block[:, offset:offset + width_bits]
+                word = np.zeros(n_states, dtype=np.int64)
+                for bit in range(width_bits):
+                    word |= (run[:, bit].astype(np.int64) << bit)
+                idx = np.clip(word - 1, 0, n_bins - 1)
+                offset += width_bits
+            boxes[:, o, coord] = dequantise(idx, n_bins, extent)
         boxes[empty, o, :] = 0.0
     return boxes
 
 
 def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
-                     width=CANVAS_W, height=CANVAS_H):
+                     width=CANVAS_W, height=CANVAS_H, encoding="onehot"):
     """Mean squared pixel error introduced by the discretisation alone.
 
     This is the floor the oracle cannot go below, and it is worth reporting
@@ -162,8 +199,10 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     as well as this representation permits.
     """
     boxes = np.asarray(boxes, dtype=np.float64)
-    z = boxes_to_latents(boxes, bins_x, bins_y, width, height)
-    back = latents_to_boxes(z, boxes.shape[1], bins_x, bins_y, width, height)
+    z = boxes_to_latents(boxes, bins_x, bins_y, width, height,
+                         encoding=encoding)
+    back = latents_to_boxes(z, boxes.shape[1], bins_x, bins_y, width, height,
+                            encoding=encoding)
     d = back.astype(np.float64) - boxes
     return float((d * d).sum(axis=-1).mean())
 
@@ -378,11 +417,12 @@ def _load_boxes(path):
 
 def build_export(boxes, out_path, bins_x=DEFAULT_BINS_X,
                  bins_y=DEFAULT_BINS_Y, width=CANVAS_W, height=CANVAS_H,
-                 frame_ids=None, dedupe=True):
+                 frame_ids=None, dedupe=True, encoding="onehot"):
     """Write an oracle export and return its summary."""
-    latents = boxes_to_latents(boxes, bins_x, bins_y, width, height)
+    latents = boxes_to_latents(boxes, bins_x, bins_y, width, height,
+                               encoding=encoding)
     decoded = latents_to_boxes(latents, boxes.shape[1], bins_x, bins_y,
-                               width, height)
+                               width, height, encoding=encoding)
 
     pre, suc = latents[:-1], latents[1:]
     if len(pre):
@@ -416,7 +456,9 @@ def build_export(boxes, out_path, bins_x=DEFAULT_BINS_X,
         "distinct_latents": int(len(np.unique(latents, axis=0))),
         "transitions": int(len(actions)),
         "quantisation_mse": round_trip_error(boxes, bins_x, bins_y,
-                                             width, height),
+                                             width, height,
+                                             encoding=encoding),
+        "encoding": encoding,
     }
 
 
@@ -439,6 +481,11 @@ def main(argv=None):
                     help="do not carry the last annotated frame forward")
     ap.add_argument("--limit", type=int, default=None,
                     help="use only the first N states")
+    ap.add_argument("--encoding", choices=("onehot", "binary"),
+                    default="onehot",
+                    help="positional code. onehot matches common/decode.py; "
+                         "binary is far narrower and gives an action a "
+                         "repeatable effect far more often (EVAL.md)")
     ap.add_argument("--something-else", action="store_true",
                     help="read the source as a Something-Else annotation file "
                          "rather than a VidVRD one")
@@ -474,10 +521,10 @@ def main(argv=None):
             frame_ids = frame_ids[:args.limit]
 
     info = build_export(boxes, args.out, bins_x, bins_y,
-                        frame_ids=frame_ids)
+                        frame_ids=frame_ids, encoding=args.encoding)
 
     print(f"wrote {args.out}")
-    for k in ("states", "objects", "n_bits", "distinct_latents",
+    for k in ("states", "objects", "encoding", "n_bits", "distinct_latents",
               "transitions", "quantisation_mse"):
         print(f"  {k:<18}{info[k]}")
     if info["distinct_latents"] < info["states"]:
