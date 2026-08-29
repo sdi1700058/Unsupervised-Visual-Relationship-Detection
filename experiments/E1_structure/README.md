@@ -61,6 +61,33 @@ difference between the arms is structure.
 That last row is the likeliest single outcome and is worth expecting: the best
 result so far came from a full-batch overfit on one clip.
 
+## What has been verified, and what has not
+
+Checked before handing this over, because a silent failure costs a whole
+Sherlock cycle:
+
+| check | result |
+|---|---|
+| both scripts parse (`bash -n`) | pass |
+| `sweep_lib.sh` sources and defines `bake`, `submit`, `section`, `sweep_totals` | pass |
+| every flag used exists in `setup-dataset.py`'s parser | pass — read from the argparse definitions |
+| all 22 video ids exist in `annotations/train` | pass |
+| all 22 have frames in `frames_30fps/train` | pass |
+| `score_local.sh` behaves when the exports are absent | pass — prints what to run |
+| `latent_geometry.py` accepts two explicit files | pass |
+
+One thing looked wrong and was not: six ids carry an `ILSVRC2015_val_` prefix,
+which reads like a different split. It is ILSVRC's original naming, and those
+83 files live inside VidVRD's **train** split. The loader takes
+`split="train"` and finds them.
+
+**Not verified: the bake itself.** `setup-dataset.py` imports `config.py`,
+which imports matplotlib, and matplotlib is absent from the local venv with no
+route to install it. So the argument names are confirmed by reading the parser
+but the command has never run. That is the residual risk, and it shows up
+immediately — `bake` prints `BAKE FAILED <name>` and the arm is skipped rather
+than producing a wrong result.
+
 ## Running it
 
 **On Sherlock** — about 40 minutes wall for both arms:
