@@ -168,6 +168,49 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     return float((d * d).sum(axis=-1).mean())
 
 
+def load_canvas_scaler():
+    """Return `(_scale_bbox_to_canvas, CANVAS_W, CANVAS_H)` from the loader.
+
+    `puzzle_labeled_objects` needs only os, json, numpy and PIL, but importing
+    it through the package runs `latplan/__init__.py`, which pulls in
+    TensorFlow. That blocks every environment without the training stack —
+    including the one this module's own docstring promises to work in.
+
+    So the package import is tried first, and on failure the module is loaded
+    directly from its file. Either way the **same function** is imported, never
+    copied, which SPEC V5 requires: the canvas geometry must have one
+    definition.
+    """
+    try:
+        from latplan.puzzles.puzzle_labeled_objects import (
+            _scale_bbox_to_canvas, CANVAS_W, CANVAS_H)
+        return _scale_bbox_to_canvas, CANVAS_W, CANVAS_H
+    except ImportError:
+        pass
+
+    import importlib.util
+    import os
+
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))),
+        "latplan", "puzzles", "puzzle_labeled_objects.py")
+    if not os.path.exists(path):
+        raise SystemExit(
+            "cannot find latplan/puzzles/puzzle_labeled_objects.py, which "
+            "defines the canvas geometry. Run from the repository root.")
+
+    spec = importlib.util.spec_from_file_location("_plo_direct", path)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except ImportError as exc:
+        raise SystemExit(
+            "reading VidVRD annotations needs numpy and pillow, and one is "
+            "missing (%s). The rest of oracle.py needs only numpy." % exc)
+    return (module._scale_bbox_to_canvas, module.CANVAS_W, module.CANVAS_H)
+
+
 def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
     """Read one VidVRD annotation JSON into canvas-space boxes.
 
@@ -187,14 +230,7 @@ def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
     """
     import json
 
-    try:
-        from latplan.puzzles.puzzle_labeled_objects import (
-            _scale_bbox_to_canvas, CANVAS_W as W, CANVAS_H as H)
-    except ImportError as e:
-        raise SystemExit(
-            "reading VidVRD annotations needs the project environment "
-            f"(latplan imports failed: {e}). Run this under the venv or the "
-            "conda env; the rest of oracle.py needs only numpy.")
+    _scale_bbox_to_canvas, W, H = load_canvas_scaler()
 
     with open(ann_path) as f:
         ann = json.load(f)

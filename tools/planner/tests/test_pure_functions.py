@@ -15,6 +15,15 @@ from pathlib import Path
 
 import numpy as np
 
+
+def _has_pillow():
+    """`puzzle_labeled_objects` imports PIL, so the scaler test needs it."""
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
 
@@ -455,6 +464,25 @@ class TestBfs(unittest.TestCase):
                "relation_instances": [
                    {"predicate": "taller", "begin_fid": 0, "end_fid": 8}]}
         self.assertEqual(coupled_coverage(doc), 0.0)
+
+    @unittest.skipUnless(_has_pillow(), "pillow is not installed in this "
+                         "interpreter; run under .venv-local")
+    def test_canvas_scaler_loads_without_the_training_stack(self):
+        """The oracle claims to need no keras, and it should be true.
+
+        `puzzle_labeled_objects` imports only os, json, numpy and PIL, but
+        importing it through the package runs `latplan/__init__.py`, which
+        pulls in TensorFlow. That blocked every local oracle run. The loader
+        reaches the module directly, so the same function is imported rather
+        than copied.
+        """
+        from tools.planner.oracle import load_canvas_scaler
+
+        scale, width, height = load_canvas_scaler()
+        self.assertEqual((height, width), (200, 300))
+        # A box filling the left half of a 1280x576 frame maps to the left
+        # half of the canvas.
+        self.assertEqual(scale([0, 0, 640, 288], 1280, 576), (0, 0, 150, 100))
 
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
