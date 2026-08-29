@@ -484,6 +484,73 @@ class TestBfs(unittest.TestCase):
         # half of the canvas.
         self.assertEqual(scale([0, 0, 640, 288], 1280, 576), (0, 0, 150, 100))
 
+    def test_report_verdict_reads_a_win(self):
+        """The report must state the bottom line before any table.
+
+        Its whole purpose is that a result can be understood without reading
+        a CSV, so the verdict is computed rather than left to the reader.
+        """
+        from tools.planner.make_report import summarise
+
+        rows = [
+            {"reachability": "True", "moving_gt_steps": "7", "bbox_mse": "12.0",
+             "baseline_mse": "327.0", "mse_ratio": "0.046",
+             "beats_baseline": "True", "bbox_iou": "0.93",
+             "baseline_iou": "0.86", "plan_length": "7",
+             "decode_fallbacks": "0", "init": "0", "goal": "7"},
+            {"reachability": "True", "moving_gt_steps": "7", "bbox_mse": "11.0",
+             "baseline_mse": "944.0", "mse_ratio": "0.012",
+             "beats_baseline": "True", "bbox_iou": "0.94",
+             "baseline_iou": "0.85", "plan_length": "7",
+             "decode_fallbacks": "0", "init": "7", "goal": "14"},
+        ]
+        s = summarise(rows)
+        self.assertEqual(s["solved"], 2)
+        self.assertEqual(s["scored"], 2)
+        self.assertAlmostEqual(s["ratio"], 0.029, places=3)
+        self.assertEqual(s["beats"], 2)
+        self.assertIn("beats", s["verdict"].lower())
+
+    def test_report_verdict_reads_a_loss(self):
+        from tools.planner.make_report import summarise
+
+        rows = [{"reachability": "True", "moving_gt_steps": "7",
+                 "bbox_mse": "500.0", "baseline_mse": "10.0",
+                 "mse_ratio": "50.0", "beats_baseline": "False",
+                 "bbox_iou": "0.1", "baseline_iou": "0.8",
+                 "plan_length": "3", "decode_fallbacks": "2",
+                 "init": "0", "goal": "7"}]
+        s = summarise(rows)
+        self.assertEqual(s["beats"], 0)
+        self.assertNotIn("beats the", s["verdict"].lower())
+
+    def test_report_handles_a_run_where_nothing_solved(self):
+        from tools.planner.make_report import summarise
+
+        rows = [{"reachability": "False", "moving_gt_steps": "7",
+                 "bbox_mse": "", "baseline_mse": "", "mse_ratio": "",
+                 "beats_baseline": "", "bbox_iou": "", "baseline_iou": "",
+                 "plan_length": "0", "decode_fallbacks": "0",
+                 "init": "0", "goal": "7"}]
+        s = summarise(rows)
+        self.assertEqual(s["solved"], 0)
+        self.assertIsNone(s["ratio"])
+        self.assertIn("no window", s["verdict"].lower())
+
+    def test_report_excludes_windows_without_motion(self):
+        """A window whose boxes never move scores nothing worth reporting."""
+        from tools.planner.make_report import summarise
+
+        rows = [{"reachability": "True", "moving_gt_steps": "0",
+                 "bbox_mse": "1.0", "baseline_mse": "0.0001",
+                 "mse_ratio": "10000", "beats_baseline": "False",
+                 "bbox_iou": "0.9", "baseline_iou": "0.9",
+                 "plan_length": "1", "decode_fallbacks": "0",
+                 "init": "0", "goal": "7"}]
+        s = summarise(rows)
+        self.assertEqual(s["solved"], 1)
+        self.assertEqual(s["scored"], 0)
+
     def test_repeated_searches_return_the_same_plan(self):
         from tools.planner.bfs.planner import mine_deltas, search
 
