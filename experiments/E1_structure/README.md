@@ -82,8 +82,9 @@ which reads like a different split. It is ILSVRC's original naming, and those
 `split="train"` and finds them.
 
 **Not verified: the bake itself.** `setup-dataset.py` imports `config.py`,
-which imports matplotlib, and matplotlib is absent from the local venv with no
-route to install it. So the argument names are confirmed by reading the parser
+which imports **TensorFlow** at line 11 — not matplotlib, which is present.
+TensorFlow is a large install and PyPI is unreachable from the sandbox, so the
+bake cannot run here at all. So the argument names are confirmed by reading the parser
 but the command has never run. That is the residual risk, and it shows up
 immediately — `bake` prints `BAKE FAILED <name>` and the arm is skipped rather
 than producing a wrong result.
