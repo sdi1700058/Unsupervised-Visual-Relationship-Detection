@@ -275,3 +275,102 @@ class TestBboxIoU(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def _has_pillow():
+    """`load_canvas_scaler` reaches the loader, which imports PIL."""
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@unittest.skipUnless(_has_pillow(), "needs pillow (present in .venv-local)")
+class TestSynthBboxContract(unittest.TestCase):
+    """The oracle must read what `tools/synth_bbox.py` writes.
+
+    That tool is the whole VideoNet path: MediaPipe hands plus Grounded-DINO
+    produce a VidVRD-schema JSON with no `relation_instances`, no `fps` and no
+    `frame_count`. If the oracle ever stops reading it, the auto-annotation
+    route dies silently and nobody finds out until a cluster cycle is spent.
+
+    Nothing here needs MediaPipe, a checkpoint or a download.
+    """
+
+    def _doc(self, n=40, grow_left=True):
+        import math
+        cats = [{"tid": 0, "category": "left_hand"},
+                {"tid": 1, "category": "right_hand"},
+                {"tid": 2, "category": "pen"}]
+        traj = []
+        for f in range(n):
+            t = f / float(n)
+            lx, ly = 100 + 40 * math.sin(2 * math.pi * t), 180.0
+            rx, ry = 400 + 40 * math.cos(2 * math.pi * t), 180.0
+            # The left hand grows past the right. Ordering slots by per-frame
+            # area would swap the two hands at the crossing point.
+            lw = 30 + (40 * t if grow_left else 0)
+            traj.append([
+                {"tid": 0, "bbox": {"xmin": lx, "ymin": ly,
+                                    "xmax": lx + lw, "ymax": ly + lw}},
+                {"tid": 1, "bbox": {"xmin": rx, "ymin": ry,
+                                    "xmax": rx + 50, "ymax": ry + 50}},
+                {"tid": 2, "bbox": {"xmin": 250.0, "ymin": 200.0,
+                                    "xmax": 265.0, "ymax": 215.0}},
+            ])
+        return {"video_id": "SYNTH_0001", "width": 640, "height": 360,
+                "subject/objects": cats, "trajectories": traj,
+                "_meta": {"synth_tool": "synth_bbox.py"}}
+
+    def _write(self, doc):
+        import json
+        p = os.path.join(tempfile.mkdtemp(), "SYNTH_0001.json")
+        with open(p, "w") as f:
+            json.dump(doc, f)
+        return p
+
+    def test_oracle_reads_a_document_with_no_relation_instances(self):
+        from tools.planner.oracle import boxes_from_vidvrd
+
+        boxes, meta = boxes_from_vidvrd(self._write(self._doc()),
+                                        num_objs=3, fill=False)
+        self.assertEqual(boxes.shape, (40, 3, 4))
+        self.assertEqual(meta["video_id"], "SYNTH_0001")
+
+    def test_slot_identity_survives_an_area_crossover(self):
+        """The left hand must stay in its slot when it grows past the right.
+
+        Before 2026-08-30 slots were ordered by per-frame area, so the two
+        hands swapped mid-clip and the oracle -- whose own docstring calls
+        these latents "perfect by construction" -- injected a teleport that
+        never happened.
+        """
+        from tools.planner.oracle import boxes_from_vidvrd
+
+        boxes, _ = boxes_from_vidvrd(self._write(self._doc(grow_left=True)),
+                                     num_objs=3, fill=False)
+        centre_x = (boxes[:, 0, 0] + boxes[:, 0, 2]) / 2.0
+        # Slot 0 is the left hand throughout; it must never jump to the right
+        # half of the canvas.
+        self.assertLess(centre_x.max(), centre_x.min() * 2.0)
+        self.assertGreater(centre_x.min(), 0.0)
+
+    def test_the_chain_reaches_a_scoreable_export(self):
+        """synth_bbox -> oracle -> M3, which is the VideoNet route."""
+        from tools.planner.oracle import boxes_from_vidvrd, boxes_to_latents
+        from tools.planner.plan_validity import motion_model, discrimination
+
+        boxes, _ = boxes_from_vidvrd(self._write(self._doc(n=60)),
+                                     num_objs=3, fill=False)
+        z = boxes_to_latents(boxes)
+        self.assertEqual(z.shape[0], len(boxes))
+        self.assertGreater(z.sum(), 0)
+
+        # M3 needs no ground truth and no relation labels, which is exactly
+        # why it is the metric for auto-annotated data.
+        m = motion_model(boxes[:40])
+        rng = np.random.RandomState(0)
+        real = boxes[40:]
+        d = discrimination(real, real[rng.permutation(len(real))], m)
+        self.assertGreater(d["separation"], 0.05)
