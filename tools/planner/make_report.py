@@ -45,6 +45,18 @@ def _median(values):
     return (values[mid - 1] + values[mid]) / 2.0
 
 
+def _missing_columns(rows, needed=("moving_gt_steps", "mse_ratio", "bbox_mse")):
+    """Which expected columns the CSV does not have.
+
+    A missing column is not the same as a column full of zeros, and the report
+    used to conflate them: a winning planner whose CSV lacked `moving_gt_steps`
+    was described as "none of them carry motion". Say which it is.
+    """
+    if not rows:
+        return list(needed)
+    return [c for c in needed if c not in rows[0]]
+
+
 def summarise(rows, min_motion=6):
     """Reduce a run to the numbers worth stating, and a verdict.
 
@@ -52,6 +64,7 @@ def summarise(rows, min_motion=6):
     move are scored: a window where nothing moves has a near-zero baseline, so
     its ratio is noise rather than signal (`EVAL.md` §4.8).
     """
+    missing = _missing_columns(rows)
     solved = [r for r in rows if (r.get("reachability") or "").strip() == "True"]
     scored = [r for r in solved
               if (_num(r, "moving_gt_steps") or 0) >= min_motion
@@ -84,6 +97,11 @@ def summarise(rows, min_motion=6):
     if not solved:
         out["verdict"] = ("No window was solved. The action schema does not "
                           "connect the two frames at all.")
+    elif missing:
+        out["verdict"] = (
+            "Cannot judge this run: the summary is missing the column(s) %s. "
+            "That is a different thing from a run with no signal, and the two "
+            "used to be reported identically." % ", ".join(missing))
     elif not scored:
         out["verdict"] = ("Windows solved, but none of them carry motion, so "
                           "nothing measurable came out of this run.")

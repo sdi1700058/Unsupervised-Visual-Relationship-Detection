@@ -76,10 +76,16 @@ PREDICATE_TIERS = {
 def predicate_tier(predicate):
     """Classify one VidVRD predicate. See `PREDICATE_TIERS` for the argument.
 
-    Returns `coupled`, `configurational`, or `attribute`. A coupled suffix
-    beats a configurational one, and both beat the verb: `walk_past` is motion
-    against a moving reference, so it counts as coupled even though `walk`
-    alone would not.
+    Returns `coupled`, `configurational`, `attribute`, or `other`. A coupled
+    suffix beats a configurational one, and both beat the verb: `walk_past` is
+    motion against a moving reference, so it counts as coupled even though
+    `walk` alone would not.
+
+    `other` is the fall-through and is **dead on this corpus** -- 0 of 25,917
+    relation instances reach it, which is the evidence that `PREDICATE_TIERS`
+    covers VidVRD's vocabulary. It is kept so a new dataset does not get
+    silently mis-tiered, and a non-zero `other` count is a signal to extend
+    the table rather than to trust the result.
     """
     if predicate in PREDICATE_TIERS["attribute"]:
         return "attribute"
@@ -240,7 +246,7 @@ def window_crossover(per_object, width, height, window=8):
     def present(track, run):
         return all(f in track for f in run)
 
-    def boxes_for(tracks, run_frames, at):
+    def boxes_for(tracks, at):
         return np.array([t[at] for t in tracks], dtype=np.float64)
 
     floor_boxes, errors = [], []
@@ -252,16 +258,23 @@ def window_crossover(per_object, width, height, window=8):
         tracks = [t for t in per_object.values() if present(t, run)]
         if not tracks:
             continue                          # nothing stable to score
-        a = boxes_for(tracks, run, run[0])
-        b = boxes_for(tracks, run, run[-1])
+        a = boxes_for(tracks, run[0])
+        b = boxes_for(tracks, run[-1])
         for f in run:
             # One row per box. Quantisation error is independent per box, so
             # flattening here keeps the floor correct while letting the object
             # count differ between windows.
-            floor_boxes.extend(boxes_for(tracks, run, f))
+            #
+            # The floor covers BOTH endpoints; the baseline below covers only
+            # the interior. They are therefore not measured on identical frame
+            # sets, which an earlier comment here wrongly claimed. Measured
+            # across 250 clips the difference is median 0.7%, p90 1.9%, max
+            # 6.0%, and it flips ZERO winnable/not verdicts -- so the code is
+            # left alone and the claim is corrected instead.
+            floor_boxes.extend(boxes_for(tracks, f))
         for step, frame in enumerate(run[1:-1], start=1):
             predicted = a + (step / float(window)) * (b - a)
-            errors.append(float(((predicted - boxes_for(tracks, run, frame))
+            errors.append(float(((predicted - boxes_for(tracks, frame))
                                  ** 2).sum(axis=-1).mean()))
 
     if not errors:

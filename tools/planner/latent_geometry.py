@@ -66,7 +66,7 @@ def score(path):
     if "latents" not in data.files or "gt_boxes" not in data.files:
         return None
     result = latent_geometry(data["latents"], data["gt_boxes"])
-    result["export"] = os.path.basename(path)[:-4]
+    result["export"] = os.path.splitext(os.path.basename(path))[0]
     z = np.asarray(data["latents"])
     result["n_bits"] = int(z.shape[1])
     result["distinct"] = len({row.tobytes() for row in z.astype("int8")})

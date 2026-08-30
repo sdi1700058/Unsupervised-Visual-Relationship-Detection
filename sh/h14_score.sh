@@ -51,7 +51,8 @@ echo "=========================================="
 # repetition to compose them. That is a statement about the search, not about
 # the representation.
 for NPZ in "${EXPORTS[@]}"; do
-    NAME="H14-$(basename "${NPZ}" .npz)"
+    # The export stem already carries "catH14-", so do not prefix again.
+    NAME="$(basename "${NPZ}" .npz)"
     echo
     echo "--- ${NAME}"
     ( ulimit -v "${MEM_KB}"
