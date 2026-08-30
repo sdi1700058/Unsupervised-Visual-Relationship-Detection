@@ -6,6 +6,10 @@
 # Needs the two exports pulled from Sherlock. Writes eval/planner/E1_summary.md.
 
 set -eo pipefail
+
+# Window 16, not 8. The crossover criterion depends steeply on window size and
+# these clips were screened at a larger window than 8; scoring at 8 measures
+# something the selection never promised (SPEC V37). Override with WINDOW=.
 cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 PY="${PY:-.venv-local/bin/python}"
@@ -48,7 +52,7 @@ for pair in "structured:${A}" "unstructured:${B}"; do
     name="${pair%%:*}"; path="${pair#*:}"
     echo "=== planning: ${name} ==="
     bash tools/planner/eval_plannability.sh "${path}" \
-        --methods bfs,pddl --window 8 --budget 30 --name "E1-${name}" \
+        --methods bfs,pddl --window "${WINDOW:-16}" --budget 30 --name "E1-${name}" \
         2>&1 | tail -3
     echo
 done

@@ -16,7 +16,16 @@ set -eo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${PROJECT_DIR}"
 
-WINDOW="${WINDOW:-8}"
+# 16, not 8. The crossover criterion is a steep function of window size, and
+# the clips H14 trained on were screened at a larger window than 8 (SPEC V37).
+# Scored at 8 the ORACLE loses to a straight line on 4 of 4 random clips; at 16
+# it wins on 6 of 10. A whole day of conclusions was drawn at the wrong window
+# before this was understood.
+#
+# If a clip list carries a provenance header, prefer the window it names:
+#   python3 -c "import sys;sys.path.insert(0,'tools/video');\
+#     from screen_vidvrd import clip_list_window;print(clip_list_window(PATH))"
+WINDOW="${WINDOW:-16}"
 BUDGET="${BUDGET:-60}"
 MAX_WINDOWS="${MAX_WINDOWS:-14}"
 MEM_KB="${MEM_KB:-8000000}"     # 8 GB ceiling per planner process
@@ -78,8 +87,10 @@ Charts per arm at:    eval/planner/H14-*/chart.svg
 
 How to read it, against the oracle on the same task:
 
-    oracle    planner error 12.0   mse_ratio 0.046   14/14 solved
-    floor      9.91  -- no representation at this resolution beats this
+    oracle    median mse_ratio 0.80, beats the baseline on 6 of 10 random
+              screened clips at window 16
+    trained   median 9.05 (400 bits) and 6.33 (200 bits), 0 of 10 each,
+              and the oracle beats both on 10 of 10 clips
 
   mse_ratio < 1     a trained FOSAE beats linear interpolation. The thesis
                     has a positive answer.

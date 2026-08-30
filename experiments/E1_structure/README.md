@@ -2,6 +2,27 @@
 
 **Status: ready to run. Needs Sherlock for the training half.**
 
+
+## The window this is scored at — read before interpreting any number
+
+`score_local.sh` scores at **window 16**, not 8, and that is not a free
+parameter. The crossover criterion `EVAL.md` §4.2 selects clips by is a steep
+function of window size: one clip reads `floor/baseline` 2.50 at w=8, 1.06 at
+w=12, 0.48 at w=16 and 0.07 at w=32, because a longer window accumulates more
+non-linear motion, the straight line gets worse, and the same representation
+beats it.
+
+Measured on ten random screened clips, paired on identical frames:
+
+| | oracle | trained P10 | trained P5 |
+|---|---|---|---|
+| window 8 | loses on 4 of 4 | — | — |
+| **window 16** | **beats baseline 6 of 10** | 0 of 10 | 0 of 10 |
+
+Both arms of E1 were screened the same way as H14's clips, so **scoring E1 at
+window 8 would measure something its selection never promised** (`SPEC.md`
+V37). Override with `WINDOW=` only with a reason.
+
 ## The hypothesis, in one sentence
 
 A FOSAE model trained on clips whose subject is **rule-governed** produces
