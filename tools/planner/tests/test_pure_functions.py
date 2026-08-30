@@ -1401,3 +1401,54 @@ class TestScreenVidvrdMinorFixes(unittest.TestCase):
 
         # Documented as the fall-through, and dead on VidVRD (0 of 25,917).
         self.assertEqual(predicate_tier("zorble"), "other")
+
+
+class TestReportRecordsItsWindow(unittest.TestCase):
+    """A planner report must say which window produced it. SPEC V37.
+
+    `eval/planner/` holds 87 run directories, 45 of them scored at window 8,
+    which V37 established is the wrong window for these clips. Nothing in a
+    report says which window it used, so a reader browsing the index cannot
+    tell a current result from a superseded one -- the same failure the clip
+    lists had before `provenance_header`.
+    """
+
+    def _rows(self, init_goal):
+        return [{"init": str(i), "goal": str(g), "reachability": "True",
+                 "moving_gt_steps": "7", "bbox_mse": "12.0",
+                 "baseline_mse": "300.0", "mse_ratio": "0.04",
+                 "beats_baseline": "True", "decode_fallbacks": "0"}
+                for i, g in init_goal]
+
+    def test_the_window_is_recovered_from_the_rows(self):
+        from tools.planner.make_report import summarise
+
+        s = summarise(self._rows([(0, 15), (15, 30), (30, 45)]))
+        self.assertEqual(s["window"], 16)
+
+    def test_window_eight_is_recognised_too(self):
+        from tools.planner.make_report import summarise
+
+        s = summarise(self._rows([(0, 7), (7, 14)]))
+        self.assertEqual(s["window"], 8)
+
+    def test_an_unreadable_window_is_none_not_a_guess(self):
+        from tools.planner.make_report import summarise
+
+        rows = self._rows([(0, 7)])
+        del rows[0]["goal"]
+        self.assertIsNone(summarise(rows)["window"])
+
+    def test_the_verdict_flags_a_superseded_window(self):
+        """So a stale report announces itself rather than reading as current."""
+        from tools.planner.make_report import summarise
+
+        s = summarise(self._rows([(0, 7), (7, 14), (14, 21)]))
+        self.assertIn("window 8", s["verdict"])
+        self.assertIn("V37", s["verdict"])
+
+    def test_the_current_window_is_not_flagged(self):
+        from tools.planner.make_report import summarise
+
+        s = summarise(self._rows([(0, 15), (15, 30), (30, 45)]))
+        self.assertNotIn("V37", s["verdict"])

@@ -57,6 +57,28 @@ def _missing_columns(rows, needed=("moving_gt_steps", "mse_ratio", "bbox_mse")):
     return [c for c in needed if c not in rows[0]]
 
 
+def _window_of(rows):
+    """The window size a run used, recovered from its own rows.
+
+    `goal - init + 1` frames per window. Nothing in a report used to say which
+    window produced it, so a reader could not tell a current result from a
+    superseded one -- and 45 of the 87 run directories on disk are scored at
+    window 8, which `SPEC.md` V37 established is the wrong window for these
+    clips. Returns None rather than guessing when the columns are absent.
+    """
+    for r in rows:
+        try:
+            return int(r["goal"]) - int(r["init"]) + 1
+        except (KeyError, TypeError, ValueError):
+            continue
+    return None
+
+
+# The window these clips were screened at. A run at any other window is
+# measuring something the selection never promised (SPEC V37).
+SCREENING_WINDOW = 16
+
+
 def summarise(rows, min_motion=6):
     """Reduce a run to the numbers worth stating, and a verdict.
 
@@ -65,6 +87,7 @@ def summarise(rows, min_motion=6):
     its ratio is noise rather than signal (`EVAL.md` §4.8).
     """
     missing = _missing_columns(rows)
+    window = _window_of(rows)
     solved = [r for r in rows if (r.get("reachability") or "").strip() == "True"]
     scored = [r for r in solved
               if (_num(r, "moving_gt_steps") or 0) >= min_motion
@@ -95,6 +118,7 @@ def summarise(rows, min_motion=6):
             / float(len(scored))) if scored else None,
         "rows": rows,
         "scored_rows": scored,
+        "window": window,
     }
 
     if not solved:
@@ -127,6 +151,13 @@ def summarise(rows, min_motion=6):
             "The planner **loses** to linear interpolation: mse_ratio %.2f. "
             "It wins %d of %d scored windows."
             % (ratio, beats, len(scored)))
+    if window is not None and window != SCREENING_WINDOW:
+        out["verdict"] = (
+            "SUPERSEDED: scored at window %d, but these clips were screened at "
+            "window %d. The crossover criterion depends steeply on window size, "
+            "so this run measures something the selection never promised "
+            "(SPEC V37). Re-run before quoting it. --- %s"
+            % (window, SCREENING_WINDOW, out["verdict"]))
     return out
 
 
@@ -245,6 +276,9 @@ def _cards(s):
         # fallback, not the model. It belongs beside the ratio, not buried in
         # the per-window table.
         card("fallbacks / window", fmt(s["fallbacks_per_window"], "%.1f")),
+        # SPEC V37. A report that does not say which window produced it cannot
+        # be told apart from a superseded one.
+        card("window", "n/a" if s.get("window") is None else s["window"]),
     ])
 
 
