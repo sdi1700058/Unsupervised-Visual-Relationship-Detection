@@ -183,3 +183,48 @@ trusting elsewhere.
 - M2's held-out category is `bird`, chosen because it is the largest category
   in the batch that leaves a usable training set. A different holdout may give
   a different answer, and the experiment should be repeated across several.
+
+---
+
+## Results on a TRAINED model — added 2026-08-30
+
+All three were originally run on the oracle only. They are now paired against
+H14's trained FOSAE (`U40 A2 P10`, 400 bits) on ten random clips from its own
+training set, identical frames.
+
+| | oracle | trained |
+|---|---|---|
+| **M1** linear probe mAP | 0.116 | 0.098 |
+| **M1** label prior (the bar) | 0.119 | 0.119 |
+| **M1** selectivity | **+0.078** | **−0.003** |
+| **M1** `attribute` tier lift | **+0.263** (2 of 2) | +0.060 (1 of 2) |
+| **M2** verdict | NO SIGNAL | NO SIGNAL |
+| **M3** decoded step / frame | **2.50 px** | **9.23 px** |
+| **M3** clips it can judge | 10 of 10 | 1 of 10 |
+
+Figure: `eval/summary/four_methods.svg`.
+
+### How to read each of these, using the pre-registered rules above
+
+- **M1.** Neither clears the label prior, so neither encodes VidVRD's relations
+  readably. **Check selectivity before the tier table**: at −0.003 the probe
+  fits random labels on the trained latent as well as real ones, so its
+  per-predicate numbers are not interpretable. A single coupled predicate
+  clearing 0.10 there is what a non-selective probe produces, not a finding.
+- **M2.** NO SIGNAL on both, as the first row of its table predicts. It cannot
+  speak until a model clears M1's bar. That is a limitation of M2 on this data,
+  not a result about composition.
+- **M3.** Reports SILENT on 9 of 10 trained clips. **The silence is not the
+  evidence** — the cause is: the trained model's decoded boxes move 3.7x more
+  per frame than the real ones, so the learned bound is 7.5x wider and a
+  scrambled trajectory does not exceed it.
+
+### What all three agree on, and what none of them show
+
+Three different questions, no shared machinery beyond the export, same
+conclusion: the trained representation is worse than a positional code at
+everything measured, and the positional code is itself only adequate.
+
+None of them is held out — every clip is inside H14's training set, so the
+model fails on data it was fitted to. A held-out number needs a fresh export
+from the cluster.
