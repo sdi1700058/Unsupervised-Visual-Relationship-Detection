@@ -307,8 +307,26 @@ def main(argv=None):
         raise SystemExit("nothing scored")
 
     print("")
-    for name, r in results[:1]:
-        print(verdict(r))
+    if len(results) == 1:
+        print(verdict(results[0][1]))
+    else:
+        # A corpus verdict, not the first row's. Printing one clip's verdict
+        # over a table of twenty reads as a statement about all of them.
+        seps = [r["discrimination"]["separation"] for _, r in results]
+        vals = [r["validity"] for _, r in results]
+        loud = [s for s in seps if s >= 0.05]
+        print("%d of %d clips are informative (separation >= 0.05); the rest "
+              "are SILENT and their validity is not evidence."
+              % (len(loud), len(results)))
+        print("median separation %.3f, median validity %.3f"
+              % (float(np.median(seps)), float(np.median(vals))))
+        if loud:
+            informative = [v for v, s in zip(vals, seps) if s >= 0.05]
+            print("across the informative clips only, median validity %.3f"
+                  % float(np.median(informative)))
+        else:
+            print("NO clip is informative: on this data the measure is silent "
+                  "everywhere and reports nothing about the plans.")
 
     if a.out_dir:
         if not os.path.isdir(a.out_dir):
