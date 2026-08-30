@@ -38,9 +38,22 @@ from tools.planner.common.windows import linear_interp_bboxes  # noqa: E402
 WINDOWS = (2, 4, 6, 8, 10, 12, 16, 20, 24, 32)
 
 
-def survey_clip(path, num_objs, bins_x, bins_y, windows=WINDOWS):
-    """Return per-clip statistics, or None when the clip is too short."""
-    boxes, meta = boxes_from_vidvrd(path, num_objs=num_objs, fill=True)
+def survey_clip(path, num_objs, bins_x, bins_y, windows=WINDOWS, fill=False):
+    """Return per-clip statistics, or None when the clip is too short.
+
+    `fill` defaults to **False**, and that is a correction rather than a
+    preference. Until 2026-08-30 this ran with `fill=True`, so it measured
+    `EVAL.md` 4.2's criterion on frames the loader had invented -- carrying the
+    last box forward through every unannotated gap. `screen_vidvrd.
+    window_crossover` computes the same criterion absence-aware, so the two
+    disagreed by construction and the thesis had two definitions of its own
+    selection rule. Corpus-wide a median VidVRD clip is 37% filled, so this was
+    not a small effect.
+
+    Pass `fill=True` only to reproduce a pre-correction number, never to
+    produce a new one.
+    """
+    boxes, meta = boxes_from_vidvrd(path, num_objs=num_objs, fill=fill)
     n = len(boxes)
     if n < min(windows) + 1:
         return None
@@ -68,9 +81,23 @@ def survey_clip(path, num_objs, bins_x, bins_y, windows=WINDOWS):
         ratios = []
         for start in range(0, n - w, max(1, (n - w) // 8)):
             mid = list(range(start + 1, start + w))
-            base = linear_interp_bboxes(boxes[start], boxes[start + w],
-                                        len(mid))
-            e = base - boxes[mid]
+
+            # An object enters a window only when it is present in EVERY frame
+            # of it, exactly as `screen_vidvrd.window_crossover` requires. A
+            # zero box is absence, not a box at the origin, and scoring it as
+            # position drags a straight line to the corner of the canvas and
+            # inflates the baseline -- which flatters the ratio. Measured on
+            # real data: zero-padding makes a clip look 3.5x more winnable
+            # than it is (SPEC V30).
+            span = list(range(start, start + w + 1))
+            present = (np.abs(boxes[span]).sum(axis=-1) > 0).all(axis=0)
+            if not present.any():
+                continue
+
+            a = boxes[start][present]
+            b = boxes[start + w][present]
+            base = linear_interp_bboxes(a, b, len(mid))
+            e = base - boxes[mid][:, present, :]
             mse = float((e * e).sum(axis=-1).mean())
             if mse > 0:
                 ratios.append(floor / mse)
