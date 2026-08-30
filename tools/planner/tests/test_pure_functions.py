@@ -1332,3 +1332,72 @@ class TestReviewRegressions(unittest.TestCase):
         self.assertTrue(found)
         self.assertEqual(len(trace), 1)
         self.assertEqual(stats["outcome"], "endpoints_identical")
+
+
+class TestReportDistinguishesMissingFromEmpty(unittest.TestCase):
+    """A fact about the FILE must not be reported as a fact about the DATA.
+
+    From the 2026-08-30 review: a summary.csv lacking `moving_gt_steps` was
+    described as "none of them carry motion", so a winning planner run could
+    be reported as having no signal.
+    """
+
+    def _row(self, **kw):
+        base = {"reachability": "True", "moving_gt_steps": "7",
+                "bbox_mse": "12.0", "baseline_mse": "300.0",
+                "mse_ratio": "0.04", "beats_baseline": "True", "init": "0",
+                "decode_fallbacks": "0"}
+        base.update(kw)
+        return base
+
+    def test_a_missing_column_says_so(self):
+        from tools.planner.make_report import summarise
+
+        rows = [self._row() for _ in range(4)]
+        for r in rows:
+            del r["moving_gt_steps"]
+        v = summarise(rows)["verdict"]
+        self.assertIn("missing", v.lower())
+        self.assertIn("moving_gt_steps", v)
+
+    def test_a_genuinely_motionless_run_still_says_no_motion(self):
+        from tools.planner.make_report import summarise
+
+        rows = [self._row(moving_gt_steps="0") for _ in range(4)]
+        v = summarise(rows)["verdict"]
+        self.assertIn("motion", v.lower())
+        self.assertNotIn("missing", v.lower())
+
+    def test_a_winning_run_is_still_reported_as_winning(self):
+        from tools.planner.make_report import summarise
+
+        out = summarise([self._row() for _ in range(4)])
+        self.assertIn("beats", out["verdict"].lower())
+        self.assertEqual(out["scored"], 4)
+
+
+class TestScreenVidvrdMinorFixes(unittest.TestCase):
+
+    def test_a_relation_without_a_predicate_does_not_raise(self):
+        """The JSON load around it was guarded; this was not."""
+        import sys
+        from pathlib import Path
+        v = str(Path(__file__).resolve().parents[2] / "video")
+        if v not in sys.path:
+            sys.path.insert(0, v)
+        from screen_vidvrd import coupled_coverage
+
+        doc = {"relation_instances": [{"subject_tid": 0, "object_tid": 1}],
+               "trajectories": [], "subject/objects": []}
+        coupled_coverage(doc)          # must not raise KeyError
+
+    def test_predicate_tier_returns_other_for_an_unknown_word(self):
+        import sys
+        from pathlib import Path
+        v = str(Path(__file__).resolve().parents[2] / "video")
+        if v not in sys.path:
+            sys.path.insert(0, v)
+        from screen_vidvrd import predicate_tier
+
+        # Documented as the fall-through, and dead on VidVRD (0 of 25,917).
+        self.assertEqual(predicate_tier("zorble"), "other")
