@@ -22,6 +22,10 @@ NBAKED="${NBAKED:-0}"
 NJOBS="${NJOBS:-0}"
 NFAILED="${NFAILED:-0}"
 
+# Every job id `submit` gets back, so a sweep can chain a follow-up step onto
+# all of its arms with --dependency instead of asking the user to come back.
+SUBMITTED_IDS=()
+
 # The environment every arm gets unless it says otherwise. A sweep overwrites
 # this array with its own baseline, so an arm only has to name what it changes.
 SWEEP_DEFAULTS=("${SWEEP_DEFAULTS[@]:-}")
@@ -70,6 +74,9 @@ submit () {
                   "$@" \
                   bash sh/submit.sh 2>&1)"; then
         echo "${out}" | grep -E "Submitted|OUT_DIR" || echo "${out}" | tail -2
+        local id
+        id="$(echo "${out}" | sed -n 's/^Submitted batch job \([0-9]\+\).*/\1/p' | tail -1)"
+        [[ -n "${id}" ]] && SUBMITTED_IDS+=("${id}")
         NJOBS=$((NJOBS + 1))
     else
         # A silent failure here costs a whole arm, so show why.
