@@ -80,14 +80,25 @@ def score(path):
 def temporal_fidelity(latents, ks=(2, 4, 7, 10), samples=12, max_states=4000):
     """Does latent path length track real time? `SPEC.md` V35.
 
-    **The screen `latent_geometry` should have been.** Geometry scores whether
-    Hamming distance *orders* observed frames the way position does, and on
-    H14 that looked fine at +0.539 while the model planned 37 times worse than
-    the oracle. Planning does not need ordering; it needs **path length**. A
-    code can rank frames correctly and still put two frames seven apart only
-    four transitions apart, and then a planner reaches the goal before the
-    window is filled and the intermediate frames are resampled from too few
-    states.
+    **NOT VALIDATED AS A PREDICTOR OF PLANNER ERROR. Read this before using
+    it.** It was shipped claiming to predict planner error where `spearman`
+    does not. Tested across 8 clips of one model, spanning fidelity 0.00 to
+    1.00, it correlates **+0.238** with `mse_ratio` — the **wrong sign** — and
+    `spearman` does better at **-0.452**. The clip with perfect fidelity 1.00
+    had the *worst* ratio of the eight, 265.
+
+    The n=3 evidence that looked convincing compared **different models on one
+    clip**; the n=8 test compares **one model across clips**. Whatever it
+    separates, it is not clip-level plannability, and the between-model claim
+    now rests on three points and should not be leaned on either.
+
+    What it does measure, and this part holds: **whether latent path length
+    tracks real time.** It tracks `plan_length` almost exactly (fidelity 1.00
+    gives 6-step plans, 0.00 gives 0-step plans), which is close to true by
+    construction. Plan length simply does not determine interpolation error.
+
+    Use it to describe a code, not to rank one. This is the second screen in
+    this project to be narrowed after shipping; see V26 for the first.
 
     Measured on identical frames, median observed-graph steps between frames
     *k* apart::
@@ -97,14 +108,15 @@ def temporal_fidelity(latents, ks=(2, 4, 7, 10), samples=12, max_states=4000):
         trained P10    2     4     6     9          0.86
         trained P5     1     2     4     4          0.57
 
-    against planner `mse_ratio` 0.086, 3.16 and 3.20. **Expect 1.0.** Below
-    about 0.9 the code is compressing time, and no search discipline fixes it:
-    restricting the planner to observed states only made those same models
-    *worse*, which is what falsified the earlier "leaving the support"
-    diagnosis.
+    against planner `mse_ratio` 0.086, 3.16 and 3.20 — which is the n=3
+    comparison that did not survive n=8. Across the 88 clips of H14's own
+    training set the median fidelity is **0.35**, so clip `00150010`, on which
+    the H14 headline was measured, is the model's **best case** and not a
+    typical one.
 
     Needs no planner, no ground truth and no model — only the export's own
-    latents, so it screens a model in seconds rather than an afternoon.
+    latents. That makes it cheap, which is not the same as making it
+    predictive.
 
     `steps_per_frame` is the **mean of the per-k ratios**, not the ratio at any
     single k. On H14's P10 arm that gives 0.94 where the ratio at k=7 alone is
@@ -205,11 +217,11 @@ def main(argv=None):
         print(f"{r['export'][:46]:46} {r['n_bits']:>6} {r['distinct']:>9} "
               f"{rho:>9} {r['nearest_box_error']:>10.2f} {tfs:>9}")
 
-    print("\ntime_fid is latent steps per frame of real time (SPEC V35), and "
-          "it is the\ncolumn that predicted planner error on H14 where "
-          "spearman did not. Expect 1.00;\nbelow about 0.9 the code "
-          "compresses time and the planner reaches the goal\nbefore the "
-          "window is filled. n/a means a dead latent.\n")
+    print("\ntime_fid is latent steps per frame of real time (SPEC V35). It "
+          "describes a code;\nit does NOT predict planner error. Tested over "
+          "8 clips it correlates +0.238 with\nmse_ratio, the wrong sign, "
+          "where spearman manages -0.452. Do not rank by it.\n"
+          "n/a means a dead latent.\n")
     print("A screen, not a ranking. Below roughly +0.5 the code does not "
           "order frames the\nway the world does, so the fallback decode is "
           "arbitrary — which is what the\ntrained models do at +0.34, and it "
