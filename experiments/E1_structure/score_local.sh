@@ -41,7 +41,9 @@ echo
 
 # 6 GB and a short budget: an unbounded search over a wide latent can exhaust
 # memory, and this has crashed a workstation before.
-ulimit -v 6000000
+# Scoped by the callers below rather than applied to the whole script, which
+# is what sh/h14_score.sh does. Pick one convention and this is it.
+MEM_KB="${MEM_KB:-6000000}"
 for pair in "structured:${A}" "unstructured:${B}"; do
     name="${pair%%:*}"; path="${pair#*:}"
     echo "=== planning: ${name} ==="
@@ -61,7 +63,10 @@ def read(name):
     rows = list(csv.DictReader(open(path)))
     ok = [r for r in rows if r["reachability"] == "True"]
     live = [r for r in ok
-            if r.get("moving_gt_steps") and int(r["moving_gt_steps"]) >= 6
+            # float(), matching make_report's parse of the same column. The
+            # writer emits "7" today, so int() works, and would raise the day
+            # it emits "7.0".
+            if r.get("moving_gt_steps") and float(r["moving_gt_steps"]) >= 6
             and r.get("bbox_mse")]
     return {
         "windows": len(rows), "solved": len(ok), "scored": len(live),
@@ -95,7 +100,10 @@ else:
         "| beats the straight line | %d | %d |" % (a["beats"], b["beats"]),
         "",
     ]
-    if a["mse"] and b["mse"]:
+    # `is not None`, not truthiness. A planner error of exactly 0.0 is a
+    # legitimate perfect score, and treating it as missing sent a real result
+    # into the "no scorable windows" branch. Same failure class as SPEC V29.
+    if a["mse"] is not None and b["mse"] is not None:
         ratio = b["mse"] / a["mse"]
         lines.append("Unstructured error is **%.2fx** the structured error." % ratio)
         lines.append("")
@@ -115,12 +123,12 @@ else:
             lines.append("**Reading: structure does not predict plannability "
                          "here.** Criterion 0 is not disproven, but it should "
                          "stop being the organising principle until it is "
-                         "tested at the full 74-clip scale.")
+                         "tested at the full 88-clip scale.")
     else:
         lines.append("**Reading: no scorable windows in at least one arm.** "
                      "Most likely both models failed to train at ~1,000 "
                      "transitions, which says nothing about Criterion 0. "
-                     "Rerun at the full 74-clip, 6,391-transition scale.")
+                     "Rerun at the full 88-clip, 8,522-transition scale.")
 
 out = "eval/planner/E1_summary.md"
 os.makedirs("eval/planner", exist_ok=True)

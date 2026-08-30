@@ -56,7 +56,7 @@ difference between the arms is structure.
 | **A's planner error materially below B's** (well past the 38% margin) | Criterion 0 is real and operative at this scale | Reorganise the dataset search around structure. Robotics corpora move to the front. |
 | **A ≈ B** | Structure does not predict plannability at this data volume | Criterion 0 is not disproven, but it stops being the organising principle. Look at volume and model capacity instead. |
 | **B better than A** | The criterion is backwards | Take it seriously. Re-examine the predicate classification in `screen_vidvrd.PREDICATE_TIERS` first, since it is a judgement. |
-| **Both fail to train** (`val_loss` above ~0.4) | ~1,000 transitions is too few, whatever the structure | Neither arm says anything about Criterion 0. Rerun at the full 74-clip / 6,391-transition scale. |
+| **Both fail to train** (`val_loss` above ~0.4) | ~1,000 transitions is too few, whatever the structure | Neither arm says anything about Criterion 0. Rerun at the full 88-clip / 8,522-transition scale. |
 
 That last row is the likeliest single outcome and is worth expecting: the best
 result so far came from a full-batch overfit on one clip.

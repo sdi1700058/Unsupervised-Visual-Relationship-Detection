@@ -276,6 +276,7 @@ def build(run_dir):
                 ("lose" if s["ratio"] is not None else "")
 
     verdict = html.escape(s["verdict"]).replace("**", "")
+    chart = _bars(s["scored_rows"])
     body = """<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>%s — planner report</title><style>%s</style></head><body><main>
@@ -293,7 +294,7 @@ Log scale, since errors span orders of magnitude. Shorter is better.</p>
 scored.</footer>
 </main></body></html>""" % (
         html.escape(name), CSS, html.escape(name), s["windows"], css_class,
-        verdict, _cards(s), _bars(s["scored_rows"]), _table(rows),
+        verdict, _cards(s), chart, _table(rows),
         html.escape(csv_path))
 
     out = os.path.join(run_dir, "report.html")
@@ -303,8 +304,7 @@ scored.</footer>
     # The chart is also written on its own, because an image file beside the
     # data is what actually gets looked at later. SVG opens in any browser or
     # image viewer and needs no matplotlib, so this works in a bare sandbox and
-    # on Sherlock's Python 3.6 alike.
-    chart = _bars(s["scored_rows"])
+    # on Sherlock's Python 3.6 alike. `chart` was built once, above.
     if chart.startswith("<svg"):
         standalone = chart.replace(
             '<svg ', '<svg xmlns="http://www.w3.org/2000/svg" ', 1)

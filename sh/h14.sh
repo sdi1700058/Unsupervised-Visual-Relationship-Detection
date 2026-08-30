@@ -114,7 +114,16 @@ IDS="$(echo "\
 CLIPS="${CLIPS:-eval/vidvrd_winnable_clips.txt}"
 if [[ -f "${CLIPS}" ]]; then
     echo "using clip list from ${CLIPS}"
-    IDS="$(tr -d '\r' < "${CLIPS}" | grep -v '^[[:space:]]*$' | paste -sd, -)"
+    # `|| true` because an all-blank file makes grep exit 1, and `set -o
+    # pipefail` would then abort the whole job with nothing explaining why.
+    # The emptiness check below says it plainly instead.
+    OVERRIDE="$(tr -d '\r' < "${CLIPS}" | grep -v '^[[:space:]]*$' | paste -sd, - || true)"
+    if [[ -z "${OVERRIDE}" ]]; then
+        echo "FATAL: ${CLIPS} exists but contains no clip ids." >&2
+        echo "       Remove it to use the ${NCLIPS_PINNED:-88} pinned ids." >&2
+        exit 2
+    fi
+    IDS="${OVERRIDE}"
 fi
 
 NCLIPS="$(echo "${IDS}" | tr ',' '\n' | grep -c .)"
