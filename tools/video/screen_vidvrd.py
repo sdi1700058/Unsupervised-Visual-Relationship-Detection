@@ -224,6 +224,21 @@ def window_crossover(per_object, width, height, window=8):
     means no representation at this bin resolution can beat the straight line
     at this window.
 
+    **What this ranks, stated plainly, because it is easy to misread.** The
+    quantisation floor is nearly constant across clips -- measured over 25
+    screened clips it spans **1.9x**, 14.6 to 27.5 -- while the linear baseline
+    spans **1575x**, 2.0 to 3084.5. So `floor / baseline` is dominated by the
+    denominator, and this criterion is in effect a ranking of **how non-linear a
+    clip's motion is**, not of how friendly it is to any particular
+    representation.
+
+    That is correct by design rather than a defect: a clip is winnable exactly
+    when the straight line is beatable, and the straight line is only beatable
+    when the motion departs from it. But "winnable" is a statement about the
+    **clip**, and nothing here says a representation will actually win.
+    `SPEC.md` V38 records the same structure in `mse_ratio` itself, where the
+    numerator varies 5x against the denominator's 1575x.
+
     Everything is in the video's own pixels, with the decoder's 60x40 grid
     mapped onto them, so one bin here is one bin there. The floor comes from
     `tools/planner/oracle.py`, which needs numpy alone.
