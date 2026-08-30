@@ -66,12 +66,98 @@ def score(path):
     if "latents" not in data.files or "gt_boxes" not in data.files:
         return None
     result = latent_geometry(data["latents"], data["gt_boxes"])
+    result.update({"temporal_" + k: v
+                   for k, v in temporal_fidelity(data["latents"]).items()
+                   if k in ("steps_per_frame", "n_distinct")})
     result["export"] = os.path.splitext(os.path.basename(path))[0]
     z = np.asarray(data["latents"])
     result["n_bits"] = int(z.shape[1])
     result["distinct"] = len({row.tobytes() for row in z.astype("int8")})
     return result
 
+
+
+def temporal_fidelity(latents, ks=(2, 4, 7, 10), samples=12, max_states=4000):
+    """Does latent path length track real time? `SPEC.md` V35.
+
+    **The screen `latent_geometry` should have been.** Geometry scores whether
+    Hamming distance *orders* observed frames the way position does, and on
+    H14 that looked fine at +0.539 while the model planned 37 times worse than
+    the oracle. Planning does not need ordering; it needs **path length**. A
+    code can rank frames correctly and still put two frames seven apart only
+    four transitions apart, and then a planner reaches the goal before the
+    window is filled and the intermediate frames are resampled from too few
+    states.
+
+    Measured on identical frames, median observed-graph steps between frames
+    *k* apart::
+
+        k              2     4     7    10     steps per frame
+        oracle         2     4     7    10          1.00
+        trained P10    2     4     6     9          0.86
+        trained P5     1     2     4     4          0.57
+
+    against planner `mse_ratio` 0.086, 3.16 and 3.20. **Expect 1.0.** Below
+    about 0.9 the code is compressing time, and no search discipline fixes it:
+    restricting the planner to observed states only made those same models
+    *worse*, which is what falsified the earlier "leaving the support"
+    diagnosis.
+
+    Needs no planner, no ground truth and no model — only the export's own
+    latents, so it screens a model in seconds rather than an afternoon.
+
+    `steps_per_frame` is the **mean of the per-k ratios**, not the ratio at any
+    single k. On H14's P10 arm that gives 0.94 where the ratio at k=7 alone is
+    0.86; both describe the same measurement and the earlier report log quotes
+    the latter. `per_k` is the unambiguous form and is what to quote.
+
+    Returns `steps_per_frame` (None for a dead latent, which has no distance to
+    measure rather than zero distance) and `per_k`, the median step count per
+    separation.
+    """
+    import numpy as np
+
+    from tools.planner.onmanifold import shortest_observed_path
+
+    z = np.asarray(latents, dtype=np.int8)
+    if len(z) > max_states:
+        # Bound the BFS. Sub-sampling frames would change the transitions, so
+        # the prefix is taken whole instead.
+        z = z[:max_states]
+
+    # A code with one distinct state has no distance to measure. That is a
+    # DEAD latent, not a maximally compressed one, and the two must not read
+    # alike: compression is a property of a working code (SPEC V29).
+    n_distinct = len({row.tobytes() for row in z})
+    if n_distinct < 2:
+        return {"steps_per_frame": None, "per_k": {},
+                "n_states": int(len(z)), "n_distinct": n_distinct,
+                "note": "dead latent: %d distinct state(s)" % n_distinct}
+
+    per_k, ratios = {}, []
+    for k in ks:
+        if len(z) <= k:
+            continue
+        lens = []
+        stride = max(1, (len(z) - k) // samples)
+        for i in range(0, len(z) - k, stride):
+            path = shortest_observed_path(z, i, i + k)
+            if path is not None:
+                lens.append(len(path) - 1)
+        if not lens:
+            continue
+        per_k[k] = float(np.median(lens))
+        if k:
+            ratios.append(per_k[k] / float(k))
+
+    return {
+        # None, not 0.0: a dead latent has no path at all, which is undefined
+        # rather than "zero steps" (SPEC V29).
+        "steps_per_frame": float(np.mean(ratios)) if ratios else None,
+        "per_k": per_k,
+        "n_states": int(len(z)),
+        "n_distinct": n_distinct,
+    }
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
@@ -110,14 +196,21 @@ def main(argv=None):
     rows.sort(key=lambda r: (r["spearman"] is None,
                              -(r["spearman"] or 0.0)))
 
-    print(f"{'export':52} {'bits':>6} {'distinct':>9} "
-          f"{'spearman':>9} {'nn_err_px':>10}")
+    print(f"{'export':46} {'bits':>6} {'distinct':>9} "
+          f"{'spearman':>9} {'nn_err_px':>10} {'time_fid':>9}")
     for r in rows:
         rho = "    n/a" if r["spearman"] is None else f"{r['spearman']:+.3f}"
-        print(f"{r['export'][:52]:52} {r['n_bits']:>6} {r['distinct']:>9} "
-              f"{rho:>9} {r['nearest_box_error']:>10.2f}")
+        tf = r.get("temporal_steps_per_frame")
+        tfs = "n/a" if tf is None else f"{tf:.2f}"
+        print(f"{r['export'][:46]:46} {r['n_bits']:>6} {r['distinct']:>9} "
+              f"{rho:>9} {r['nearest_box_error']:>10.2f} {tfs:>9}")
 
-    print("\nA screen, not a ranking. Below roughly +0.5 the code does not "
+    print("\ntime_fid is latent steps per frame of real time (SPEC V35), and "
+          "it is the\ncolumn that predicted planner error on H14 where "
+          "spearman did not. Expect 1.00;\nbelow about 0.9 the code "
+          "compresses time and the planner reaches the goal\nbefore the "
+          "window is filled. n/a means a dead latent.\n")
+    print("A screen, not a ranking. Below roughly +0.5 the code does not "
           "order frames the\nway the world does, so the fallback decode is "
           "arbitrary — which is what the\ntrained models do at +0.34, and it "
           "is invisible to reconstruction loss.\n\nAbove that, do NOT rank by "
