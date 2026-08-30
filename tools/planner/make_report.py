@@ -90,6 +90,9 @@ def summarise(rows, min_motion=6):
         "baseline_iou": _median([_num(r, "baseline_iou") for r in scored
                                  if _num(r, "baseline_iou") is not None]),
         "fallbacks": sum(int(_num(r, "decode_fallbacks") or 0) for r in scored),
+        "fallbacks_per_window": (
+            sum(int(_num(r, "decode_fallbacks") or 0) for r in scored)
+            / float(len(scored))) if scored else None,
         "rows": rows,
         "scored_rows": scored,
     }
@@ -107,6 +110,13 @@ def summarise(rows, min_motion=6):
                           "nothing measurable came out of this run.")
     elif ratio is None:
         out["verdict"] = "Windows scored, but no ratio could be formed."
+    elif (out.get("fallbacks_per_window") or 0) >= 2.0:
+        out["verdict"] = (
+            "mse_ratio %.3f, but **%.1f states per window were latents the "
+            "model never emitted**, so their boxes came from the nearest "
+            "observed frame rather than a decode. This run measures the "
+            "fallback more than the model (SPEC V33)."
+            % (ratio, out["fallbacks_per_window"]))
     elif ratio < 1.0:
         out["verdict"] = (
             "The planner **beats** linear interpolation: mse_ratio %.3f, "
@@ -227,6 +237,14 @@ def _cards(s):
         card("baseline", fmt(s["baseline_mse"])),
         card("IoU", "%s / %s" % (fmt(s["planner_iou"], "%.3f"),
                                  fmt(s["baseline_iou"], "%.3f"))),
+        # SPEC V33. A fallback means the planner reached a latent the encoder
+        # never emitted, so that window's boxes came from the Hamming-nearest
+        # observed frame rather than a real decode. Measured on identical
+        # frames, the oracle produces 0.0 per window and a trained FOSAE 5.5
+        # of roughly 6 -- so a high count means the run is measuring the
+        # fallback, not the model. It belongs beside the ratio, not buried in
+        # the per-window table.
+        card("fallbacks / window", fmt(s["fallbacks_per_window"], "%.1f")),
     ])
 
 
