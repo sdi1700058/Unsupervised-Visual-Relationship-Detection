@@ -289,6 +289,62 @@ def window_crossover(per_object, width, height, window=8):
     return floor / max(float(np.mean(errors)), 1e-9)
 
 
+
+def provenance_header(window, n, filters):
+    """A comment header saying how a clip list was produced. `SPEC.md` V37.
+
+    `eval/vidvrd_winnable_clips.txt` is 88 bare ids with no header, and the
+    current screen reproduces no window exactly -- w=12 gives 69, w=16 gives
+    86, w=20 gives 99, and the closest shares 80 of the 88. Its provenance is
+    unrecoverable, and every planner number in the project was scored at
+    window 8, which the list may never have been screened at. That cost a full
+    day of wrong conclusions in both directions.
+
+    The crossover criterion is a steep function of window size, so a list
+    without its window is not interpretable. Every line is a comment, so the
+    file still reads as a plain id list.
+    """
+    import datetime
+
+    parts = ["# screen_vidvrd.py window=%d n=%d" % (window, n),
+             "# written %s" % datetime.date.today().isoformat()]
+    if filters:
+        parts.append("# filters: %s"
+                     % " ".join("%s=%s" % (k, v)
+                                for k, v in sorted(filters.items())))
+    parts.append("# The crossover criterion depends on the window. Score this")
+    parts.append("# list at window=%d; another window measures something else." % window)
+    return "\n".join(parts) + "\n"
+
+
+def read_clip_list(path):
+    """Video ids from a list file, skipping comments and blank lines."""
+    out = []
+    with open(path) as handle:
+        for line in handle:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                out.append(line)
+    return out
+
+
+def clip_list_window(path):
+    """The window a list was screened at, or None when it does not say.
+
+    None means the list predates `provenance_header` and its numbers cannot be
+    trusted against any particular window.
+    """
+    import re
+
+    with open(path) as handle:
+        for line in handle:
+            if not line.startswith("#"):
+                break
+            found = re.search(r"window=(\d+)", line)
+            if found:
+                return int(found.group(1))
+    return None
+
 def main(argv=None):
     import numpy as np
 
@@ -416,10 +472,21 @@ def main(argv=None):
 
     if args.list:
         os.makedirs(os.path.dirname(args.list) or ".", exist_ok=True)
+        # The header is not decoration. A list without its window is not
+        # interpretable, because the crossover criterion is a steep function
+        # of window size (SPEC V37).
+        header = provenance_header(
+            args.window, len(kept),
+            {"no_fill_only": args.no_fill_only,
+             "min_frames": args.min_frames,
+             "min_disp": args.min_disp,
+             "winnable_only": args.winnable_only})
         with open(args.list, "w") as fh:
+            fh.write(header)
             for r in kept:
-                fh.write(r["video_id"] + "\n")
-        print(f"\nwrote {len(kept)} video ids to {args.list}")
+                fh.write(f"{r['video_id']}\n")
+        print(f"\nwrote {len(kept)} video ids to {args.list} "
+              f"(screened at window={args.window})")
 
     if args.csv:
         os.makedirs(os.path.dirname(args.csv) or ".", exist_ok=True)
