@@ -419,6 +419,47 @@ def latent_geometry(latents, gt_boxes, max_pairs=4000, seed=0):
             "n_pairs": len(pairs)}
 
 
+def floor_ratio(planner_mse, quantisation_floor):
+    """`planner_error / quantisation_floor` — how close to the best possible.
+
+    **A measure of the representation, where `mse_ratio` is a measure of the
+    clip.** `mse_ratio` divides by the linear-interpolation baseline, and
+    measured over 22 screened clips that baseline spans **1575x** (2.0 to
+    3084.5) while the oracle's planner error spans **5x** (20.4 to 100.4). A
+    ratio reports whichever of its parts varies most, so `mse_ratio` reports
+    how non-linear a clip happens to be (`SPEC.md` V38).
+
+    The quantisation floor spans only **1.9x** across the same clips, so
+    dividing by it leaves the numerator in charge.
+
+    Validated on two independent samples before being written, because two
+    measures were already narrowed after shipping on small evidence this week::
+
+        n=10, paired    floor_ratio CV 0.51   mse_ratio CV 0.79
+        n=22, oracle    floor_ratio CV 0.52   mse_ratio CV 1.87   3.6x steadier
+
+    For one fixed representation across 22 clips, `mse_ratio` ranged 0.01 to
+    25.19 and `floor_ratio` 0.91 to 5.51.
+
+    **Report both.** They answer different questions:
+
+    - `mse_ratio < 1` — does this beat the trivial alternative? Practical
+      utility, and the question the thesis's task statement asks.
+    - `floor_ratio -> 1` — how close is this to the best any representation
+      could do at this bin resolution? Representation quality.
+
+    A value below 1 is possible rather than an error: slot matching can pair
+    boxes more favourably than the identity the floor assumes.
+
+    None when either input is missing or the floor is not positive (V29).
+    """
+    if planner_mse is None or quantisation_floor is None:
+        return None
+    if quantisation_floor <= 0:
+        return None
+    return float(planner_mse) / float(quantisation_floor)
+
+
 def moving_gt_steps(gt_boxes, tol=1e-3):
     """Frame steps in the window where the annotated boxes actually move.
 
@@ -607,6 +648,10 @@ def summarize(found, plan_length, wall_s, window=None, scores=None, extra=None):
         out["hungarian_mapping"] = scores["planner"]["mapping"]
         out["matching_mode"] = scores["planner"]["matching_mode"]
         out["temporal_order"] = scores.get("temporal_order")
+        # SPEC V38: reported beside mse_ratio, because mse_ratio measures the
+        # clip and this measures the representation.
+        out["floor_ratio"] = scores.get("floor_ratio")
+        out["quantisation_floor"] = scores.get("quantisation_floor")
         if "planner_iou" in scores:
             out["bbox_iou_mean"] = scores["planner_iou"]["mean_iou"]
             out["frames_iou_above_half"] = scores["planner_iou"]["frames_above_0.5"]

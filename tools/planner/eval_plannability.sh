@@ -92,7 +92,7 @@ echo "length   ${LENGTH_MODE}"
 echo "summary  ${SUMMARY_CSV}"
 echo
 
-echo "export,method,init,goal,reachability,plan_length,expected_length,moving_steps,moving_gt_steps,skipped_absent,length_match,bbox_mse,baseline_mse,mse_ratio,beats_baseline,bbox_iou,baseline_iou,temporal_order,decode_fallbacks,wall_s" \
+echo "export,method,init,goal,reachability,plan_length,expected_length,moving_steps,moving_gt_steps,skipped_absent,length_match,bbox_mse,baseline_mse,mse_ratio,beats_baseline,bbox_iou,baseline_iou,temporal_order,floor_ratio,quantisation_floor,decode_fallbacks,wall_s" \
     > "${SUMMARY_CSV}"
 
 IFS=',' read -ra METHOD_LIST <<< "${METHODS}"
@@ -150,7 +150,8 @@ row = [stem, method, cell("init_frame"), cell("goal_frame"),
        cell("moving_steps"), cell("moving_gt_steps"), cell("skipped_absent"), cell("plan_length_match"), cell("bbox_mse_mean"),
        cell("baseline_mse_mean"), cell("mse_ratio"), cell("beats_baseline"),
        cell("bbox_iou_mean"), cell("baseline_iou_mean"),
-       cell("temporal_order"), cell("decode_fallbacks"), cell("wall_s")]
+       cell("temporal_order"), cell("floor_ratio"), cell("quantisation_floor"),
+       cell("decode_fallbacks"), cell("wall_s")]
 print(",".join(str(x) for x in row))
 
 ratio = m.get("mse_ratio")

@@ -1452,3 +1452,52 @@ class TestReportRecordsItsWindow(unittest.TestCase):
 
         s = summarise(self._rows([(0, 15), (15, 30), (30, 45)]))
         self.assertNotIn("V37", s["verdict"])
+
+
+class TestFloorRatio(unittest.TestCase):
+    """`planner_error / quantisation_floor` — a measure of the REPRESENTATION.
+
+    `mse_ratio` divides by the linear baseline, which spans 1575x across clips
+    while the planner error spans 5x, so it reports the clip more than the
+    model (SPEC V38). The quantisation floor spans only 1.9x, so dividing by
+    it measures what the representation does rather than what the clip is.
+
+    Validated before implementing, on two independent samples:
+
+        n=10 paired   floor_ratio CV 0.51 vs mse_ratio 0.79 (oracle)
+        n=22 oracle   floor_ratio CV 0.52 vs mse_ratio 1.87  -- 3.6x steadier
+
+    Both are kept. They answer different questions: `mse_ratio` asks whether
+    the representation beats the trivial alternative, `floor_ratio` asks how
+    close it gets to the best achievable at this bin resolution.
+    """
+
+    def test_at_the_floor_the_ratio_is_one(self):
+        from tools.planner.common.metrics import floor_ratio
+
+        self.assertAlmostEqual(floor_ratio(20.0, 20.0), 1.0)
+
+    def test_twice_the_floor_is_two(self):
+        from tools.planner.common.metrics import floor_ratio
+
+        self.assertAlmostEqual(floor_ratio(40.0, 20.0), 2.0)
+
+    def test_a_missing_input_is_none_not_zero(self):
+        """SPEC V29 — a metric must be able to say 'no data'."""
+        from tools.planner.common.metrics import floor_ratio
+
+        self.assertIsNone(floor_ratio(None, 20.0))
+        self.assertIsNone(floor_ratio(20.0, None))
+
+    def test_a_degenerate_floor_is_refused(self):
+        """A floor at or below zero makes the ratio meaningless."""
+        from tools.planner.common.metrics import floor_ratio
+
+        self.assertIsNone(floor_ratio(20.0, 0.0))
+        self.assertIsNone(floor_ratio(20.0, -1.0))
+
+    def test_below_one_is_possible_and_not_an_error(self):
+        """Matching can beat the floor when slots are re-paired favourably."""
+        from tools.planner.common.metrics import floor_ratio
+
+        self.assertAlmostEqual(floor_ratio(10.0, 20.0), 0.5)

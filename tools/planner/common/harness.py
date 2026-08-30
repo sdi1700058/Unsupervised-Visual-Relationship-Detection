@@ -110,6 +110,27 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
                                          export.gt_boxes[goal_idx]))
         scores["resample_free"] = exact
 
+        # `floor_ratio` beside `mse_ratio`, because the two answer different
+        # questions and only the second is stable across clips: the linear
+        # baseline spans 1575x across screened clips where the quantisation
+        # floor spans 1.9x, so mse_ratio reports the clip and floor_ratio
+        # reports the representation (SPEC V38).
+        #
+        # Imported here rather than at module scope: oracle.py can reach for
+        # the loader, and the loader pulls TensorFlow.
+        try:
+            from tools.planner.oracle import round_trip_error
+            from tools.planner.common.metrics import floor_ratio
+            floor = round_trip_error(gt_window)
+            scores["quantisation_floor"] = floor
+            scores["floor_ratio"] = floor_ratio(
+                scores["planner"]["mean_mse"], floor)
+        except Exception as exc:                       # noqa: BLE001
+            # A missing floor must not cost the run its other metrics.
+            scores["quantisation_floor"] = None
+            scores["floor_ratio"] = None
+            scores["floor_error"] = str(exc)
+
         (out_dir / "plan_trace.json").write_text(json.dumps({
             "window": window,
             "latents": trace.astype(int).tolist(),
@@ -137,6 +158,9 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
             line += " (baseline is exact; window carries no signal)"
         else:
             line += f" (ratio {ratio:.3f})"
+        fr = scores.get("floor_ratio")
+        if fr is not None:
+            line += f", {fr:.2f}x the floor"
         print(line)
     if export.fallback_count:
         print(f"note: {export.fallback_count} latents were not in the export "

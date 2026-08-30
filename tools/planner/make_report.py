@@ -112,6 +112,8 @@ def summarise(rows, min_motion=6):
                                 if _num(r, "bbox_iou") is not None]),
         "baseline_iou": _median([_num(r, "baseline_iou") for r in scored
                                  if _num(r, "baseline_iou") is not None]),
+        "floor_ratio": _median([_num(r, "floor_ratio") for r in scored
+                                if _num(r, "floor_ratio") is not None]),
         "fallbacks": sum(int(_num(r, "decode_fallbacks") or 0) for r in scored),
         "fallbacks_per_window": (
             sum(int(_num(r, "decode_fallbacks") or 0) for r in scored)
@@ -278,6 +280,9 @@ def _cards(s):
         card("fallbacks / window", fmt(s["fallbacks_per_window"], "%.1f")),
         # SPEC V37. A report that does not say which window produced it cannot
         # be told apart from a superseded one.
+        # SPEC V38. mse_ratio measures the clip; this measures the
+        # representation. Both, because they answer different questions.
+        card("x the floor", fmt(s.get("floor_ratio"), "%.2f")),
         card("window", "n/a" if s.get("window") is None else s["window"]),
     ])
 
