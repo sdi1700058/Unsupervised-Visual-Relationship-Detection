@@ -68,7 +68,7 @@ def _present(boxes):
     return np.abs(boxes).sum(axis=-1) > 0
 
 
-def motion_model(boxes, percentile=99.0):
+def motion_model(boxes, percentile=95.0):
     """Learn what a plausible one-step displacement looks like, from data.
 
     Only steps where the object is present in **both** frames count. A
@@ -108,15 +108,33 @@ def motion_model(boxes, percentile=99.0):
     }
 
 
-def plan_validity(trace_boxes, model, width=None, height=None, slack=1.5):
+def plan_validity(trace_boxes, model, width=None, height=None, slack=1.0):
     """Fraction of object-steps in a decoded plan that betray nothing.
 
     Takes **no ground truth**, by design and by test.
 
-    `slack` multiplies the learned displacement bound, so an object may exceed
-    the fastest thing ever observed by half again before it is called a
-    teleport. Without it the 99th percentile of the training set would flag
-    roughly one step in a hundred of a perfectly real trajectory.
+    `slack` multiplies the learned displacement bound.
+
+    The default was 99th percentile with slack 1.5 until 2026-08-30. That is
+    too loose, and the cost was measured rather than argued: on 13
+    Something-Else clips it left the measure SILENT on 8 of them, because
+    hand-object manipulation has a heavy-tailed step distribution -- median
+    step 2.50 px against a 99th-percentile bound of 16.23, a ratio of 6.5,
+    where VidVRD sits at 3.6. A scrambled trajectory has that much room to
+    hide under the bound.
+
+    95th percentile with slack 1.0 was chosen by sweeping both corpora, and
+    the thing that stops it going tighter is that a REAL trajectory must keep
+    scoring high validity:
+
+        pct  slack   VidVRD real / sep      Something-Else real / sep
+        99   1.5     1.000 / 0.147          1.000 / 0.000
+        95   1.0     1.000 / 0.269          1.000 / 0.083   <- default
+        90   1.0     0.990 / 0.288          1.000 / 0.095
+        75   1.0     0.922 / 0.378 FLAGGED  0.974 / 0.154
+
+    Separation alone would drive the threshold to zero, so it is not the
+    criterion. `TestBoundCalibration` pins both sides.
     """
     b = np.asarray(trace_boxes, dtype=np.float64)
     if b.ndim == 2:
@@ -193,8 +211,8 @@ def discrimination(real_trace, scrambled_trace, model, **kw):
     }
 
 
-def score_export(path, test_frac=0.3, slack=1.5, width=None, height=None,
-                 seed=0):
+def score_export(path, test_frac=0.3, slack=1.0, width=None, height=None,
+                 seed=0, percentile=95.0):
     """Fit the motion model on the early frames, score the late ones."""
     d = np.load(path)
     key = "decoded_boxes" if "decoded_boxes" in d else "gt_boxes"
@@ -206,7 +224,7 @@ def score_export(path, test_frac=0.3, slack=1.5, width=None, height=None,
     if cut < 2 or len(boxes) - cut < 2:
         raise SystemExit("%s is too short to split" % path)
 
-    model = motion_model(boxes[:cut])
+    model = motion_model(boxes[:cut], percentile=percentile)
     real = boxes[cut:]
     rng = np.random.RandomState(seed)
     scrambled = real[rng.permutation(len(real))]
@@ -275,7 +293,9 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("exports", nargs="+", help="planner export npz files")
     ap.add_argument("--test-frac", type=float, default=0.3)
-    ap.add_argument("--slack", type=float, default=1.5)
+    ap.add_argument("--slack", type=float, default=1.0)
+    ap.add_argument("--percentile", type=float, default=95.0,
+                    help="displacement percentile for the bound")
     ap.add_argument("--canvas", default="300x200",
                     help="WxH the boxes were rasterised onto, or 'none'")
     ap.add_argument("--out-dir", default=None)
@@ -292,7 +312,8 @@ def main(argv=None):
         if name.endswith(".npz"):
             name = name[:-4]
         try:
-            r = score_export(p, a.test_frac, a.slack, w, h)
+            r = score_export(p, a.test_frac, a.slack, w, h,
+                             percentile=a.percentile)
         except SystemExit as e:
             print("skip %s: %s" % (name, e))
             continue

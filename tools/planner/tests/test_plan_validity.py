@@ -164,5 +164,103 @@ class TestDiscrimination(unittest.TestCase):
         self.assertGreater(d["separation"], 0.1)
 
 
+
+class TestBoundCalibration(unittest.TestCase):
+    """The default bound, and the guard that stops it being tightened further.
+
+    Measured 2026-08-30 across 20 VidVRD and 13 Something-Else clips. Tighter
+    bounds always raise separation, so separation alone would drive the
+    threshold to zero. What stops it is that a REAL trajectory must keep
+    scoring high validity:
+
+        pct  slack   VidVRD real-validity / sep    SomethingElse
+        99   1.5     1.000 / 0.147                 1.000 / 0.000
+        95   1.0     1.000 / 0.269                 1.000 / 0.083   <- default
+        90   1.0     0.990 / 0.288                 1.000 / 0.095
+        75   1.0     0.922 / 0.378  REAL FLAGGED   0.974 / 0.154
+
+    99/1.5 was the original default and it is too loose: it left the measure
+    silent on 8 of 13 Something-Else clips.
+    """
+
+    def _walk_corpus(self, n=200, step=3.0, seed=0, bin_px=5.0):
+        """A walk that stays on the canvas AND lies on bin edges.
+
+        Both details are needed for this to be a fair model of what M3 sees,
+        and each was established by measurement after the first version of
+        this test failed:
+
+        1. An unclamped 200-step walk drifts off a 300x200 canvas, so
+           `offcanvas_rate` decides the test rather than the displacement
+           bound.
+
+        2. **Quantisation is the important one.** Every trajectory M3 ever
+           scores comes out of `latents_to_boxes`, so it lies on bin edges --
+           300/60 = 5 px. A continuous walk has no zero-length steps, and a
+           95th-percentile bound then flags about 5% of its steps BY
+           DEFINITION. A quantised walk spends about half its steps not
+           changing bin at all, and a zero step can never exceed the bound.
+           Measured: 0.058 of real steps flagged continuous, **0.000**
+           quantised.
+
+        A hypothesis was tested and falsified on the way here: that
+        autocorrelation ("momentum") explained the gap. It does not -- the
+        flagged fraction stays at 0.06-0.07 for every autocorrelation from 0.0
+        to 0.9. Quantisation is the whole of it.
+        """
+        b = _walk(n=n, step=step, seed=seed, start=120.0)
+        x = np.clip(b[:, 0, 0], 5.0, 250.0)
+        y = np.clip(b[:, 0, 1], 5.0, 160.0)
+        x = np.floor(x / bin_px) * bin_px
+        y = np.floor(y / bin_px) * bin_px
+        b[:, 0, 0], b[:, 0, 1] = x, y
+        b[:, 0, 2], b[:, 0, 3] = x + 20.0, y + 20.0
+        return b
+
+    def test_the_default_does_not_flag_a_real_trajectory(self):
+        from tools.planner.plan_validity import motion_model, plan_validity
+
+        for seed in range(6):
+            b = self._walk_corpus(seed=seed)
+            m = motion_model(b[:140])
+            v = plan_validity(b[140:], m, width=300, height=200)["validity"]
+            self.assertGreaterEqual(v, 0.95,
+                                    "default bound flags real motion (seed %d)" % seed)
+
+    def test_the_default_still_separates_real_from_scrambled(self):
+        from tools.planner.plan_validity import motion_model, discrimination
+
+        rng = np.random.RandomState(0)
+        seps = []
+        for seed in range(6):
+            b = self._walk_corpus(seed=seed)
+            m = motion_model(b[:140])
+            real = b[140:]
+            seps.append(discrimination(real, real[rng.permutation(len(real))],
+                                       m, width=300, height=200)["separation"])
+        self.assertGreater(float(np.median(seps)), 0.05)
+
+    def test_a_looser_bound_separates_less(self):
+        """Which is why the default moved off 99/1.5."""
+        from tools.planner.plan_validity import motion_model, discrimination
+
+        b = self._walk_corpus(seed=3)
+        real = b[140:]
+        rng = np.random.RandomState(1)
+        scrambled = real[rng.permutation(len(real))]
+
+        tight = discrimination(real, scrambled, motion_model(b[:140], percentile=95.0),
+                               width=300, height=200, slack=1.0)["separation"]
+        loose = discrimination(real, scrambled, motion_model(b[:140], percentile=99.0),
+                               width=300, height=200, slack=1.5)["separation"]
+        self.assertGreaterEqual(tight, loose)
+
+    def test_percentile_is_settable(self):
+        from tools.planner.plan_validity import motion_model
+
+        b = self._walk_corpus(seed=2)
+        self.assertLess(motion_model(b, percentile=75.0)["max_step"],
+                        motion_model(b, percentile=99.0)["max_step"])
+
 if __name__ == "__main__":
     unittest.main()
