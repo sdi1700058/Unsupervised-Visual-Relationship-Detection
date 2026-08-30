@@ -64,7 +64,15 @@ therefore worse than no latent. Beating them proves nothing.
 | kNN probe | 0.118 |
 | shuffled control | 0.076 |
 | **label prior** | **0.119** |
+| control task (Hewitt & Liang) | 0.039 |
 | **lift** | **−0.003** |
+| **selectivity** | **+0.078** |
+
+The **control task** answers the objection the other controls cannot: *was the
+probe simply too weak?* Random labels fixed per latent type can only be fitted
+by the probe's own memorisation, and the ridge probe scores 0.039 on them. It
+is a **selective** probe that still cannot read the relations, so the negative
+is about the representation rather than the instrument.
 
 **A code built from ground-truth boxes carries no readable information about
 VidVRD's relation labels.** This is a statement about the dataset, not about

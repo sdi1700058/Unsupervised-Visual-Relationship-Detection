@@ -33,14 +33,21 @@ relation is there but the code does not surface it. That is a weaker claim
 than "FOSAE learned the relation", and stating it precisely is worth more than
 a single number.
 
-Two controls, without which the numbers mean nothing
-----------------------------------------------------
+Three controls, without which the numbers mean nothing
+------------------------------------------------------
 
 - **prior** — predict each predicate's base rate. VidVRD predicates are very
   imbalanced, so a probe that learns nothing still beats chance.
 - **shuffled** — the identical probe on latents permuted across the corpus.
   This keeps the label prior AND the object-pair identity and removes only the
   representation.
+- **control task** — Hewitt & Liang 2019 (`RELATED_WORK.md` N2): random labels
+  fixed per latent *type*, which *"can only be learned by the probe itself"*.
+  **selectivity** = probe minus control task, and it answers the objection the
+  other two cannot: *is the probe simply expressive enough to fit anything?*
+  Measured 0.039 on the oracle corpus, giving selectivity +0.078 — the ridge
+  probe has almost no memorisation capacity, so its failure to beat the prior
+  is a fact about the representation and not about a badly-chosen probe.
 
 **The bar is `max(prior, shuffled)`, and it is usually the prior.** Measured
 on 20 clips: the shuffled control scored 0.076 while the prior scored 0.119 —
@@ -86,7 +93,9 @@ First result, 2026-08-30 — **oracle** latents, 20 screened clips, 6 held out,
     kNN probe         0.118
     shuffled control  0.076
     label prior       0.119
+    control task      0.039
     lift             -0.003
+    selectivity      +0.078
 
 A code built from **ground-truth boxes** carries no readable information about
 VidVRD's relation labels. That is a statement about the dataset rather than
@@ -302,6 +311,44 @@ def knn_probe(X_train, y_train, X_test, k=5, neighbours=None):
     return y[neighbours].mean(axis=1)
 
 
+def control_task_labels(latents, base_rate=0.3, seed=0):
+    """Hewitt & Liang's control task: random labels, fixed per latent *type*.
+
+    `RELATED_WORK.md` N2. Their construction associates *"word types with
+    random outputs"*, so the task *"can only be learned by the probe itself"*
+    — any score on it is the probe's own memorisation capacity rather than
+    anything the representation supplied. Their **selectivity** is probe
+    accuracy minus control accuracy.
+
+    The analogue of a word type here is a **distinct latent code**, so
+    identical codes must receive identical labels. Assigning per row instead
+    would make the task unlearnable by construction and selectivity would be
+    high for the wrong reason.
+
+    This is NOT the same as `probe_corpus`'s shuffled control, and neither
+    substitutes for the other:
+
+    ========================  =============  ==================================
+    control                   randomises     isolates
+    ========================  =============  ==================================
+    control task (this)       the labels     the probe's memorisation capacity
+    shuffled latents          the code       the representation's contribution
+    ========================  =============  ==================================
+    """
+    z = np.asarray(latents)
+    z = z.reshape(len(z), -1)
+    rng = np.random.RandomState(seed)
+
+    labels = {}
+    out = np.zeros(len(z))
+    for i in range(len(z)):
+        key = z[i].tobytes()
+        if key not in labels:
+            labels[key] = float(rng.rand() < base_rate)
+        out[i] = labels[key]
+    return out
+
+
 def _pair_onehot(pairs, n_slots):
     """One-hot of which ordered pair a row describes.
 
@@ -455,6 +502,15 @@ def probe_corpus(clips, k=5, test_frac=0.3, seed=0):
     S_shuf = ridge_probe_multi(X_shuf[train], Y[train], X_shuf[test])
     nbr = knn_neighbours(X[train], X[test], k)
 
+    # Hewitt & Liang's control task, one per predicate at that predicate's own
+    # base rate so the comparison is like for like (RELATED_WORK N2).
+    Y_ctrl = np.zeros_like(Y)
+    for c in range(Y.shape[1]):
+        rate = float(Y[:, c].mean())
+        Y_ctrl[:, c] = control_task_labels(X[:, :n_z], base_rate=rate,
+                                           seed=seed + c)
+    S_ctrl = ridge_probe_multi(X[train], Y_ctrl[train], X[test])
+
     rows = []
     for c, name in enumerate(predicates):
         y = Y[:, c]
@@ -467,6 +523,7 @@ def probe_corpus(clips, k=5, test_frac=0.3, seed=0):
             "shuffled": average_precision(y[test], S_shuf[:, c]),
             "prior": average_precision(y[test],
                                        np.full(len(test), y[train].mean())),
+            "control_task": average_precision(Y_ctrl[test, c], S_ctrl[:, c]),
         })
 
     def macro(key):
@@ -485,10 +542,18 @@ def probe_corpus(clips, k=5, test_frac=0.3, seed=0):
         "knn_mAP": macro("knn"),
         "shuffled_mAP": macro("shuffled"),
         "prior_mAP": macro("prior"),
+        "control_task_mAP": macro("control_task"),
     }
     summary["gap"] = (None if summary["ridge_mAP"] is None
                       or summary["shuffled_mAP"] is None
                       else summary["ridge_mAP"] - summary["shuffled_mAP"])
+    # Selectivity, Hewitt & Liang 2019: probe minus control task. A probe with
+    # a high control score is reporting its own capacity, so a high raw score
+    # from it means nothing. Their ELMo ranking INVERTED once this was
+    # applied.
+    summary["selectivity"] = (None if summary["ridge_mAP"] is None
+                              or summary["control_task_mAP"] is None
+                              else summary["ridge_mAP"] - summary["control_task_mAP"])
     return summary, rows
 
 
@@ -624,10 +689,11 @@ def main(argv=None):
     print("predicates     %d, of which %d scoreable"
           % (summary["n_predicates"], summary["n_scored"]))
     print("")
-    for key, label in (("ridge_mAP", "linear probe   "),
-                       ("knn_mAP", "kNN probe      "),
+    for key, label in (("ridge_mAP", "linear probe    "),
+                       ("knn_mAP", "kNN probe       "),
                        ("shuffled_mAP", "shuffled control"),
-                       ("prior_mAP", "label prior    ")):
+                       ("prior_mAP", "label prior     "),
+                       ("control_task_mAP", "control task    ")):
         v = summary[key]
         print("  %s %s" % (label, "n/a" if v is None else "%.3f" % v))
     print("")
@@ -635,6 +701,9 @@ def main(argv=None):
     lift = summary.get("lift_over_best_control")
     print("  lift over the best control  %s"
           % ("n/a" if lift is None else "%+.3f" % lift))
+    sel = summary.get("selectivity")
+    print("  selectivity (Hewitt & Liang) %s"
+          % ("n/a" if sel is None else "%+.3f" % sel))
     print("")
     print(v)
 

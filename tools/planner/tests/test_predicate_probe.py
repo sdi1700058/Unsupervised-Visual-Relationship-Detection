@@ -208,3 +208,77 @@ class TestShuffleControl(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestControlTask(unittest.TestCase):
+    """Hewitt & Liang's control task, which M1 lacked (RELATED_WORK N2).
+
+    The shuffled control randomises the REPRESENTATION and isolates what the
+    representation contributes. A control task randomises the LABELS and
+    isolates what the probe's own capacity contributes. They answer different
+    questions and neither substitutes for the other.
+    """
+
+    def test_labels_are_a_function_of_the_latent_type(self):
+        """A "word type" here is a distinct latent code.
+
+        Identical codes must get identical control labels, or the probe can
+        never fit the control task and selectivity is trivially high for the
+        wrong reason.
+        """
+        from tools.planner.predicate_probe import control_task_labels
+
+        z = np.array([[0, 1], [1, 0], [0, 1], [1, 1]], dtype=np.float64)
+        y = control_task_labels(z, base_rate=0.5, seed=0)
+        self.assertEqual(y[0], y[2])          # same code, same label
+
+    def test_the_base_rate_is_preserved(self):
+        from tools.planner.predicate_probe import control_task_labels
+
+        rng = np.random.RandomState(0)
+        z = rng.randint(0, 2, size=(400, 10)).astype(np.float64)
+        y = control_task_labels(z, base_rate=0.25, seed=1)
+        self.assertGreater(y.mean(), 0.1)
+        self.assertLess(y.mean(), 0.45)
+
+    def test_a_linear_probe_cannot_fit_a_control_task(self):
+        """Which is the point: low control accuracy means high selectivity.
+
+        A ridge probe has little capacity to memorise arbitrary code-to-label
+        assignments, so it should score near the base rate here. If it did
+        not, every M1 number would be suspect.
+        """
+        from tools.planner.predicate_probe import (control_task_labels,
+                                                   ridge_probe,
+                                                   average_precision)
+
+        rng = np.random.RandomState(2)
+        z = rng.randint(0, 2, size=(400, 24)).astype(np.float64)
+        y = control_task_labels(z, base_rate=0.3, seed=3)
+
+        ap = average_precision(y[300:], ridge_probe(z[:300], y[:300], z[300:]))
+        prior = average_precision(y[300:],
+                                  np.full(100, y[:300].mean()))
+        self.assertIsNotNone(ap)
+        # Near the prior, not near 1.0.
+        self.assertLess(ap - (prior or 0.0), 0.25)
+
+    def test_selectivity_appears_in_the_corpus_summary(self):
+        from tools.planner.predicate_probe import probe_corpus, Labels
+
+        rng = np.random.RandomState(4)
+        clips = []
+        for c in range(4):
+            n = 30
+            z = rng.randint(0, 2, size=(n, 16)).astype(np.int8)
+            frames = np.repeat(np.arange(n), 2)
+            pairs = np.tile(np.array([(0, 1), (1, 0)]), (n, 1))
+            Y = np.zeros((len(frames), 1))
+            Y[:, 0] = z[frames, 0]           # bit 0 IS the label
+            clips.append((z, Labels(frames, pairs, Y, ["p"], [0, 1])))
+
+        summary, rows = probe_corpus(clips, test_frac=0.5)
+        self.assertIn("control_task_mAP", summary)
+        self.assertIn("selectivity", summary)
+        if summary["selectivity"] is not None:
+            self.assertGreater(summary["selectivity"], 0.0)
