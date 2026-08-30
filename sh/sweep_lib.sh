@@ -28,7 +28,14 @@ SUBMITTED_IDS=()
 
 # The environment every arm gets unless it says otherwise. A sweep overwrites
 # this array with its own baseline, so an arm only has to name what it changes.
-SWEEP_DEFAULTS=("${SWEEP_DEFAULTS[@]:-}")
+#
+# NOT `("${SWEEP_DEFAULTS[@]:-}")`. That idiom looks defensive but yields a
+# one-element array holding the EMPTY STRING, and `env` then takes "" as the
+# command name and exits 127 -- every arm of such a sweep failing through the
+# SUBMIT FAILED path. Measured 2026-08-30.
+if [[ -z "${SWEEP_DEFAULTS+x}" ]]; then
+    SWEEP_DEFAULTS=()
+fi
 
 section () {
     echo
@@ -67,10 +74,17 @@ submit () {
     fi
     echo "--- ${tag}"
     local out
+    # Order is load-bearing, and this is the second time it has bitten. Later
+    # assignments win in `env`, so the precedence must read
+    #   SWEEP_DEFAULTS  <  this call's MEM/TIME  <  the arm's own VAR=val
+    # MEM/TIME used to come FIRST, so a sweep that put MEM or TIME in its
+    # defaults silently overrode the per-arm resource request -- exactly the
+    # regression this file was extracted to eliminate, just relocated.
+    # A wrong TIME on Sherlock costs a night. Measured 2026-08-30.
     if out="$(env NPZ_PATH="${PWD}/${f}" FPS="${FPS}" \
                   DOMAIN="${DOMAIN:-vidvrd}" NO_EARLYSTOP=1 AUTO_RESOURCES=0 \
-                  MEM="${mem}" TIME="${time}" \
                   "${SWEEP_DEFAULTS[@]}" \
+                  MEM="${mem}" TIME="${time}" \
                   "$@" \
                   bash sh/submit.sh 2>&1)"; then
         echo "${out}" | grep -E "Submitted|OUT_DIR" || echo "${out}" | tail -2

@@ -637,7 +637,10 @@ class TestBfs(unittest.TestCase):
             [0, 0, 0, 0], [0, 0, 1, 0],
             [0, 0, 0, 0], [0, 0, 0, 1],
         ], dtype=np.int8)
-        r = action_effect_consistency(z[0::2], z[1::2], ["A"] * 4)
+        # Two labels, not one. With a single label there is no `between` set,
+        # so `within - between` reduces to `within` and the measure cannot
+        # fail; `consistency` is None in that case since 2026-08-30.
+        r = action_effect_consistency(z[0::2], z[1::2], ["A", "A", "B", "B"])
         self.assertAlmostEqual(r["within"], 0.0, places=6)
         self.assertLess(r["consistency"], 0.01)
 
@@ -864,7 +867,10 @@ class TestMetrics(unittest.TestCase):
         pred = np.ones((3, 1, 4)) * 5.0
         result = bbox_mse(pred, gt, matching="fixed")
         self.assertEqual(result["skipped_absent"], 3)
-        self.assertEqual(result["mean_mse"], 0.0)
+        # None, not 0.0. Zero is the BEST possible score, so returning it here
+        # put a window with no data at all into the reported median as a
+        # perfect result.
+        self.assertIsNone(result["mean_mse"])
 
     def test_score_window_drops_objects_absent_at_an_endpoint(self):
         """The baseline cannot be formed from an endpoint that does not exist.
@@ -1131,3 +1137,198 @@ class TestExportDedupe(unittest.TestCase):
         kept = _dedupe_transitions(rows)
         self.assertEqual(len(kept), 1)
         np.testing.assert_array_equal(kept[0], [0, 0, 1, 0])
+
+
+class TestReviewRegressions(unittest.TestCase):
+    """Defects found by the 2026-08-30 review, each confirmed by execution.
+
+    Every one of these is a *silent wrong number* rather than a crash, which
+    is the failure mode this project keeps hitting. They are grouped so the
+    next reviewer can see at a glance what has already been paid for.
+    """
+
+    # ── metrics: an unscoreable window must not score as perfect ──────────
+    def test_window_with_no_scoreable_object_reports_none_not_zero(self):
+        from tools.planner.common.metrics import bbox_mse
+
+        pred = np.full((4, 2, 4), 400.0)     # wildly wrong everywhere
+        gt = np.zeros((4, 2, 4))             # every object absent
+
+        out = bbox_mse(pred, gt, matching="fixed")
+
+        # 0.0 is the BEST possible score, so returning it for "no data at
+        # all" put a perfect window into the reported median.
+        self.assertIsNone(out["mean_mse"])
+        self.assertEqual(out["skipped_absent"], 8)
+
+    # ── metrics: the pairing must not be solved against absent boxes ──────
+    def test_match_slots_ignores_absent_ground_truth(self):
+        from tools.planner.common.metrics import match_slots
+
+        # gt object 0 is present and matches pred slot 0 exactly.
+        # gt object 1 is ABSENT, and its all-zero box is a strong attractor
+        # for pred slot 1, which is also empty.
+        pred = np.array([[20.0, 20, 30, 30], [0, 0, 0, 0]])
+        gt = np.array([[20.0, 20, 30, 30], [0, 0, 0, 0]])
+
+        mapping = match_slots(pred, gt, gt_present=np.array([True, False]))
+        self.assertEqual(int(mapping[0]), 0)
+
+    def test_match_slots_pairs_on_a_frame_where_the_object_is_present(self):
+        from tools.planner.common.metrics import match_slots
+
+        # Frame 0 has nothing annotated; the pairing must come from later
+        # frames rather than from a frame of zeros.
+        pred = np.zeros((3, 2, 4))
+        gt = np.zeros((3, 2, 4))
+        pred[1:, 0] = [10.0, 10, 20, 20]
+        pred[1:, 1] = [90.0, 90, 99, 99]
+        gt[1:, 0] = [90.0, 90, 99, 99]
+        gt[1:, 1] = [10.0, 10, 20, 20]
+
+        mapping = match_slots(pred, gt)
+        self.assertEqual([int(v) for v in mapping], [1, 0])
+
+    def test_bbox_mse_does_not_reward_a_wrong_pairing(self):
+        from tools.planner.common.metrics import bbox_mse
+
+        pred = np.array([[[20.0, 20, 30, 30], [0, 0, 0, 0]]])
+        gt = np.array([[[20.0, 20, 30, 30], [0, 0, 0, 0]]])
+
+        out = bbox_mse(pred, gt, matching="hungarian")
+        self.assertEqual(out["mean_mse"], 0.0)
+        self.assertEqual(int(out["mapping"][0]), 0)
+
+    # ── metrics: a near-zero baseline must not produce a huge ratio ───────
+    def test_mse_ratio_is_none_when_the_baseline_is_degenerate(self):
+        from tools.planner.common.metrics import mse_ratio
+
+        self.assertIsNone(mse_ratio(12.0, 4.1e-10))
+        self.assertIsNone(mse_ratio(12.0, 0.0))
+        self.assertAlmostEqual(mse_ratio(12.0, 24.0), 0.5)
+
+    # ── metrics: motion must not be manufactured by an object vanishing ───
+    def test_moving_gt_steps_ignores_appearance_and_disappearance(self):
+        from tools.planner.common.metrics import moving_gt_steps
+
+        static = np.tile(np.array([[[10.0, 10, 20, 20]]]), (4, 1, 1))
+        self.assertEqual(moving_gt_steps(static), 0)
+
+        vanishes = static.copy()
+        vanishes[2:] = 0.0          # object leaves; not motion
+        self.assertEqual(moving_gt_steps(vanishes), 0)
+
+    # ── metrics: a single action label cannot be "consistent" ─────────────
+    def test_action_effect_consistency_is_none_for_a_single_label(self):
+        from tools.planner.common.metrics import action_effect_consistency
+
+        rng = np.random.RandomState(0)
+        pre = rng.randint(0, 2, size=(8, 12)).astype(np.int8)
+        suc = rng.randint(0, 2, size=(8, 12)).astype(np.int8)
+
+        out = action_effect_consistency(pre, suc, ["a"] * 8)
+        self.assertIsNone(out["consistency"])
+
+    # ── oracle: the binary code must hold every bin it claims to ──────────
+    def test_binary_code_survives_power_of_two_bin_counts(self):
+        from tools.planner import oracle as O
+
+        # A box sitting in the TOP bin on every coordinate. Before the fix
+        # the code overflowed its field, the object block went all-zero, and
+        # `latents_to_boxes` read the object as ABSENT — the oracle deleted
+        # an object that was there.
+        box = np.array([[[290.0, 190.0, 299.0, 199.0]]])
+        for bins in (8, 16, 32, 64):
+            lat = O.boxes_to_latents(box, bins_x=bins, bins_y=bins,
+                                     encoding="binary")
+            self.assertGreater(lat.sum(), 0,
+                               "object deleted at bins=%d" % bins)
+            back = O.latents_to_boxes(lat, 1, bins_x=bins, bins_y=bins,
+                                      encoding="binary")
+            # x2 >= x1, not x2 > x1: at 8 bins the two coordinates legitimately
+            # quantise into the same bin. The defect was inversion — x2 came
+            # back as 4.7 px against an x1 of 285.9 — not equality.
+            self.assertGreaterEqual(back[0, 0, 2], back[0, 0, 0],
+                                    "box inverted at bins=%d" % bins)
+            self.assertGreaterEqual(back[0, 0, 3], back[0, 0, 1],
+                                    "box inverted at bins=%d" % bins)
+
+    def test_code_width_holds_the_offset_value(self):
+        from tools.planner.oracle import _code_width
+
+        for bins in (2, 8, 16, 31, 32, 33, 64):
+            self.assertGreaterEqual(2 ** _code_width(bins) - 1, bins,
+                                    "width too small at bins=%d" % bins)
+
+    # ── oracle: the floor must be the floor the real decoder actually has ─
+    def test_dequantise_matches_the_real_decoder(self):
+        from tools.planner import oracle as O
+
+        # `common/decode.py` maps a bin index to the bin's LEFT EDGE:
+        #     x1 = argmax(...) * (canvas_w / X)
+        # The oracle used bin centres, which put its floor 4x below the one
+        # every trained model is measured against.
+        idx = np.array([0, 1, 5, 59])
+        expected = idx * (300.0 / 60)
+        np.testing.assert_allclose(O.dequantise(idx, 60, 300), expected)
+
+    def test_round_trip_error_divides_by_present_cells_only(self):
+        from tools.planner import oracle as O
+
+        one_real = np.array([[[10.0, 10.0, 40.0, 40.0]]])
+        with_padding = np.zeros((1, 3, 4))
+        with_padding[0, 0] = one_real[0, 0]
+
+        # Padding slots round-trip to exactly zero error, so averaging over
+        # them reported a third of the true floor.
+        self.assertAlmostEqual(O.round_trip_error(one_real),
+                               O.round_trip_error(with_padding), places=6)
+
+    # ── planner: a timeout is not a claim about the representation ────────
+    def test_search_reports_timeout_separately_from_exhaustion(self):
+        from tools.planner.bfs.planner import search
+
+        z = np.zeros(24, dtype=np.int8)
+        goal = np.ones(24, dtype=np.int8)
+        deltas = np.eye(24, dtype=np.int8)[:6]      # cannot reach the goal
+
+        stats = {}
+        found, _, _ = search(z, goal, deltas, time_budget_s=30.0,
+                             max_length=3, stats=stats)
+        self.assertFalse(found)
+        self.assertEqual(stats["outcome"], "exhausted")
+
+        stats = {}
+        found, _, _ = search(z, goal, deltas, time_budget_s=0.0,
+                             max_length=40, stats=stats)
+        self.assertFalse(found)
+        self.assertEqual(stats["outcome"], "timeout")
+
+    def test_search_is_bounded_by_a_node_cap(self):
+        from tools.planner.bfs.planner import search
+
+        # Unreachable goal, wide branching, generous clock: without a node
+        # cap this grows at roughly 2.4 GiB per minute. An unbounded search
+        # of exactly this shape crashed the workstation on 2026-08-28.
+        z = np.zeros(64, dtype=np.int8)
+        goal = np.ones(64, dtype=np.int8)
+        deltas = np.eye(64, dtype=np.int8)[:20]
+
+        stats = {}
+        found, _, _ = search(z, goal, deltas, time_budget_s=30.0,
+                             max_length=40, max_nodes=5000, stats=stats)
+        self.assertFalse(found)
+        self.assertEqual(stats["outcome"], "node_cap")
+
+    def test_identical_endpoints_are_flagged_rather_than_counted_as_solved(self):
+        from tools.planner.bfs.planner import search
+
+        z = np.zeros(8, dtype=np.int8)
+        deltas = np.eye(8, dtype=np.int8)[:3]
+
+        stats = {}
+        found, trace, _ = search(z, z.copy(), deltas, max_length=4,
+                                 stats=stats)
+        self.assertTrue(found)
+        self.assertEqual(len(trace), 1)
+        self.assertEqual(stats["outcome"], "endpoints_identical")

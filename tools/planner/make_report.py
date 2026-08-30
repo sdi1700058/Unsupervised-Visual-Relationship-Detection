@@ -140,10 +140,12 @@ def _bars(scored, width=760, height=210):
         x = i * slot + slot / 2.0
         svg.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" '
                    'class="base"><title>window %s baseline %.1f</title></rect>'
-                   % (x - bar, y_of(b), bar, 10 + plot_h - y_of(b), init, b))
+                   % (x - bar, y_of(b), bar, 10 + plot_h - y_of(b),
+                      html.escape(str(init)), b))
         svg.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" '
                    'class="plan"><title>window %s planner %.1f</title></rect>'
-                   % (x, y_of(p), bar, 10 + plot_h - y_of(p), init, p))
+                   % (x, y_of(p), bar, 10 + plot_h - y_of(p),
+                      html.escape(str(init)), p))
         svg.append('<text x="%.1f" y="%d" class="tick">%s</text>'
                    % (x, height - 12, html.escape(str(init))))
     svg.append('</svg>')
@@ -293,7 +295,7 @@ scored.</footer>
                  'text-anchor:middle}'
                  'text.title{fill:#16181d;font:600 12px sans-serif;'
                  'text-anchor:start}</style>')
-        title = ('<text x="4" y="9" class="title">%s &mdash; planner (blue) vs '
+        title = ('<text x="4" y="9" class="title">%s &#8212; planner (blue) vs '
                  'baseline, log scale</text>' % html.escape(name))
         standalone = standalone.replace('>', '>' + style + title, 1)
         with open(os.path.join(run_dir, "chart.svg"), "w") as fh:

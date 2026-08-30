@@ -44,11 +44,15 @@
 #
 #     bash sh/h14_score.sh
 #
+# The wall clock covers the BAKE, not the training -- the arms are separate
+# jobs with their own budgets. E1 takes 4 h for 22 clips; this has 88, so 2 h
+# was under-provisioned. A killed bake aborts before any `submit` runs, which
+# loses the whole one-visit cycle rather than part of it.
 #SBATCH --job-name=fosae-H14
 #SBATCH --partition=normal
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
-#SBATCH --time=2:00:00
+#SBATCH --time=6:00:00
 #SBATCH --output=logs/H14.%j.out
 #SBATCH --error=logs/H14.%j.err
 
@@ -71,7 +75,14 @@ MID=(32G 6:00:00); BIG=(48G 10:00:00)
 # Sherlock and reading it would abort the run. E1 pins its arms the same way,
 # and pinning also makes the experiment reproducible without re-screening.
 #
-# Produced by: python3 tools/video/screen_vidvrd.py --winnable
+# Produced by, and re-derivable with, exactly this command:
+#
+#   python3 tools/video/screen_vidvrd.py --winnable-only --no-fill-only \
+#       --min-frames 45 --list eval/vidvrd_winnable_clips.txt
+#
+# All three flags matter. Without --min-frames 45 the screen yields 153 clips,
+# the extra 65 being 30-frame stubs. Verified 2026-08-30 to reproduce the list
+# below byte for byte, in membership and in order.
 # Criteria (EVAL.md 4.2): fully annotated, and the quantisation floor sits
 # below the linear-interpolation baseline, so mse_ratio < 1 is arithmetically
 # reachable. 8,522 real transitions in total.
@@ -116,9 +127,22 @@ if [[ -f "${NPZ}/${STEM}.npz" ]]; then
     echo "have  ${STEM}"
 else
     echo "bake  ${STEM}  (${NCLIPS} clips, no fill)"
+    BAKE_LOG="logs/H14-bake.$$.log"
     python3 setup-dataset.py video_vidvrd all \
         --video-id "${IDS}" --fps "${FPS}" \
-        --max-objects 3 --patch-size 8 --out-name "${STEM}"
+        --max-objects 3 --patch-size 8 --out-name "${STEM}" \
+        2>&1 | tee "${BAKE_LOG}"
+
+    # `puzzle_vidvrd` skips a clip whose frames are missing and carries on, so
+    # a partial frame extraction would silently shrink the decisive experiment
+    # while STEM still says "winnable88". Fail loudly instead.
+    LOADED="$(grep -oE '[0-9]+ videos? loaded' "${BAKE_LOG}" | tail -1 \
+              | grep -oE '^[0-9]+' || true)"
+    if [[ -n "${LOADED}" && "${LOADED}" != "${NCLIPS}" ]]; then
+        echo "FATAL: baked ${LOADED} clips, expected ${NCLIPS}." >&2
+        echo "       Frames are missing on this machine. See ${BAKE_LOG}." >&2
+        exit 3
+    fi
     NBAKED=$((NBAKED + 1))
 fi
 

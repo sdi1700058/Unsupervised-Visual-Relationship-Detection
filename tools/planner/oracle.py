@@ -65,14 +65,39 @@ def quantise(values, n_bins, extent):
 
 
 def dequantise(idx, n_bins, extent):
-    """Map bin indices back to the pixel coordinate at each bin's centre."""
+    """Map bin indices back to pixels, exactly as `common/decode.py` does.
+
+    The real decoder takes the bin's **left edge**::
+
+        x1 = np.argmax(x1_oh, axis=-1) * (canvas_w / X)     # decode.py:79
+
+    This used to return the bin *centre*, `(idx + 0.5) * extent / n_bins`.
+    That is the better estimator in isolation — it is the minimum-error
+    dequantiser — but it is not what any trained model's decoder emits, and
+    the oracle exists to be the ceiling those models are measured against.
+    The gap was not small: measured 2026-08-30 on 200 random two-object
+    frames, the floor was **8.37 under bin centres and 34.11 under the
+    decoder's left edges**, a factor of 4.1. Every "the planner is at the
+    floor" statement was therefore comparing against a floor no trained model
+    could reach, for a reason unrelated to learning.
+    """
     idx = np.asarray(idx, dtype=np.float64)
-    return (idx + 0.5) * (float(extent) / n_bins)
+    return idx * (float(extent) / n_bins)
 
 
 def _code_width(n_bins):
-    """Bits needed to hold a bin index in a plain binary code."""
-    return max(1, int(np.ceil(np.log2(max(n_bins, 2)))))
+    """Bits needed to hold a bin index in a plain binary code.
+
+    `boxes_to_latents` writes `idx + 1`, so that bin 0 is not the all-zero
+    word and stays distinguishable from an absent slot. The field therefore
+    has to hold `n_bins`, not `n_bins - 1`, and sizing it for `n_bins` alone
+    overflowed at every power of two. Measured 2026-08-30: at `bins=8` a box
+    in the top bin drove all four runs to zero, the object block went
+    all-zero, and `latents_to_boxes` read the object as **absent** — the
+    oracle deleted an object that was there. At `bins=32` the box inverted,
+    with `x2` decoding to 4.7 px instead of 296.
+    """
+    return max(1, int(np.ceil(np.log2(n_bins + 1))))
 
 
 def bits_per_object(bins_x, bins_y, encoding="onehot"):
@@ -197,6 +222,12 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     This is the floor the oracle cannot go below, and it is worth reporting
     next to the planner's error: if the two are close, the planner is doing
     as well as this representation permits.
+
+    Averaged over **present** object-frames only, which is the denominator
+    `bbox_mse` uses. Averaging over padding slots too made the two numbers
+    incomparable while the docstring invited exactly that comparison: with
+    `--max-objects 3` and one real object, the printed floor was a third of
+    the truth (8.11 became 2.70).
     """
     boxes = np.asarray(boxes, dtype=np.float64)
     z = boxes_to_latents(boxes, bins_x, bins_y, width, height,
@@ -204,7 +235,11 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     back = latents_to_boxes(z, boxes.shape[1], bins_x, bins_y, width, height,
                             encoding=encoding)
     d = back.astype(np.float64) - boxes
-    return float((d * d).sum(axis=-1).mean())
+    present = np.abs(boxes).sum(axis=-1) > 0
+    n = int(present.sum())
+    if not n:
+        return None
+    return float((d * d).sum(axis=-1)[present].sum() / n)
 
 
 def load_canvas_scaler():
@@ -358,6 +393,40 @@ def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
     src_w, src_h = ann["width"], ann["height"]
     trajectories = ann.get("trajectories", [])
 
+    # Slots are keyed on `tid`, the annotation's own track id, exactly as the
+    # Something-Else reader keys on `standard_category`.
+    #
+    # This used to sort by box area per frame and call that "stable frame to
+    # frame". It is not. When two objects' areas cross, their slots swap, and
+    # the oracle's own docstring calls these latents "perfect by
+    # construction". Measured 2026-08-30 on a synthetic pair: two objects held
+    # at fixed positions, one shrinking past the other, produced slot 0
+    # teleporting from x=0 to x=75 at the crossing frame. A newly-appearing
+    # larger object could also evict an existing track from the clip
+    # entirely. Both inject fabricated transitions into the action set and
+    # inflate the baseline.
+    #
+    # Which tracks get the slots is decided once, over the whole clip, by
+    # total annotated area — so the choice is still "the most prominent
+    # objects", but it no longer changes from frame to frame.
+    def area(o):
+        b = o["bbox"]
+        return float((b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"]))
+
+    totals = {}
+    for frame in trajectories:
+        for o in (frame or []):
+            tid = o.get("tid")
+            if tid is None:
+                continue
+            totals[tid] = totals.get(tid, 0.0) + area(o)
+
+    if not totals:
+        raise SystemExit(f"{ann_path}: no trajectory carries a tid")
+
+    keep = sorted(totals, key=lambda t: totals[t], reverse=True)[:num_objs]
+    slot_of = {tid: i for i, tid in enumerate(keep)}
+
     rows, last = [], None
     for frame in trajectories:
         objs = frame if frame else None
@@ -369,15 +438,11 @@ def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
         else:
             last = objs
 
-        # Biggest boxes first, so the slot assignment is stable frame to
-        # frame the same way the loader orders them.
-        def area(o):
-            b = o["bbox"]
-            return (b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"])
-
-        chosen = sorted(objs, key=area, reverse=True)[:num_objs]
         row = np.zeros((num_objs, 4), dtype=np.float32)
-        for i, o in enumerate(chosen):
+        for o in objs:
+            i = slot_of.get(o.get("tid"))
+            if i is None:
+                continue
             b = o["bbox"]
             row[i] = _scale_bbox_to_canvas(
                 (b["xmin"], b["ymin"], b["xmax"], b["ymax"]), src_w, src_h)

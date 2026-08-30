@@ -14,6 +14,27 @@ exercising the encode, decode and scoring path with no lisp toolchain.
 import time
 from collections import deque
 
+# Why a search reports what it reports. The distinction is load-bearing: three
+# of these are claims about the REPRESENTATION and two are claims about our own
+# compute, and before 2026-08-30 they were all returned as the same bare
+# `False`. `make_report.py` renders that as "the action schema does not connect
+# the two frames at all", so a clock running out was being printed as a
+# negative result about the thesis.
+#
+#   solved              a plan was found
+#   exhausted           the frontier emptied; no plan exists within the bound
+#   endpoints_identical the two frames encode the same latent; the empty plan
+#                       is valid but this is not a planned window
+#   timeout             the wall-clock budget expired
+#   node_cap            the node ceiling was hit
+OUTCOMES = ("solved", "exhausted", "endpoints_identical", "timeout",
+            "node_cap")
+
+
+def _outcome(stats, value):
+    if stats is not None:
+        stats["outcome"] = value
+
 
 def mine_deltas(pre, suc):
     """Collect the distinct XOR deltas seen in the training transitions.
@@ -40,7 +61,7 @@ def mine_deltas(pre, suc):
 
 
 def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None,
-           max_length=None):
+           max_length=None, max_nodes=1000000, stats=None):
     """Breadth-first search from z_init to z_goal.
 
     Returns (found, trace, wall_s). The trace holds the init state, every
@@ -81,15 +102,27 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None,
         if max_length is not None and max_length < 0:
             raise ValueError(f"max_length must be >= 0; got {max_length}")
         if start == goal:
+            # The empty plan IS the shortest plan within k-1 actions, so this
+            # is correct -- but it must not be counted as a solved window.
+            # 108 of 385 recorded rows were `reachability=True` with
+            # `plan_length=0`, and one run reported "6 of 12 solved" where the
+            # true count of planned windows was zero.
+            _outcome(stats, "endpoints_identical")
             return True, np.stack([z_init]), 0.0
         if max_length == 0:
+            _outcome(stats, "exhausted")
             return False, np.zeros((0, len(z_init)), dtype=np.int8), 0.0
 
         queue = deque([(z_init, 0)])
         parent = {start: None}
+        outcome = "exhausted"
 
         while queue:
             if time.time() - began > time_budget_s:
+                outcome = "timeout"
+                break
+            if len(parent) >= max_nodes:
+                outcome = "node_cap"
                 break
 
             state, depth = queue.popleft()
@@ -111,10 +144,12 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None,
                     chain.reverse()
                     trace = np.stack([np.frombuffer(k, dtype=np.int8)
                                       for k in chain])
+                    _outcome(stats, "solved")
                     return True, trace, time.time() - began
 
                 queue.append((child, depth + 1))
 
+        _outcome(stats, outcome)
         empty = np.zeros((0, len(z_init)), dtype=np.int8)
         return False, empty, time.time() - began
 
@@ -123,14 +158,21 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None,
     if exact_length == 0:
         # A zero-step plan is only valid when the two ends already agree.
         if start == goal:
+            _outcome(stats, "endpoints_identical")
             return True, np.stack([z_init]), 0.0
+        _outcome(stats, "exhausted")
         return False, np.zeros((0, len(z_init)), dtype=np.int8), 0.0
 
     queue = deque([(z_init, 0)])
     parent = {(start, 0): None}
+    outcome = "exhausted"
 
     while queue:
         if time.time() - began > time_budget_s:
+            outcome = "timeout"
+            break
+        if len(parent) >= max_nodes:
+            outcome = "node_cap"
             break
 
         state, depth = queue.popleft()
@@ -152,10 +194,12 @@ def search(z_init, z_goal, deltas, time_budget_s=60.0, exact_length=None,
                 chain.reverse()
                 trace = np.stack([np.frombuffer(k[0], dtype=np.int8)
                                   for k in chain])
+                _outcome(stats, "solved")
                 return True, trace, time.time() - began
 
             queue.append((child, depth + 1))
 
+    _outcome(stats, outcome)
     empty = np.zeros((0, len(z_init)), dtype=np.int8)
     return False, empty, time.time() - began
 

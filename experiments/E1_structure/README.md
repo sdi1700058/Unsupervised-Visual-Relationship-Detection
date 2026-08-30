@@ -101,7 +101,7 @@ mkdir -p logs && sbatch experiments/E1_structure/run_sherlock.sh
 Then, once the jobs finish:
 
 ```bash
-git add -f eval/exports/E1_*.npz && git commit -m "E1 exports" && git push
+git add -f eval/exports/*E1-*.npz && git commit -m "E1 exports" && git push
 ```
 
 **Locally**, after pulling those exports:

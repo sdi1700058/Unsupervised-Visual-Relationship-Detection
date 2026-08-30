@@ -31,16 +31,24 @@ class TestQuantise(unittest.TestCase):
     def test_negative_clips_to_zero(self):
         self.assertEqual(quantise(-5.0, 10, 100), 0)
 
-    def test_dequantise_returns_bin_centre(self):
-        self.assertAlmostEqual(dequantise(0, 10, 100), 5.0)
-        self.assertAlmostEqual(dequantise(9, 10, 100), 95.0)
+    def test_dequantise_returns_the_bin_left_edge(self):
+        """Matches `common/decode.py`, which is the point of the oracle.
 
-    def test_round_trip_within_half_a_bin(self):
+        This asserted the bin CENTRE until 2026-08-30. The centre is the
+        better estimator, but no trained model's decoder emits it --
+        `decode.py:79` takes `argmax * (canvas_w / X)`, the left edge -- so
+        the oracle's floor sat 4x below the floor it was the ceiling for.
+        """
+        self.assertAlmostEqual(dequantise(0, 10, 100), 0.0)
+        self.assertAlmostEqual(dequantise(9, 10, 100), 90.0)
+
+    def test_round_trip_within_one_bin(self):
+        """One bin, not half a bin: see `test_dequantise_returns_the_bin_left_edge`."""
         extent, n_bins = 300.0, 60
-        half = extent / n_bins / 2
+        step = extent / n_bins
         vals = np.linspace(0, extent - 1e-6, 97)
         back = dequantise(quantise(vals, n_bins, extent), n_bins, extent)
-        self.assertTrue(np.all(np.abs(back - vals) <= half + 1e-9))
+        self.assertTrue(np.all(np.abs(back - vals) <= step + 1e-9))
 
 
 class TestEncoding(unittest.TestCase):
@@ -118,8 +126,9 @@ class TestRoundTripError(unittest.TestCase):
             rng.uniform(0, CANVAS_H, size=(20, 3)),
         ], axis=-1)
         mse = round_trip_error(boxes, bins_x=60, bins_y=40)
-        # Four coordinates, each at most half a bin out.
-        worst = 2 * (CANVAS_W / 60 / 2) ** 2 + 2 * (CANVAS_H / 40 / 2) ** 2
+        # Four coordinates, each at most one WHOLE bin out, because the
+        # dequantiser returns the bin's left edge to match `common/decode.py`.
+        worst = 2 * (CANVAS_W / 60) ** 2 + 2 * (CANVAS_H / 40) ** 2
         self.assertLessEqual(mse, worst + 1e-6)
 
     def test_finer_bins_reduce_error(self):
@@ -212,10 +221,17 @@ class TestBboxIoU(unittest.TestCase):
 
     def test_padded_slot_scores_zero_not_one(self):
         """An all-zero box on both sides has zero union and must not count
-        as a perfect overlap."""
+        as a perfect overlap.
+
+        Since 2026-08-30 `bbox_iou` excludes absent ground truth rather than
+        scoring it as a miss, so a window that is nothing BUT padding has no
+        scoreable frame at all and reports None -- the same "no data" signal
+        `bbox_mse` now gives. Either way it is not 1.0, which is what this
+        test exists to prevent.
+        """
         p = [[[0.0, 0.0, 0.0, 0.0]]]
         r = self._iou(p, p, mapping=[0])
-        self.assertAlmostEqual(r["mean_iou"], 0.0)
+        self.assertIsNone(r["mean_iou"])
 
     def test_scale_invariance_is_the_point(self):
         """The property MSE lacks: the same relative error on a big and a

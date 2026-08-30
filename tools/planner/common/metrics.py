@@ -43,32 +43,62 @@ def _assign(cost):
     return np.arange(n), np.array(best, dtype=np.int64)
 
 
-def match_slots(pred_boxes, gt_boxes):
+def match_slots(pred_boxes, gt_boxes, gt_present=None):
     """Pair decoded object slots with annotated objects.
 
-    The decoder has no reason to keep slot order stable, so we solve the
-    pairing once on the first scored frame and reuse it for the rest of the
-    window. Solving per frame would let the mapping drift and would flatter
-    the score.
+    The decoder has no reason to keep slot order stable, so the pairing is
+    solved once for the whole window and reused for every frame. Solving per
+    frame would let the mapping drift and would flatter the score.
+
+    Accepts either a single frame, `(n_objs, 4)`, or a whole window,
+    `(T, n_objs, 4)`. **Prefer the window.** Solving on one frame means
+    solving on frame 0 whether or not anything is annotated there, and an
+    all-zero ground-truth box is not a box at the origin — it means the object
+    is not in that frame. Costing against it made the zero box a strong
+    attractor, and the review of 2026-08-30 measured the consequence: the
+    planner's pairing was wrong on 32.8% of realistic windows, and because a
+    wrong pairing raises the *baseline*'s error 10 times more often than it
+    lowers it, `mse_ratio` moved about 6% in this project's own favour.
+
+    So the cost is accumulated over the frames where the ground-truth object
+    is actually present, and objects excluded by `gt_present` take no part in
+    the assignment at all.
 
     Returns an array where pred slot i corresponds to gt object mapping[i],
     or -1 when the slot has no partner.
     """
     import numpy as np
 
-    n_pred, n_gt = pred_boxes.shape[0], gt_boxes.shape[0]
+    pred = np.asarray(pred_boxes, dtype=np.float64)
+    gt = np.asarray(gt_boxes, dtype=np.float64)
+    if pred.ndim == 2:
+        pred = pred[None, :, :]
+    if gt.ndim == 2:
+        gt = gt[None, :, :]
+
+    n_pred, n_gt = pred.shape[1], gt.shape[1]
     n = max(n_pred, n_gt)
 
+    # An object is present in a frame when its box is not all zeros.
+    present = np.abs(gt).sum(axis=-1) > 0            # (T, n_gt)
+    if gt_present is not None:
+        present = present & np.asarray(gt_present, dtype=bool)[None, :]
+
     cost = np.full((n, n), 1e6)
-    for i in range(n_pred):
-        for j in range(n_gt):
-            d = pred_boxes[i] - gt_boxes[j]
-            cost[i, j] = float(d @ d)
+    for j in range(n_gt):
+        rows = np.nonzero(present[:, j])[0]
+        if rows.size == 0:
+            # Never present, or excluded. Leave the column at the sentinel so
+            # the assignment treats it as unpairable rather than as a box.
+            continue
+        for i in range(n_pred):
+            d = pred[rows, i, :] - gt[rows, j, :]
+            cost[i, j] = float((d * d).sum() / rows.size)
 
     rows, cols = _assign(cost)
     mapping = np.full(n_pred, -1, dtype=np.int64)
     for r, c in zip(rows, cols):
-        if r < n_pred and c < n_gt:
+        if r < n_pred and c < n_gt and cost[r, c] < 1e6:
             mapping[r] = c
     return mapping
 
@@ -89,14 +119,24 @@ def bbox_mse(pred_trace, gt_boxes, matching="hungarian", scoreable=None):
     n_frames, n_objs, _ = pred.shape
 
     if matching == "hungarian":
-        mapping = match_slots(pred[0], gt[0])
+        # The whole window, not frame 0: see `match_slots`.
+        mapping = match_slots(pred, gt, gt_present=scoreable)
     elif matching == "fixed":
         mapping = np.arange(n_objs, dtype=np.int64)
     else:
         raise ValueError(f"unknown matching mode: {matching}")
 
     if not (mapping >= 0).any():
-        raise RuntimeError("no slot could be paired with an annotated object")
+        # Every object is absent or excluded. That is a window with no data,
+        # which the caller has to be able to tell apart from a perfect score.
+        return {
+            "mean_mse": None,
+            "per_frame_mse": [0.0] * n_frames,
+            "per_object_mse": [0.0] * n_objs,
+            "mapping": [int(v) for v in mapping],
+            "matching_mode": matching,
+            "skipped_absent": int(n_frames * n_objs),
+        }
 
     # A ground-truth box of all zeros means the object is not in that frame,
     # not that it sits at the origin. Squaring the distance to it would score
@@ -125,7 +165,12 @@ def bbox_mse(pred_trace, gt_boxes, matching="hungarian", scoreable=None):
                            where=scored.sum(axis=0) > 0)
 
     return {
-        "mean_mse": float(sq.sum() / n_scored) if n_scored else 0.0,
+        # None, not 0.0. Zero is the BEST possible score, so returning it for
+        # "nothing was scoreable" put a perfect window into the reported
+        # median. Measured on 2026-08-30: a window with every object absent
+        # and a planner 400 px wrong on every frame scored 0.0 and passed the
+        # report's motion filter.
+        "mean_mse": float(sq.sum() / n_scored) if n_scored else None,
         "per_frame_mse": [float(v) for v in per_frame],
         "per_object_mse": [float(v) for v in per_object],
         "mapping": [int(v) for v in mapping],
@@ -134,7 +179,8 @@ def bbox_mse(pred_trace, gt_boxes, matching="hungarian", scoreable=None):
     }
 
 
-def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
+def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian",
+             scoreable=None):
     """Mean intersection-over-union between predicted and annotated boxes.
 
     Reported alongside `bbox_mse` because squared pixel error is not
@@ -149,7 +195,12 @@ def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
     legible to readers calibrated to that convention rather than to pixel MSE.
 
     `mapping` reuses the slot assignment already solved by `bbox_mse`, so the
-    two metrics describe the same pairing.
+    two metrics describe the same pairing. `scoreable` must be the same mask
+    `bbox_mse` was given, so they also describe the same **frames**. Before
+    2026-08-30 it was not passed, and the two metrics disagreed by
+    construction: an object that left the scene scored `bbox_mse` 0.0 (frames
+    correctly excluded) and `bbox_iou` 0.625 (the same frames scored as
+    misses).
     """
     import numpy as np
 
@@ -161,19 +212,25 @@ def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
     n_frames, n_objs, _ = pred.shape
     if mapping is None:
         if matching == "hungarian":
-            mapping = match_slots(pred[0], gt[0])
+            mapping = match_slots(pred, gt, gt_present=scoreable)
         else:
             mapping = np.arange(n_objs, dtype=np.int64)
     mapping = np.asarray(mapping)
 
     per_frame = np.zeros(n_frames)
-    counted = 0
     ious = np.zeros((n_frames, n_objs))
+    # Per frame, not per window: an object can be present in some frames of
+    # the window and absent in others, and dividing by a window-wide count
+    # spread its absent frames across the ones where it was there.
+    counted_per_frame = np.zeros(n_frames)
     for i in range(n_objs):
         j = int(mapping[i])
         if j < 0:
             continue
-        counted += 1
+        present = np.abs(gt[:, j, :]).sum(axis=-1) > 0
+        if scoreable is not None:
+            present = present & bool(scoreable[j])
+        counted_per_frame += present
         p, g = pred[:, i, :], gt[:, j, :]
         x1 = np.maximum(p[:, 0], g[:, 0])
         y1 = np.maximum(p[:, 1], g[:, 1])
@@ -184,17 +241,23 @@ def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian"):
         area_g = np.clip(g[:, 2] - g[:, 0], 0, None) * np.clip(g[:, 3] - g[:, 1], 0, None)
         union = area_p + area_g - inter
         # A padded slot is an all-zero box on both sides. Union zero means
-        # there is nothing to score, not a perfect overlap.
-        ious[:, i] = np.where(union > 0, inter / np.maximum(union, 1e-9), 0.0)
+        # there is nothing to score, not a perfect overlap. `present` carries
+        # the same exclusion `bbox_mse` applies, so an absent object is not
+        # scored as a miss.
+        iou = np.where(union > 0, inter / np.maximum(union, 1e-9), 0.0)
+        ious[:, i] = np.where(present, iou, 0.0)
 
-    if counted:
-        per_frame = ious.sum(axis=1) / counted
+    per_frame = np.divide(ious.sum(axis=1), counted_per_frame,
+                          out=np.zeros(n_frames),
+                          where=counted_per_frame > 0)
+    scored_frames = counted_per_frame > 0
 
     return {
-        "mean_iou": float(per_frame.mean()) if n_frames else 0.0,
+        "mean_iou": (float(per_frame[scored_frames].mean())
+                     if scored_frames.any() else None),
         "per_frame_iou": [float(v) for v in per_frame],
-        "frames_above_0.5": int((per_frame >= 0.5).sum()),
-        "n_frames": int(n_frames),
+        "frames_above_0.5": int((per_frame[scored_frames] >= 0.5).sum()),
+        "n_frames": int(scored_frames.sum()),
     }
 
 
@@ -253,11 +316,20 @@ def action_effect_consistency(pre, suc, labels):
 
     w = float(np.mean(within)) if within else None
     b = float(np.mean(between)) if between else 0.0
-    consistency = None if w is None else max(0.0, w - b)
+    n_actions = len({labels[i] for i in keep})
+
+    # With one label there is no `between` set, so `within - between` reduces
+    # to `within` and the measure cannot fail: eight unrelated random deltas
+    # all labelled "a" scored 0.3159. A comparison needs two things to
+    # compare, so this is undefined rather than low.
+    if n_actions < 2 or w is None:
+        consistency = None
+    else:
+        consistency = max(0.0, w - b)
 
     return {"within": w, "between": b, "consistency": consistency,
             "n_transitions": len(keep),
-            "n_actions": len({labels[i] for i in keep})}
+            "n_actions": n_actions}
 
 
 def _rank(a):
@@ -360,22 +432,58 @@ def moving_gt_steps(gt_boxes, tol=1e-3):
     whole point of having it beside `moving_steps`: a model can change its code
     while the objects stand still, and that is a fact about the model rather
     than about the window being measurable.
+
+    An object appearing or disappearing is **not** motion. Differencing raw
+    boxes made a present-to-absent step look like a large jump, so a window
+    where nothing moved but one object left scored as moving — and that was
+    the gate that let a window with no scoreable data at all into the report.
+    Measured and fixed 2026-08-30. The step is therefore computed only over
+    objects present in **both** frames of a pair.
     """
     import numpy as np
 
     gt = np.asarray(gt_boxes, dtype=np.float64)
     if len(gt) < 2:
         return 0
-    step = np.abs(np.diff(gt, axis=0)).sum(axis=tuple(range(1, gt.ndim)))
+    if gt.ndim == 2:                     # (T, 4): a single object
+        gt = gt[:, None, :]
+
+    present = np.abs(gt).sum(axis=-1) > 0            # (T, n_objs)
+    both = present[:-1] & present[1:]                # (T-1, n_objs)
+    delta = np.abs(np.diff(gt, axis=0)).sum(axis=-1)  # (T-1, n_objs)
+    step = np.where(both, delta, 0.0).sum(axis=1)
     return int((step > tol).sum())
 
 
-def temporal_order(pred_trace, gt_boxes):
+def mse_ratio(planner_mse, baseline_mse, floor=1e-6):
+    """`planner_mse / baseline_mse`, or None when the ratio means nothing.
+
+    The headline number of this project, so its degenerate cases matter more
+    than its arithmetic. It is None when either side is missing, and None when
+    the baseline is at or below `floor`: linear interpolation is exact on a
+    motionless window, so dividing by its error reports how small the
+    denominator was and nothing else. A baseline of 4.1e-10 previously
+    produced a ratio of 243874974014.05, written verbatim into the CSV and the
+    per-window table.
+    """
+    if planner_mse is None or baseline_mse is None:
+        return None
+    if baseline_mse <= floor:
+        return None
+    return float(planner_mse) / float(baseline_mse)
+
+
+def temporal_order(pred_trace, gt_boxes, mapping=None, scoreable=None):
     """Spearman correlation between plan step and closest real frame.
 
     A plan can hit the right set of positions in the wrong order. This
     catches that. 1.0 means the plan walks the video forwards, 0 means the
     order carries no information, negative means it runs backwards.
+
+    `mapping` and `scoreable` are the ones `bbox_mse` solved, and both are
+    needed for this to describe the same thing the error does. Without the
+    mapping it compared slot-for-slot, so a perfect forward plan with two
+    slots swapped scored 0.0 while `bbox_mse` scored 0.0 error and IoU 1.0.
     """
     import numpy as np
 
@@ -385,10 +493,28 @@ def temporal_order(pred_trace, gt_boxes):
     if n_steps < 2:
         return None
 
-    # For each plan step, which real frame does it resemble most?
+    # Reorder the ground truth into the predictor's slot order, and keep only
+    # the objects the error was computed over.
+    if mapping is not None:
+        mapping = np.asarray(mapping)
+        keep = [i for i in range(len(mapping))
+                if int(mapping[i]) >= 0
+                and (scoreable is None or bool(scoreable[int(mapping[i])]))]
+        if not keep:
+            return None
+        pred = pred[:, keep, :]
+        gt = gt[:, [int(mapping[i]) for i in keep], :]
+
+    # For each plan step, which real frame does it resemble most? Frames where
+    # the object is not annotated carry no position, so they are not eligible.
+    present = np.abs(gt).sum(axis=-1).sum(axis=-1) > 0
+    if present.sum() < 2:
+        return None
+
     nearest = []
     for t in range(n_steps):
         d = ((gt - pred[t]) ** 2).sum(axis=(1, 2))
+        d = np.where(present, d, np.inf)
         nearest.append(int(np.argmin(d)))
 
     steps = np.arange(n_steps, dtype=np.float64)
@@ -433,21 +559,28 @@ def score_window(pred_trace, gt_boxes, baseline_trace=None,
                      & (np.abs(goal).sum(axis=-1) > 0))
 
     result = {"planner": bbox_mse(pred_trace, gt_boxes, matching, scoreable)}
-    result["temporal_order"] = temporal_order(pred_trace, gt_boxes)
 
-    # Same slot pairing as the error, so the two describe one assignment.
+    # Every metric below gets the SAME pairing and the SAME mask as the error.
+    # Before 2026-08-30 `bbox_iou` and `temporal_order` got neither, so the
+    # three numbers in one row described three different object-frame sets.
     mapping = result["planner"]["mapping"]
-    result["planner_iou"] = bbox_iou(pred_trace, gt_boxes, mapping=mapping)
+    result["temporal_order"] = temporal_order(pred_trace, gt_boxes,
+                                              mapping=mapping,
+                                              scoreable=scoreable)
+    result["planner_iou"] = bbox_iou(pred_trace, gt_boxes, mapping=mapping,
+                                     scoreable=scoreable)
 
     if baseline_trace is not None:
         base = bbox_mse(baseline_trace, gt_boxes, matching, scoreable)
         result["baseline_linear"] = base
         result["baseline_iou"] = bbox_iou(baseline_trace, gt_boxes,
-                                          mapping=base["mapping"])
+                                          mapping=base["mapping"],
+                                          scoreable=scoreable)
         planner_mse = result["planner"]["mean_mse"]
         base_mse = base["mean_mse"]
-        result["mse_ratio"] = (planner_mse / base_mse) if base_mse > 0 else None
-        result["beats_baseline"] = bool(base_mse > 0 and planner_mse < base_mse)
+        result["mse_ratio"] = mse_ratio(planner_mse, base_mse)
+        result["beats_baseline"] = bool(
+            result["mse_ratio"] is not None and result["mse_ratio"] < 1.0)
 
     return result
 
