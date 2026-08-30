@@ -63,20 +63,50 @@ source sh/sweep_lib.sh
 
 FPS="${FPS:-30}"
 NPZ="data/npz/video/vidvrd/overfit"
-CLIPS="eval/vidvrd_winnable_clips.txt"
 
 MID=(32G 6:00:00); BIG=(48G 10:00:00)
 
-if [[ ! -f "${CLIPS}" ]]; then
-    echo "FATAL: ${CLIPS} missing. It is produced by" >&2
-    echo "  python3 tools/video/screen_vidvrd.py --winnable > ${CLIPS}" >&2
-    exit 2
+# The 88 screened clips, pinned here rather than read from a file.
+# eval/ is gitignored, so eval/vidvrd_winnable_clips.txt never reaches
+# Sherlock and reading it would abort the run. E1 pins its arms the same way,
+# and pinning also makes the experiment reproducible without re-screening.
+#
+# Produced by: python3 tools/video/screen_vidvrd.py --winnable
+# Criteria (EVAL.md 4.2): fully annotated, and the quantisation floor sits
+# below the linear-interpolation baseline, so mse_ratio < 1 is arithmetically
+# reachable. 8,522 real transitions in total.
+IDS="$(echo "\
+    ILSVRC2015_train_00150010,ILSVRC2015_train_00040018,ILSVRC2015_train_00773000,ILSVRC2015_train_00069006,
+    ILSVRC2015_train_00194008,ILSVRC2015_train_00040001,ILSVRC2015_train_00040005,ILSVRC2015_train_00150024,
+    ILSVRC2015_train_00040029,ILSVRC2015_train_00265048,ILSVRC2015_train_00058003,ILSVRC2015_train_00415006,
+    ILSVRC2015_train_00058001,ILSVRC2015_train_01081000,ILSVRC2015_train_00040009,ILSVRC2015_train_00308005,
+    ILSVRC2015_val_00036008,ILSVRC2015_train_00548000,ILSVRC2015_train_00119025,ILSVRC2015_train_00466000,
+    ILSVRC2015_train_00040020,ILSVRC2015_train_00218002,ILSVRC2015_train_00071019,ILSVRC2015_train_00127000,
+    ILSVRC2015_val_00028003,ILSVRC2015_val_00159002,ILSVRC2015_train_00772005,ILSVRC2015_train_00265004,
+    ILSVRC2015_train_00797000,ILSVRC2015_train_00272001,ILSVRC2015_train_00040022,ILSVRC2015_train_00415008,
+    ILSVRC2015_train_00118005,ILSVRC2015_train_00804001,ILSVRC2015_val_00015001,ILSVRC2015_train_00016000,
+    ILSVRC2015_train_00040025,ILSVRC2015_val_00037004,ILSVRC2015_train_00290020,ILSVRC2015_train_00068002,
+    ILSVRC2015_train_00077001,ILSVRC2015_train_00265008,ILSVRC2015_train_00119014,ILSVRC2015_train_00411000,
+    ILSVRC2015_train_00312007,ILSVRC2015_train_00987000,ILSVRC2015_train_00211004,ILSVRC2015_train_00185001,
+    ILSVRC2015_train_00119045,ILSVRC2015_train_00010009,ILSVRC2015_train_00100002,ILSVRC2015_train_00010006,
+    ILSVRC2015_train_00033006,ILSVRC2015_train_00071012,ILSVRC2015_train_00025022,ILSVRC2015_train_00057003,
+    ILSVRC2015_train_00300009,ILSVRC2015_train_00149006,ILSVRC2015_train_00010012,ILSVRC2015_train_00897007,
+    ILSVRC2015_train_00119040,ILSVRC2015_train_01020000,ILSVRC2015_train_00234013,ILSVRC2015_train_00010024,
+    ILSVRC2015_train_00165000,ILSVRC2015_train_00181011,ILSVRC2015_train_00308009,ILSVRC2015_train_00375001,
+    ILSVRC2015_train_01081001,ILSVRC2015_train_00119037,ILSVRC2015_val_00026002,ILSVRC2015_train_00065002,
+    ILSVRC2015_train_00535000,ILSVRC2015_train_00165011,ILSVRC2015_train_00324000,ILSVRC2015_train_00234021,
+    ILSVRC2015_train_00211000,ILSVRC2015_val_00035008,ILSVRC2015_train_00040031,ILSVRC2015_train_00253030,
+    ILSVRC2015_train_00415004,ILSVRC2015_train_00010010,ILSVRC2015_train_00897009,ILSVRC2015_train_00729000,
+    ILSVRC2015_val_00081000,ILSVRC2015_train_01052000,ILSVRC2015_train_00574002,ILSVRC2015_train_00962007" | tr -d ' \n')"
+
+# An override, when a newer screen exists locally and has been copied over.
+CLIPS="${CLIPS:-eval/vidvrd_winnable_clips.txt}"
+if [[ -f "${CLIPS}" ]]; then
+    echo "using clip list from ${CLIPS}"
+    IDS="$(tr -d '\r' < "${CLIPS}" | grep -v '^[[:space:]]*$' | paste -sd, -)"
 fi
 
-# --video-id takes one comma-separated list, so the screened selection is
-# folded into a single argument here rather than being pasted by hand.
-IDS="$(tr -d '\r' < "${CLIPS}" | grep -v '^[[:space:]]*$' | paste -sd, -)"
-NCLIPS="$(tr -d '\r' < "${CLIPS}" | grep -cv '^[[:space:]]*$')"
+NCLIPS="$(echo "${IDS}" | tr ',' '\n' | grep -c .)"
 
 section "H14  bake ${NCLIPS} screened clips, fill OFF"
 
