@@ -19,10 +19,56 @@ from tools.planner import e1_summary  # noqa: E402
 
 
 def row(reach="True", ratio="1.0", mse="10.0", base="10.0", moving="8",
-        iou="0.5", beats="False"):
+        iou="0.5", beats="False", init="0", goal="16", method="bfs"):
     return {"reachability": reach, "mse_ratio": ratio, "bbox_mse": mse,
             "baseline_mse": base, "moving_gt_steps": moving, "bbox_iou": iou,
-            "beats_baseline": beats}
+            "beats_baseline": beats, "init": init, "goal": goal,
+            "method": method}
+
+
+class TestWindowsAreCountedOnce(unittest.TestCase):
+    """A window scored by two planners is one window, not two.
+
+    The shipped summary read "160 of 160 windows solved" for the structured arm
+    and "8 of 116" for the unstructured one. Both were row counts: 80 windows
+    times 2 methods, and 4 windows times 2 methods. The ratio survived, the
+    counts did not.
+    """
+
+    def test_the_same_window_under_two_methods_counts_once(self):
+        rows = [row(init="0", goal="16", method="bfs"),
+                row(init="0", goal="16", method="pddl")]
+        out = e1_summary.summarise_rows(rows)
+        self.assertEqual(out["windows"], 1)
+        self.assertEqual(out["solved"], 1)
+
+    def test_the_real_structured_arm_is_80_not_160(self):
+        rows = []
+        for i in range(80):
+            for m in ("bfs", "pddl"):
+                rows.append(row(init=str(i), goal=str(i + 16), method=m))
+        out = e1_summary.summarise_rows(rows)
+        self.assertEqual(out["windows"], 80)
+        self.assertEqual(out["solved"], 80)
+        self.assertEqual(out["solve_rate"], 1.0)
+
+    def test_the_real_unstructured_arm_is_4_of_58(self):
+        rows = []
+        for i in range(58):
+            reach = "True" if i < 4 else "false"
+            for m in ("bfs", "pddl"):
+                rows.append(row(init=str(i), goal=str(i + 16), method=m,
+                                reach=reach))
+        out = e1_summary.summarise_rows(rows)
+        self.assertEqual(out["windows"], 58)
+        self.assertEqual(out["solved"], 4)
+
+    def test_a_window_solved_by_one_method_only_still_counts_as_solved(self):
+        rows = [row(init="0", goal="16", method="bfs", reach="True"),
+                row(init="0", goal="16", method="pddl", reach="false")]
+        out = e1_summary.summarise_rows(rows)
+        self.assertEqual(out["windows"], 1)
+        self.assertEqual(out["solved"], 1)
 
 
 def arm(solved, total, ratio, mse=None):
@@ -93,13 +139,14 @@ class TestRowSummary(unittest.TestCase):
 
     def test_reachability_casing_does_not_lose_rows(self):
         """The writer emits 'True' and 'false'; both must parse."""
-        rows = [row(reach="True"), row(reach="false"), row(reach="TRUE")]
+        rows = [row(reach="True", init="0"), row(reach="false", init="1"),
+                row(reach="TRUE", init="2")]
         out = e1_summary.summarise_rows(rows)
         self.assertEqual(out["solved"], 2)
         self.assertEqual(out["windows"], 3)
 
     def test_still_windows_are_excluded_from_the_error(self):
-        rows = [row(moving="0"), row(moving="8")]
+        rows = [row(moving="0", init="0"), row(moving="8", init="1")]
         out = e1_summary.summarise_rows(rows)
         self.assertEqual(out["solved"], 2)
         self.assertEqual(out["scored"], 1)

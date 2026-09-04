@@ -45,6 +45,11 @@ SUPERSEDED = {
             "decoder takes bin left edges (SPEC V31)",
     "13 of 14": "window counts from the superseded single-clip run at window 8",
     "14 of 14": "window counts from the superseded single-clip run at window 8",
+    "1.377": "E1's mse_ratio margin, computed over window-times-method rows; "
+             "counted per window it is 1.05x",
+    "160/160": "E1 row count, not window count; the structured arm has 80 windows",
+    "8 of 116": "E1 row count, not window count; the unstructured arm reached "
+                "4 of 58 windows",
 }
 
 # A section carrying any of these is understood to have declared itself.

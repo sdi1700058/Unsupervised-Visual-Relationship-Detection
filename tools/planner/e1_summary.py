@@ -3,12 +3,15 @@
 
 **Why this is a module and not a heredoc.** The first version lived inline in
 `experiments/E1_structure/score_local.sh` and it reported the opposite of what
-the data said. Structured solved 160 of 160 windows; unstructured solved 8 of
-116. The summary then compared the two median errors as though they described
+the data said. Structured reached 80 of 80 windows; unstructured reached 4 of
+58. The summary compared the two median errors as though they described
 comparable samples, found unstructured lower, and printed *"structure does not
-predict plannability"*. The 8 windows were the only ones the unstructured
+predict plannability"*. Those 4 windows are the only ones the unstructured
 planner could reach at all, so they are the easiest 7% of its corpus, measured
 against the whole of the other arm.
+
+It also mis-stated the counts as 160 and 116, which were **rows**: one window
+scored by each of two planners.
 
 Two rules come out of that, and they are what this module enforces:
 
@@ -49,20 +52,58 @@ def read(name, root="eval/planner"):
     return summarise_rows(rows)
 
 
+def _window_of(row):
+    """The window a row scores. Two methods on one window are one window."""
+    return (row.get("init"), row.get("goal"))
+
+
+def _best(rows):
+    """The better of a window's rows, by mse_ratio, lowest first."""
+    def key(r):
+        value = (r.get("mse_ratio") or "").strip()
+        return float(value) if value not in ("", "None") else float("inf")
+    return min(rows, key=key)
+
+
 def summarise_rows(rows):
-    """The numbers one arm contributes, from its raw summary rows."""
-    solved = [r for r in rows if (r.get("reachability") or "").strip().lower()
-              == "true"]
-    live = [r for r in solved
-            if r.get("moving_gt_steps") and float(r["moving_gt_steps"]) >= 6
-            and r.get("bbox_mse")]
+    """The numbers one arm contributes, counted **per window**, not per row.
+
+    A row is one window scored by one planner, and E1 runs two planners. The
+    first version counted rows, so it reported 160 windows where there were 80
+    and 116 where there were 58. The ratio survived that error; the counts did
+    not.
+
+    Where a window has a row from each planner, the arm is credited with **the
+    better of the two** rather than both. Keeping both would weight windows that
+    happen to be solvable twice, which biases every median toward whichever
+    planner solves more of them.
+    """
+    by_window = {}
+    for r in rows:
+        by_window.setdefault(_window_of(r), []).append(r)
+
+    windows = len(by_window)
+    solved_windows, live = [], []
+    for key, group in by_window.items():
+        reached = [r for r in group
+                   if (r.get("reachability") or "").strip().lower() == "true"]
+        if not reached:
+            continue
+        solved_windows.append(key)
+        scoreable = [r for r in reached
+                     if r.get("moving_gt_steps")
+                     and float(r["moving_gt_steps"]) >= 6
+                     and r.get("bbox_mse")]
+        if scoreable:
+            live.append(_best(scoreable))
+
     ratios = [float(r["mse_ratio"]) for r in live
               if (r.get("mse_ratio") or "").strip() not in ("", "None")]
     return {
-        "windows": len(rows),
-        "solved": len(solved),
+        "windows": windows,
+        "solved": len(solved_windows),
         "scored": len(live),
-        "solve_rate": (float(len(solved)) / len(rows)) if rows else 0.0,
+        "solve_rate": (float(len(solved_windows)) / windows) if windows else 0.0,
         "ratio": st.median(ratios) if ratios else None,
         "mse": st.median([float(r["bbox_mse"]) for r in live]) if live else None,
         "base": st.median([float(r["baseline_mse"]) for r in live])
@@ -176,15 +217,77 @@ def render(a, b):
     return "\n".join(lines) + "\n"
 
 
+def render_svg(a, b):
+    """A two-panel chart: reachability, then error as a ratio.
+
+    Hand-written SVG so it needs no plotting library and renders anywhere. The
+    two panels are separate on purpose: reachability is the axis that carries
+    the result, and putting it beside an error bar invites reading them as
+    equally weighted.
+    """
+    if a is None or b is None:
+        return None
+    w, h, pad = 720, 300, 46
+
+    def bars(x0, title, pairs, fmt, note):
+        span = max([v for _, v in pairs] + [1e-9])
+        out = ['<text x="%d" y="30" class="t">%s</text>' % (x0, title)]
+        for i, (label, value) in enumerate(pairs):
+            y = 58 + i * 62
+            width = int(255 * value / span)
+            fill = "#2b6cb0" if i == 0 else "#a0aec0"
+            out.append('<rect x="%d" y="%d" width="%d" height="26" fill="%s"/>'
+                       % (x0, y, max(width, 2), fill))
+            out.append('<text x="%d" y="%d" class="l">%s</text>'
+                       % (x0, y - 5, label))
+            out.append('<text x="%d" y="%d" class="v">%s</text>'
+                       % (x0 + max(width, 2) + 8, y + 19, fmt % value))
+        out.append('<text x="%d" y="%d" class="n">%s</text>' % (x0, 210, note))
+        return out
+
+    parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
+             'viewBox="0 0 %d %d">' % (w, h, w, h),
+             '<style>text{font-family:sans-serif}'
+             '.t{font-size:15px;font-weight:bold}.l{font-size:12px}'
+             '.v{font-size:12px;font-weight:bold}.n{font-size:11px;fill:#555}'
+             '.c{font-size:11px;fill:#555}</style>',
+             '<rect width="%d" height="%d" fill="white"/>' % (w, h)]
+    parts += bars(pad, "windows reached",
+                  [("structured", 100 * a["solve_rate"]),
+                   ("unstructured", 100 * b["solve_rate"])],
+                  "%.0f%%",
+                  "%d of %d against %d of %d"
+                  % (a["solved"], a["windows"], b["solved"], b["windows"]))
+    if a["ratio"] and b["ratio"]:
+        parts += bars(pad + 350, "median mse_ratio, lower is better",
+                      [("structured", a["ratio"]),
+                       ("unstructured", b["ratio"])],
+                      "%.2f",
+                      "margin %.2fx, against a %.2fx confound threshold"
+                      % (b["ratio"] / a["ratio"], VOLUME_CONFOUND))
+    parts.append('<text x="%d" y="%d" class="c">%s</text>'
+                 % (pad, h - 18,
+                    "One number per window: where both planners scored a "
+                    "window, the better result is used. VidVRD only."))
+    parts.append("</svg>")
+    return "\n".join(parts)
+
+
 def main():
     a, b = read("structured"), read("unstructured")
     text = render(a, b)
-    os.makedirs("eval/planner", exist_ok=True)
+    if not os.path.isdir("eval/planner"):
+        os.makedirs("eval/planner")
     out = "eval/planner/E1_summary.md"
     with open(out, "w") as handle:
         handle.write(text)
     print(text)
     print("wrote %s" % out)
+    svg = render_svg(a, b)
+    if svg:
+        with open("eval/planner/E1_summary.svg", "w") as handle:
+            handle.write(svg)
+        print("wrote eval/planner/E1_summary.svg")
     return 0
 
 
