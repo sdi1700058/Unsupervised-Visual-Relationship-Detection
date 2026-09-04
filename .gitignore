@@ -27,7 +27,7 @@ data/*
 notebooks/fiftyone_data/
 latplan/puzzles/*.npz
 latplan/puzzles/*.npy
-.claude/
+notes/
 old_working_strips.py
 venv/
 .keras/

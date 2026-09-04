@@ -2,7 +2,7 @@
 
 A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video: `vidvrd`, `actiongenome`, and `videonet`.
 
-The document is a runbook. It tells you how to install the code, how to bake data, how to train the model, and how to look at the results. The document does not explain the theory. For the theory, read `.claude/docs/THEORY.md`.
+The document is a runbook. It tells you how to install the code, how to bake data, how to train the model, and how to look at the results. The document does not explain the theory. For the theory, read `notes/docs/THEORY.md`.
 
 ## 1. What FOSAE Does (Short Version)
 
@@ -11,7 +11,7 @@ The document is a runbook. It tells you how to install the code, how to bake dat
 - FOSAE trains without labels. The only loss is reconstruction (BCE on patches, MSE on bboxes).
 - The output is (a) a reconstruction of the input frame and (b) a discrete symbolic state that a classical planner can use.
 
-The FOSAE paper is at [arXiv:1902.08093](https://arxiv.org/abs/1902.08093). Read `.claude/docs/THEORY.md §1-2` for the architecture.
+The FOSAE paper is at [arXiv:1902.08093](https://arxiv.org/abs/1902.08093). Read `notes/docs/THEORY.md §1-2` for the architecture.
 
 ## 2. What This Fork Adds
 
@@ -215,19 +215,19 @@ For every trained model, check three things.
 2. **Training curve.** Open `training_curve.png`. All four panels should trend downwards and plateau. A flat line means no learning.
 3. **Boolean patterns.** Open `booleans_test.png`. Predicates should vary across states. A predicate that is always on or always off is collapsed.
 
-For a planner-eval run (Phase H), see `.claude/docs/STATUS.md §Phase H` and `tools/planner/plan_video.py`.
+For a planner-eval run (Phase H), see `notes/docs/STATUS.md §Phase H` and `tools/planner/plan_video.py`.
 
 ## 8. Where to Find More
 
-- `.claude/docs/THEORY.md` — FOSAE theory and architecture.
-- `.claude/docs/AUDIT.md` — code alignment with the paper and the upstream repository. Read this before any change to `strips.py` or the loaders.
-- `.claude/docs/SPEC.md` — task grid, invariants, and gate list.
-- `.claude/docs/STATUS.md` — weekly progress and the phase timeline.
-- `.claude/docs/VIZ.md` — figure catalogue.
-- `.claude/docs/CHANGES.md` — every change from the upstream fork.
-- `.claude/docs/CLAUDE.md` — the working rules for the AI assistant.
-- `.claude/docs/STE.md` — the Simplified Technical English style guide.
-- `.claude/docs/SOURCES.md` — paper links and dataset links.
+- `notes/docs/THEORY.md` — FOSAE theory and architecture.
+- `notes/docs/AUDIT.md` — code alignment with the paper and the upstream repository. Read this before any change to `strips.py` or the loaders.
+- `notes/docs/SPEC.md` — task grid, invariants, and gate list.
+- `notes/docs/STATUS.md` — weekly progress and the phase timeline.
+- `notes/docs/VIZ.md` — figure catalogue.
+- `notes/docs/CHANGES.md` — every change from the upstream fork.
+- `notes/docs/WORKING_RULES.md` — working rules and conventions.
+- `notes/docs/STE.md` — the Simplified Technical English style guide.
+- `notes/docs/SOURCES.md` — paper links and dataset links.
 
 ## 9. Citation
 

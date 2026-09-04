@@ -22,10 +22,6 @@ source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/sherlock_config.sh"
 
 export KERAS_HOME
 
-# ── Optional tools (set to 1 to load) ────────────────────────────────────────
-LOAD_CLAUDE_CODE="${LOAD_CLAUDE_CODE:-0}"
-LOAD_COPILOT_CLI="${LOAD_COPILOT_CLI:-0}"
-
 # ── Load modules ──────────────────────────────────────────────────────────────
 # cudnn/7.6.5 declares cuda/10.2.89 as its dependency, so loading it pulls in the
 # wrong CUDA for TF 1.15 (which needs libcudart.so.10.0 = cuda/10.0.x). The fix:
@@ -47,16 +43,6 @@ if command -v module &>/dev/null; then
         module load ffmpeg 2>/dev/null || true
         module save fosae 2>/dev/null && \
             echo "[sherlock_env] saved module collection 'fosae'"
-    fi
-
-    if [[ "${LOAD_CLAUDE_CODE}" == "1" ]]; then
-        module load claude-code 2>/dev/null || \
-            echo "[sherlock_env] WARNING: claude-code module not found"
-    fi
-
-    if [[ "${LOAD_COPILOT_CLI}" == "1" ]]; then
-        module load copilot-cli 2>/dev/null || \
-            echo "[sherlock_env] WARNING: copilot-cli module not found"
     fi
 fi
 

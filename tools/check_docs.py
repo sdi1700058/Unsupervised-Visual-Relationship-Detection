@@ -34,7 +34,7 @@ import sys
 
 # Documents that describe the project as it is now. These must be correct.
 def live_docs():
-    paths = sorted(set(glob.glob(".claude/*.md") + glob.glob(".claude/docs/*.md")
+    paths = sorted(set(glob.glob("notes/*.md") + glob.glob("notes/docs/*.md")
                        + glob.glob("experiments/*/*.md") + ["README.md"]))
     return [p for p in paths
             if os.path.isfile(p) and os.path.basename(p) not in HISTORICAL]
@@ -55,14 +55,24 @@ ALLOWED_ABSENT = {
         "planned destination, SPEC.md F1, explicitly still pending",
     "latplan/domains/video/videonet.py":
         "planned loader, SPEC.md VN2, not yet written",
+    "notes/docs/GUIDE.md":
+        "planned document, SPEC.md task E3, not yet written",
+    "tools/workplan.py":
+        "planned tool, DESIGN_WORKPLAN.md section 5, built in phase P0",
+    "tools/video/screen_actiongenome.py":
+        "planned screen, named in the worked example in DESIGN_WORKPLAN.md",
 }
+
+# A template naming a filename shape rather than a file. `reports/YYYY-MM-DD.md`
+# is an instruction about how to name a file, not a claim that one exists.
+PLACEHOLDER = re.compile(r"YYYY|MM-DD|<[a-z_]+>|\{|\*")
 
 # Generated output. Absent because it is gitignored or was cleaned, never
 # because a document is wrong.
 ALLOWED_PREFIXES = ("eval/", "data/", "out/", "logs/")
 
 PATH_PAT = re.compile(
-    r"\b((?:tools|sh|experiments|latplan|eval|data|out|logs|\.claude)"
+    r"\b((?:tools|sh|experiments|latplan|eval|data|out|logs|notes)"
     r"/[A-Za-z0-9_./-]+\.(?:py|sh|md|json|csv|txt|npz|npy|yml|html|svg))")
 
 # Standing rule: never write that a TASK is complete. Reporting that a chunk of
@@ -92,6 +102,8 @@ def dead_paths(docs=None):
             for i, line in enumerate(handle, 1):
                 for ref in PATH_PAT.findall(line):
                     if os.path.exists(ref):
+                        continue
+                    if PLACEHOLDER.search(ref):
                         continue
                     if ref in ALLOWED_ABSENT:
                         continue

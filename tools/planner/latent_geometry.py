@@ -20,7 +20,7 @@ every frame perfectly while ordering the frames arbitrarily in Hamming space.
     python3 tools/planner/latent_geometry.py eval/exports/ --csv eval/geom.csv
 
 Measured on ILSVRC2015_train_00005005, against planner error from the same
-windows (see .claude/docs/EVAL.md 4.8):
+windows (see notes/docs/EVAL.md 4.8):
 
     oracle       spearman +0.651   nn error  2.57 px   planner mse  13.67
     trained P10  spearman +0.356   nn error  6.10 px   planner mse 101.44

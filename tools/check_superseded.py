@@ -20,7 +20,7 @@ because how a plausible measurement misled is part of the record. This tool
 only checks that the banner is there.
 
     python3 tools/check_superseded.py
-    python3 tools/check_superseded.py --paths .claude/docs/EVAL.md
+    python3 tools/check_superseded.py --paths notes/docs/EVAL.md
 
 Exits non-zero when an occurrence is uncovered.
 
@@ -51,7 +51,7 @@ SUPERSEDED = {
 MARKERS = ("superseded", "pre-review", "withdrawn", "corrected", "wrong",
            "do not quote")
 
-DEFAULT_PATHS = (".claude/REPORT.md", ".claude/docs/*.md")
+DEFAULT_PATHS = ("notes/REPORT.md", "notes/docs/*.md")
 
 # How far after a hit a marker still counts. A table row is often annotated on
 # the line below it, which is legitimate and must not be reported.

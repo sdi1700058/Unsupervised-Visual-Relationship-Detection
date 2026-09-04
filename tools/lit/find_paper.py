@@ -14,12 +14,12 @@ The order tried here is deliberate:
   3. The open proceedings hosts, matched from the Semantic Scholar venue.
 
     python3 tools/lit/find_paper.py "Visual Relationship Detection: A Survey"
-    python3 tools/lit/find_paper.py --file titles.txt --download .claude/lit/papers
+    python3 tools/lit/find_paper.py --file titles.txt --download notes/lit/papers
 
 `--download` fetches whatever it finds and names it
 `<firstauthor><year>-<slug>.pdf`. Titles that come back with nothing are
 printed at the end, so they can go straight into
-`.claude/lit/unreachable.md`.
+`notes/lit/unreachable.md`.
 
 Every hit is title-checked against the query before it is accepted. A web
 search once offered arXiv:2201.09221 as the Cheng relation-detection survey;

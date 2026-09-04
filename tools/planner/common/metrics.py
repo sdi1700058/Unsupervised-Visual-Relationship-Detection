@@ -191,7 +191,7 @@ def bbox_iou(pred_trace, gt_boxes, mapping=None, matching="hungarian",
 
     It is also the quantity the video relation literature localises with: the
     standard protocol thresholds volumetric IoU over a box trajectory at 0.5
-    (see `.claude/docs/EVAL_CONSIDERED.md`). Reporting it makes the result
+    (see `notes/docs/EVAL_CONSIDERED.md`). Reporting it makes the result
     legible to readers calibrated to that convention rather than to pixel MSE.
 
     `mapping` reuses the slot assignment already solved by `bbox_mse`, so the

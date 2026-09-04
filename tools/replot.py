@@ -11,7 +11,7 @@ in `<model_dir>/`:
     render_test_shuffled.png    render_train_shuffled.png
     booleans_test.png           test*.pdf / test*.gv   (decision-tree)
 
-Per CLAUDE.md "Use original author code when possible".
+Per the working rules: use the original author code when possible.
 
 Usage:
     python3 tools/replot.py <model_dir>                        # auto-detect domain

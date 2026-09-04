@@ -40,10 +40,10 @@ import sys
 
 
 DOCS = {
-    "map": ".claude/docs/THESIS_MAP.md",
-    "report": ".claude/REPORT.md",
-    "eval": ".claude/docs/EVAL.md",
-    "status": ".claude/docs/STATUS.md",
+    "map": "notes/docs/THESIS_MAP.md",
+    "report": "notes/REPORT.md",
+    "eval": "notes/docs/EVAL.md",
+    "status": "notes/docs/STATUS.md",
 }
 
 
