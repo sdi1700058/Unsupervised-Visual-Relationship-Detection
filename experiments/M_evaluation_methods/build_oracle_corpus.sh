@@ -4,6 +4,14 @@
 #   bash experiments/M_evaluation_methods/build_oracle_corpus.sh
 #   N_CLIPS=40 bash experiments/M_evaluation_methods/build_oracle_corpus.sh
 #
+# Any corpus whose annotations read through tools/planner/oracle.py works, not
+# only VidVRD. VidOR uses the identical format, so:
+#
+#   CLIPS_FILE=eval/vidor_winnable_w16.txt \
+#   ANN_DIR=data/video/vidor/annotations/training \
+#   OUT_DIR=eval/probe/vidor N_CLIPS=25 \
+#     bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+#
 # These are the CEILING: latents built straight from ground-truth boxes, with
 # no model. Whatever a trained model scores, it scores against these.
 #
@@ -48,11 +56,14 @@ while read -r clip; do
     [[ -z "${clip}" ]] && continue
     (( built + skipped >= N_CLIPS )) && break
 
+    # A clip id may carry a subdirectory, as VidOR's do ("0021/6833795682").
+    # The output name flattens it so every export lands in one directory.
     ANN="${ANN_DIR}/${clip}.json"
+    out_name="${clip//\//-}"
     if [[ ! -f "${ANN}" ]]; then
         echo "  no annotation: ${clip}"; continue
     fi
-    if [[ -f "${OUT_DIR}/${clip}.npz" ]]; then
+    if [[ -f "${OUT_DIR}/${out_name}.npz" ]]; then
         skipped=$((skipped + 1)); continue
     fi
 
@@ -60,7 +71,7 @@ while read -r clip; do
     # that a filled clip is one it cannot say anything about.
     if ( ulimit -v "${MEM_KB}"
          "${PY}" tools/planner/oracle.py "${ANN}" \
-             --out "${OUT_DIR}/${clip}.npz" --max-objects 3 --no-fill \
+             --out "${OUT_DIR}/${out_name}.npz" --max-objects 3 --no-fill \
              >/dev/null 2>&1 ); then
         built=$((built + 1))
     else

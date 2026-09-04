@@ -147,6 +147,37 @@ def screen(by_clip, max_gap=6, min_run=8):
     }
 
 
+def per_object_tracks(objects_by_frame, person_by_frame, frames, num_objs=3):
+    """`{slot: {step: box}}` in source pixels, for the crossover criterion.
+
+    **Steps are consecutive annotated frames, reindexed to 0, 1, 2 ...** The
+    criterion in `screen_vidvrd.window_crossover` requires contiguous frame
+    numbers, and Action Genome's annotated frames are 1 to `max_gap` source
+    frames apart. Treating each annotated frame as one state is legitimate — a
+    planner works on a sequence of states, not on wall-clock time — but it means
+    **one step spans a variable amount of real time**, between 1 and `max_gap`
+    frames. That is the same property `SPEC.md` V35 measures as temporal
+    compression, here introduced by the corpus rather than by a model, and it
+    has to be stated wherever these numbers are quoted.
+
+    Boxes stay in the video's own pixels because that is what the criterion
+    expects. Object records are `xywh` and person records are `xyxy`.
+    """
+    tracks = {}
+    for step, f in enumerate(frames):
+        for record in objects_by_frame.get(f, []):
+            if not (record.get("visible") and record.get("bbox")):
+                continue
+            x, y, w, h = record["bbox"]
+            tracks.setdefault(record["class"], {})[step] = [x, y, x + w, y + h]
+        person = person_by_frame.get(f, {}).get("bbox")
+        if person is not None and len(person):
+            tracks.setdefault("person", {})[step] = list(person[0])
+    # Keep the slots present in most steps, person last, as the loader does.
+    ordered = sorted(tracks, key=lambda c: (c == "person", -len(tracks[c]), c))
+    return dict((c, tracks[c]) for c in ordered[:num_objs])
+
+
 def render_svg(summary):
     """A figure: how the usable corpus depends on the gap tolerance."""
     w, h, pad = 640, 300, 56

@@ -366,6 +366,107 @@ def boxes_from_something_else(path, video_id=None, num_objs=3,
     return boxes, meta
 
 
+def ag_runs_within(frames, max_gap):
+    """Maximal runs of frame numbers whose consecutive gaps are <= max_gap.
+
+    `tools/video/screen_actiongenome.py` has a near-twin returning run
+    *lengths*, for the corpus screen. This one returns the frames themselves,
+    which the loader needs. They stay separate on purpose: this module imports
+    nothing beyond numpy so it runs on the cluster's Python 3.6 venv, while the
+    screen reads the corpus through pickle.
+    """
+    if not frames:
+        return []
+    frames = sorted(frames)
+    out, start = [], 0
+    for i in range(len(frames) - 1):
+        if frames[i + 1] - frames[i] > max_gap:
+            out.append(frames[start:i + 1])
+            start = i + 1
+    out.append(frames[start:])
+    return out
+
+
+def boxes_from_actiongenome_clip(objects_by_frame, person_by_frame,
+                                 num_objs=3, max_gap=6):
+    """One Action Genome clip's densest run, as canvas boxes.
+
+    Action Genome annotates a fraction of frames, so a clip is usable only
+    where its annotated frames sit close enough together to read as
+    consecutive states. The **longest run** within `max_gap` is taken and the
+    rest of the clip is discarded, which is why the corpus yields 553 usable
+    clips rather than either 9,601 or none.
+
+    **The person goes in the last slot**, for the same reason Something-Else
+    puts the hand last: the actor appears in nearly every frame, so keeping it
+    at the end leaves the object slots stable as `num_objs` varies.
+
+    **The two annotation files use different box conventions.** Object records
+    are `xywh`; person records are `xyxy`, and say so in their `bbox_mode`.
+    Measured on 7,841 records: 100% are consistent with `xywh` and only 19%
+    with `xyxy`, so reading the objects as corner pairs would compress every
+    object box and corrupt every trajectory without raising anything.
+
+    The frame size comes from `person_bbox`, which is the only place Action
+    Genome records it. The object records carry none, and they describe the same
+    frame, so they share it.
+
+    A slot absent from a frame stays all-zero, which the metrics read as "not in
+    this frame" rather than "at the origin" (`SPEC.md` V30).
+
+    Returns (boxes, meta) with boxes shaped (n_frames, num_objs, 4).
+    """
+    import numpy as np
+
+    scale, canvas_w, canvas_h = load_canvas_scaler()
+
+    shared = sorted(set(objects_by_frame) & set(person_by_frame))
+    runs = ag_runs_within(shared, max_gap)
+    frames = max(runs, key=len) if runs else []
+    if not frames:
+        return np.zeros((0, num_objs, 4), dtype=np.float32), {
+            "frames": 0, "slots": [], "absent": 0, "run_gap": max_gap}
+
+    # Slots are chosen from the run, by how often each class is visible, so a
+    # class that appears once does not displace one present throughout.
+    seen = {}
+    for f in frames:
+        for rec in objects_by_frame[f]:
+            if rec.get("visible") and rec.get("bbox"):
+                seen[rec["class"]] = seen.get(rec["class"], 0) + 1
+    classes = sorted(seen, key=lambda c: (-seen[c], c))[:max(num_objs - 1, 0)]
+    slots = sorted(classes) + ["person"]
+    slots = slots[:num_objs]
+
+    size = person_by_frame[frames[0]].get("bbox_size")
+    width, height = size if size else (480, 270)
+
+    boxes = np.zeros((len(frames), num_objs, 4), dtype=np.float32)
+    absent = 0
+    for i, f in enumerate(frames):
+        present = {}
+        for rec in objects_by_frame[f]:
+            if rec.get("visible") and rec.get("bbox") \
+                    and rec["class"] in slots:
+                x1, y1, w, h = rec["bbox"]
+                present[rec["class"]] = scale([x1, y1, x1 + w, y1 + h],
+                                              width, height)
+        pbox = person_by_frame[f].get("bbox")
+        if pbox is not None and len(pbox):
+            present["person"] = scale(list(pbox[0]), width, height)
+        for j, slot in enumerate(slots):
+            if slot in present:
+                boxes[i, j] = present[slot]
+            else:
+                absent += 1
+
+    return boxes, {"frames": len(frames), "slots": slots, "absent": absent,
+                   "source_size": (width, height),
+                   "canvas": (canvas_w, canvas_h),
+                   "run_gap": max_gap,
+                   "first_frame": frames[0], "last_frame": frames[-1]}
+
+
 def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
     """Read one VidVRD annotation JSON into canvas-space boxes.
 
