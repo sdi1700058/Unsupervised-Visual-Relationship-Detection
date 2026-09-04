@@ -10,8 +10,14 @@ A number improved somewhere and not carried to where it is quoted is the same
 failure as a stale document, and it is harder to see because nothing about the
 old value looks wrong.
 
-So each headline is recomputed here from `eval/planner/*/summary.csv` and the
-documents are checked for the current value.
+**Every** document listed for a headline must carry it. The first version
+passed as soon as one of them did, and within hours that let EVAL.md and
+STATUS.md sit at n=10 while THESIS_MAP.md and REPORT.md carried n=22 and the
+check reported three matches. A stale document hiding behind a fresh one is the
+same failure one level up.
+
+So each headline is recomputed here from `eval/planner/*/summary.csv` and every
+document listed for it is checked for the current value.
 
     python3 tools/check_headlines.py
     python3 tools/check_headlines.py --verbose
@@ -52,14 +58,30 @@ def fmt_count(hit, total):
 
 
 def quoted_in(paths, needle):
-    """Is `needle` present in any of these documents?"""
+    """Is `needle` present in any of these documents?
+
+    Kept for callers that genuinely want "anywhere". The gate uses
+    `missing_from`, because "anywhere" is what let a stale document hide.
+    """
+    return len(missing_from(paths, needle)) < len(paths)
+
+
+def missing_from(paths, needle):
+    """The documents that do NOT carry `needle`.
+
+    Absent files count as missing. A document listed for a headline is listed
+    because it is supposed to quote it, so a path that is not there is a
+    problem rather than a pass.
+    """
+    out = []
     for path in paths:
         if not os.path.isfile(path):
+            out.append(path)
             continue
         with open(path) as handle:
-            if needle in handle.read():
-                return True
-    return False
+            if needle not in handle.read():
+                out.append(path)
+    return out
 
 
 def _medians(pattern, column="mse_ratio", min_motion=6):
@@ -105,18 +127,19 @@ def _trained_beats_baseline():
 HEADLINES = {
     "oracle beats the baseline": {
         "compute": _oracle_beats_baseline,
-        "docs": [DOCS["map"], DOCS["report"], DOCS["eval"]],
+        "docs": [DOCS["map"], DOCS["report"], DOCS["eval"], DOCS["status"]],
         "why": "Claim 1's headline count. It sat at n=10 for a day while n=22 "
-               "was on disk.",
+               "was on disk, and then sat at n=10 in EVAL.md and STATUS.md for "
+               "a further day while the check passed on the other two.",
     },
     "oracle median mse_ratio": {
         "compute": _oracle_median_ratio,
-        "docs": [DOCS["map"], DOCS["report"], DOCS["eval"]],
+        "docs": [DOCS["map"], DOCS["report"], DOCS["eval"], DOCS["status"]],
         "why": "Claim 1's headline ratio.",
     },
     "trained beats the baseline": {
         "compute": _trained_beats_baseline,
-        "docs": [DOCS["map"], DOCS["report"], DOCS["eval"]],
+        "docs": [DOCS["map"], DOCS["report"], DOCS["eval"], DOCS["status"]],
         "why": "Claim 2's headline count.",
     },
 }
@@ -131,10 +154,11 @@ def check(headlines=None):
         if value is None:
             skipped.append(name)
             continue
-        if quoted_in(spec["docs"], value):
-            ok.append((name, value))
+        missing = missing_from(spec["docs"], value)
+        if missing:
+            stale.append((name, value, spec.get("why", ""), missing))
         else:
-            stale.append((name, value, spec.get("why", "")))
+            ok.append((name, value))
     return {"stale": stale, "ok": ok, "skipped": skipped}
 
 
@@ -157,9 +181,11 @@ def main(argv=None):
         return 0
 
     print("%d headline(s) the documents do not carry:\n" % len(result["stale"]))
-    for name, value, why in result["stale"]:
+    for name, value, why, missing in result["stale"]:
         print("  %s" % name)
         print("    the data now says: %s" % value)
+        for path in missing:
+            print("    missing from:      %s" % path)
         print("    %s\n" % why)
     print("Update the documents, or say why the older figure is the one to "
           "quote.")
