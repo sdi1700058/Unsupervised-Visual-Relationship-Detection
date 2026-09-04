@@ -67,21 +67,50 @@ class TestSurveyDoesNotFabricate(unittest.TestCase):
         self.assertIn("fill", sig.parameters)
         self.assertIs(sig.parameters["fill"].default, False)
 
-    def test_a_gap_changes_the_answer_when_filled(self):
+    def test_an_unannotated_frame_changes_the_answer_when_filled(self):
         """Filling a gap is not free, and the survey must not do it silently."""
+        import json
+
         from tools.planner.window_survey import survey_clip
 
         with tempfile.TemporaryDirectory() as tmp:
-            p = _clip(os.path.join(tmp, "SURVEY_0001.json"), n=40, gap=(10, 20))
+            p = _clip(os.path.join(tmp, "SURVEY_0001.json"), n=40)
+            with open(p) as handle:
+                clip = json.load(handle)
+            for i in range(10, 20):
+                clip["trajectories"][i] = []       # unannotated, not partial
+            with open(p, "w") as handle:
+                json.dump(clip, handle)
             honest = survey_clip(p, 2, 60, 40, fill=False)
             filled = survey_clip(p, 2, 60, 40, fill=True)
 
         self.assertIsNotNone(honest)
         self.assertIsNotNone(filled)
-        # Filling manufactures ten motionless frames for object 1, which drags
-        # the baseline down and the ratio up.
+        # Filling manufactures ten motionless frames, which lowers the floor and
+        # raises the fraction of duplicate frames.
         self.assertNotEqual(round(honest["floor"], 6),
                             round(filled["floor"], 6))
+        self.assertGreater(filled["duplicate_frac"], honest["duplicate_frac"])
+
+    def test_a_partial_frame_is_not_filled(self):
+        """`fill` works on unannotated FRAMES, never on a missing object.
+
+        The earlier version of the test above removed one object from a range
+        of frames and expected filling to change the answer. It does not, and
+        should not: every frame there still carries a box, so the dataset never
+        left it unannotated. A slot absent from an annotated frame means the
+        object is not in the shot, and inventing a position for it would be the
+        fabrication this whole check exists to prevent.
+        """
+        from tools.planner.window_survey import survey_clip
+
+        with tempfile.TemporaryDirectory() as tmp:
+            p = _clip(os.path.join(tmp, "PARTIAL_0001.json"), n=40,
+                      gap=(10, 20))
+            honest = survey_clip(p, 2, 60, 40, fill=False)
+            filled = survey_clip(p, 2, 60, 40, fill=True)
+
+        self.assertEqual(round(honest["floor"], 6), round(filled["floor"], 6))
 
     def test_absent_objects_do_not_enter_the_baseline(self):
         """A zero box is not a box at the origin (SPEC V30)."""
