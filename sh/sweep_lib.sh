@@ -23,7 +23,7 @@ NJOBS="${NJOBS:-0}"
 NFAILED="${NFAILED:-0}"
 
 # Every job id `submit` gets back, so a sweep can chain a follow-up step onto
-# all of its arms with --dependency instead of asking the user to come back.
+# all of its arms with --dependency instead of needing a second visit.
 SUBMITTED_IDS=()
 
 # The environment every arm gets unless it says otherwise. A sweep overwrites

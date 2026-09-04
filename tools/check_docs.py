@@ -1,22 +1,21 @@
 #!/usr/bin/env python3
-"""Quality gate for the documentation, the same way the code has one.
+"""Quality gate for the notes, the same way the code has one.
 
-**Why the documents need a gate at all.** They are not in git. `.gitignore`
-excludes `.claude/`, because the standing rule is that only code goes in the
-repository. So the documents have no history, no diff, no review point and no
-commit message explaining a change. Everything that keeps the code honest is
-absent for them, and they are what the next loop reads to decide what to do.
+**Why the notes need a gate at all.** They are outside version control, so they
+have no history, no diff, no review point and no commit message explaining a
+change. Everything that keeps the code honest is absent for them, and the work
+is planned from them.
 
-The audit of 2026-08-31 found what that costs:
+An audit on 2026-08-31 found what that costs:
 
 - **STATUS.md, whose own header calls it the current state of the project, was
   carrying a superseded headline.** `check_headlines.py` was declared to read it
-  and no headline ever referenced it, so it was never read.
+  and no entry ever referenced it, so it was never read.
 - **EVAL.md, the authoritative evaluation document, was carrying the same
   superseded headline**, and the check passed because two other documents had
   been updated. One fresh document was excusing two stale ones.
-- Two documents claimed a task was **finished**, which the user has forbidden in
-  as many words, because deciding a task is complete is theirs and not ours.
+- Two documents declared a task **finished**. Progress is reported here; a work
+  item is closed by decision, not by a document asserting it.
 - Three references pointed at scripts that had moved.
 
     python3 tools/check_docs.py
@@ -66,9 +65,9 @@ PATH_PAT = re.compile(
     r"\b((?:tools|sh|experiments|latplan|eval|data|out|logs|\.claude)"
     r"/[A-Za-z0-9_./-]+\.(?:py|sh|md|json|csv|txt|npz|npy|yml|html|svg))")
 
-# The user's standing rule: never write that a TASK is complete. Reporting that
-# a chunk of implementation is finished is fine, so the pattern targets the
-# subjects that name work items.
+# Standing rule: never write that a TASK is complete. Reporting that a chunk of
+# implementation is finished is fine, so the pattern targets the subjects that
+# name work items.
 DONE_PAT = re.compile(
     r"\b(pipeline|task|evaluation|project|phase|thesis|work|dataset search)\b"
     r"[^.\n]{0,40}?\b(is|are|was|were)\s+(now\s+)?"
@@ -104,7 +103,7 @@ def dead_paths(docs=None):
 
 
 def completion_claims(docs=None):
-    """Statements that a task is complete, which is the user's call alone."""
+    """Statements that a work item is closed, which a document cannot decide."""
     docs = live_docs() if docs is None else docs
     hits = []
     for path in docs:
@@ -173,11 +172,11 @@ def stale_counts(docs=None, actual=UNSET):
 
 CHECKS = (
     ("references to files that do not exist", dead_paths,
-     "A document that names a moved script sends the next reader, or the next "
-     "loop, to a path that is not there."),
+     "A document that names a moved script sends the next reader to a path "
+     "that is not there."),
     ("claims that a task is complete", completion_claims,
-     "Only the user decides a task is done. Reporting what a chunk of "
-     "implementation produced is fine; closing a work item is not ours."),
+     "A document cannot close a work item. Reporting what a chunk of "
+     "implementation produced is fine; declaring the task done is not."),
     ("test counts that disagree with the suite", stale_counts,
      "A stale count is a document describing a repository that no longer "
      "exists, and it is the cheapest possible thing to keep true."),

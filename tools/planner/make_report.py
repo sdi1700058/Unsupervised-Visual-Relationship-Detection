@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Turn a planner run into one page you can read in a minute.
 
-A `summary.csv` is not a result anyone can absorb. With the loop running
-unattended the bottom line has to be visible without reading a table, so this
+A `summary.csv` is not a result anyone can absorb. With many runs to
+compare, the bottom line has to be visible without reading a table, so this
 writes a single self-contained HTML page: the verdict first, then the numbers
 that support it, then a chart, then the per-window detail for anyone who wants
 it.

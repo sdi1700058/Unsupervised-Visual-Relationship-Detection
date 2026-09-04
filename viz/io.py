@@ -2,7 +2,7 @@
 
 `save_with_caption()` keeps the `what/why/how_to_read` arguments for caller
 back-compat but writes ONLY the PNG by default. The earlier per-figure
-`<name>.caption.md` sidecar was retracted by the user — it created hundreds of
+`<name>.caption.md` sidecar was retracted — it created hundreds of
 stray files and made the viz dir hard to navigate. Re-enable with
 `VIZ_CAPTIONS=1` env var if ever needed.
 """
