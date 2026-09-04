@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Unattended run: fetch data, inspect, bake, then fan out training jobs.
+# Batch run: fetch data, inspect, bake, then fan out training jobs.
 #
 # Submit this one job and go. It prepares the data on a CPU node, records
 # which categories are worth using, bakes the npz files, and submits the GPU

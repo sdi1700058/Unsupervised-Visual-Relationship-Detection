@@ -117,6 +117,56 @@ class TestStaleCounts(DocFixture):
         self.assertEqual(check_docs.stale_counts([d], actual=None), [])
 
 
+class TestWorkingContextVocabulary(DocFixture):
+    """Tracked source describes behaviour, not how the work is supervised.
+
+    The repository is public, so this is a gate check rather than something to
+    remember to re-run. Two failures of my own are locked down here: the check
+    once flagged "autonomous driving", and it once passed vacuously because it
+    was handed the notes list instead of the tracked tree.
+    """
+
+    def test_a_working_arrangement_mention_is_caught(self):
+        d = self.doc("v1.py", "# what the next loop reads to decide")
+        self.assertEqual(len(check_docs.working_context_vocabulary([d])), 1)
+
+    def test_behavioural_prose_is_quiet(self):
+        d = self.doc("v2.py", "# Batch run: fetch, inspect, bake, then submit.")
+        self.assertEqual(check_docs.working_context_vocabulary([d]), [])
+
+    def test_autonomous_is_a_research_term_and_not_flagged(self):
+        """'autonomous driving' appears throughout the literature notes."""
+        d = self.doc("v3.md", "3. **Data.** Pedestrian video for autonomous "
+                              "driving. **Real video.**")
+        self.assertEqual(check_docs.working_context_vocabulary([d]), [])
+        self.assertNotIn("autonomous", check_docs.CONTEXT_TERMS)
+
+    def test_the_check_supplies_its_own_scope(self):
+        """Called with no arguments it must read the tracked tree, not nothing.
+
+        The vacuous-pass bug: it intersected the caller's list with the tracked
+        set, so passing the untracked notes gave an empty scope and it always
+        passed.
+        """
+        self.assertGreater(len(check_docs._tracked_source()), 50)
+
+    def test_the_definition_file_is_exempt_from_itself(self):
+        """A blocklist has to be able to name what it blocks."""
+        self.assertIn("tools/check_docs.py", check_docs.VOCAB_EXEMPT_FILES)
+        self.assertNotIn("tools/check_docs.py", check_docs._tracked_source())
+
+    def test_every_term_has_a_stated_reason(self):
+        for term, why in check_docs.CONTEXT_TERMS.items():
+            self.assertTrue(why and len(why) > 3,
+                            "%s is flagged with no reason" % term)
+
+    def test_the_tracked_tree_is_clean_right_now(self):
+        """A live assertion about the repository, not a fixture."""
+        hits = check_docs.working_context_vocabulary()
+        self.assertEqual(hits, [], "tracked files carry: %s"
+                         % [(h["doc"], h["ref"]) for h in hits])
+
+
 class TestScope(unittest.TestCase):
 
     def test_append_only_records_are_excluded(self):

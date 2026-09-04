@@ -182,7 +182,71 @@ def stale_counts(docs=None, actual=UNSET):
     return hits
 
 
+# Terms that describe the working arrangement rather than what the code does.
+# Each carries why it matters, because a bare blocklist rots.
+# "autonomous" is deliberately absent: it is a research term of art here, as in
+# "autonomous driving", and flagging it would produce noise for ever.
+CONTEXT_TERMS = {
+    "the next loop": "describes a working arrangement, not what the code does",
+    "each loop": "same",
+    "every loop": "same",
+    "a cold loop": "same",
+    "unattended": "describes how the work is supervised, not what runs",
+}
+
+# Where the terms are tolerated: superseded scripts kept only as a record of
+# what produced which output directory.
+VOCAB_EXEMPT_DIRS = ("sh/deprecated/",)
+
+# A blocklist has to be able to name what it blocks, and its own tests have to
+# be able to exercise it. Both are self-reference, not violations.
+VOCAB_EXEMPT_FILES = ("tools/check_docs.py",
+                      "tools/planner/tests/test_check_docs.py")
+
+
+def _tracked_source():
+    """Files under version control, which is what a reader can see."""
+    try:
+        out = subprocess.check_output(
+            ["git", "ls-files", "*.py", "*.sh", "*.md"],
+            stderr=subprocess.STDOUT).decode("utf-8", "replace")
+    except (subprocess.CalledProcessError, OSError):
+        return []
+    return [p for p in out.split("\n")
+            if p and not p.startswith(VOCAB_EXEMPT_DIRS)
+            and p not in VOCAB_EXEMPT_FILES]
+
+
+def working_context_vocabulary(paths=None):
+    """Tracked source that describes the working arrangement.
+
+    **This check supplies its own scope.** Only files under version control are
+    in scope, because only those can be read by anyone else, and the notes are
+    deliberately excluded from version control. An earlier version intersected
+    the caller's list with the tracked set, which made it pass vacuously when
+    handed the notes — a check that always passes is worse than one that is
+    occasionally noisy.
+    """
+    paths = _tracked_source() if paths is None else paths
+    hits = []
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for i, line in enumerate(handle, 1):
+                low = line.lower()
+                for term, why in CONTEXT_TERMS.items():
+                    if term in low:
+                        hits.append({"doc": path, "line": i, "ref": term,
+                                     "text": line.strip()[:80], "why": why})
+    return hits
+
+
 CHECKS = (
+    ("tracked files describing the working arrangement",
+     working_context_vocabulary,
+     "The repository is public. Source describes behaviour; how the work is "
+     "supervised is not the code's business."),
     ("references to files that do not exist", dead_paths,
      "A document that names a moved script sends the next reader to a path "
      "that is not there."),
@@ -203,7 +267,9 @@ def main(argv=None):
     docs = live_docs()
     failed = 0
     for title, fn, why in CHECKS:
-        hits = fn(docs)
+        # One check supplies its own scope: it reads the tracked tree, not the
+        # notes. Handing it `docs` is what made it pass vacuously.
+        hits = fn() if fn is working_context_vocabulary else fn(docs)
         if not hits:
             if a.verbose:
                 print("  ok    %s" % title)
