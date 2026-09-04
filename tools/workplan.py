@@ -191,14 +191,41 @@ CLAIM_END = "<!-- /claim -->"
 
 # How each tier is allowed to speak. The scoped form deliberately reports an
 # event and draws no consequence; that is the whole point of it.
-TIER_FRAME = {
-    "scoped": "**Scoped claim.** Measured on %s of %s: %s. This reports what "
-              "happened in one experiment and licenses nothing beyond it.",
-    "existential": "**Existential claim.** Measured on %s of %s: %s. It "
-                   "follows that this is possible on at least this data.",
-    "comparative": "**Comparative claim.** Measured on %s of %s: %s.",
-    "universal": "**Universal claim.** Measured on %s of %s: %s.",
+# The author's own instruction on how a claim should read: "we did this
+# experiment E on these specific samples S and had this result R, so it is
+# possible". So every run is listed on its own line with its own sample and its
+# own result, and the consequence the tier permits comes last and separately.
+# An earlier version printed only the strongest observation, which hid the
+# other corpus entirely while still counting it towards the strength.
+TIER_CONSEQUENCE = {
+    "scoped": "That is what those runs produced. Nothing follows from it "
+              "beyond them.",
+    "existential": "So it is possible on that data. Nothing is claimed about "
+                   "other data, other clips, or the method in general.",
+    "comparative": "So the difference holds across the corpora tested, and not "
+                   "necessarily beyond them.",
+    "universal": "The evidence spans enough corpora to state this generally.",
 }
+
+TIER_LABEL = {"scoped": "Scoped claim", "existential": "Existential claim",
+              "comparative": "Comparative claim", "universal": "Universal claim"}
+
+
+def experiment_of(observation):
+    """A readable name for the run an observation came from.
+
+    Taken from the source path, because that is the thing a reader can open.
+    An `experiment` field overrides it when the path is not self-explaining.
+    """
+    named = observation.get("experiment")
+    if named:
+        return named
+    source = observation.get("source") or ""
+    parts = [p for p in source.split("/") if p]
+    for part in reversed(parts):
+        if part not in ("summary.csv", "metrics.json") and "." not in part:
+            return part
+    return parts[-2] if len(parts) > 1 else (source or "an unrecorded run")
 
 
 def claim_evidence(claim, plan):
@@ -242,12 +269,19 @@ def claim_sentence(claim, plan):
                 "floor). Current hypothesis, not a finding: %s."
                 % (claim.get("id"), e, TIER_BAR[-1][1], claim.get("asserts")))
     datasets = sorted(set(d for o in obs for d in (o.get("datasets") or [])))
-    corpus = ", ".join(datasets) if datasets else "an unnamed corpus"
-    count = "%d dataset%s" % (len(datasets), "" if len(datasets) == 1 else "s")
-    total = sum(o.get("n") or 0 for o in obs)
-    sample = "%s independent unit%s" % (total, "" if total == 1 else "s")
-    detail = "%s (%s, strength %.2f)" % (corpus, count, e)
-    return TIER_FRAME[tier] % (sample, detail, best.get("what", ""))
+    lines = ["**%s.**" % TIER_LABEL[tier], ""]
+    for o in sorted(obs, key=lambda x: experiment_of(x)):
+        corpora = ", ".join(o.get("datasets") or ["an unnamed corpus"])
+        lines.append("- In **%s**, on %s clips of %s: %s."
+                     % (experiment_of(o), o.get("n"), corpora,
+                        (o.get("what") or "").rstrip(".")))
+        if o.get("caveat"):
+            lines.append("  *%s*" % o["caveat"])
+    lines += ["",
+              "%s Evidence strength **%.2f** across **%d dataset%s**."
+              % (TIER_CONSEQUENCE[tier], e, len(datasets),
+                 "" if len(datasets) == 1 else "s")]
+    return "\n".join(lines)
 
 
 def render_claims(plan):
@@ -462,6 +496,72 @@ def next_unit(plan, runs_on=None):
 
 
 # --------------------------------------------------------------------------
+# milestones, counted from what is on disk
+# --------------------------------------------------------------------------
+
+def combinations_measured(plan=None, root="."):
+    """(dataset, method) pairs whose declared evidence is on disk.
+
+    Declared in the plan, not detected by globbing. Globbing matched
+    `eval/probe/vidor` and `eval/probe/se_batch`, which hold oracle exports
+    rather than probe results, and missed two real results at the same time.
+    A milestone counter has to be the harder of the two to fool, so it reads a
+    declaration and then checks the file is there.
+    """
+    plan = load() if plan is None else plan
+    out = []
+    for combo in plan.get("combinations", []):
+        path = os.path.join(root, combo.get("evidence", ""))
+        if combo.get("evidence") and os.path.exists(path):
+            out.append("%s x %s" % (combo["dataset"], combo["method"]))
+    return sorted(out)
+
+
+def papers_fully_treated(index_path="notes/lit/index.json"):
+    """Papers carrying all three of summary, deeper notes, and eval detail.
+
+    Two of the three is not one paper. `notes/lit/deep/<id>.md` holds the
+    deeper notes; nothing writes it yet, so this reads zero until that work
+    starts, which is the honest answer.
+    """
+    if not os.path.isfile(index_path):
+        return []
+    with open(index_path) as handle:
+        index = json.load(handle)
+    out = []
+    for paper in index.get("papers", []):
+        has_summary = bool(paper.get("data_text")) and paper.get("has_mechanism")
+        has_detail = bool(paper.get("datasets")) or bool(paper.get("metrics"))
+        has_notes = os.path.isfile("notes/lit/deep/%s.md" % paper["id"])
+        if has_summary and has_detail and has_notes:
+            out.append(paper["id"])
+    return out
+
+
+def milestone_progress(plan):
+    """Countable progress per milestone. Counts artifacts, not intentions."""
+    counters = {
+        "combinations_measured": lambda: combinations_measured(plan),
+        "papers_fully_treated": lambda: papers_fully_treated(),
+        "parked": lambda: [],
+    }
+    rows = []
+    for m in plan.get("milestones", []):
+        got = counters.get(m.get("counter"), lambda: [])()
+        units = [u for u in plan.get("units", [])
+                 if u.get("milestone") == m["id"]]
+        rows.append({
+            "id": m["id"], "title": m["title"],
+            "have": len(got), "target": m.get("target", 0),
+            "detail": got,
+            "units_total": len(units),
+            "units_accepted": sum(1 for u in units
+                                  if u.get("state") == "accepted"),
+        })
+    return rows
+
+
+# --------------------------------------------------------------------------
 # views
 # --------------------------------------------------------------------------
 
@@ -543,11 +643,27 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("command", choices=["next", "render", "check", "score",
                                         "contradictions", "report",
-                                        "sensitivity", "graph", "claims"])
+                                        "sensitivity", "graph", "claims",
+                                        "progress"])
     ap.add_argument("--runs-on", default=None)
     ap.add_argument("--plan", default=None)
     a = ap.parse_args(argv)
     plan = load(a.plan)
+
+    if a.command == "progress":
+        rows = milestone_progress(plan)
+        print("%-5s %-52s %-11s %s" % ("", "milestone", "counted", "units"))
+        for r in rows:
+            bar = "%d of %d" % (r["have"], r["target"])
+            print("%-5s %-52s %-11s %d accepted of %d"
+                  % (r["id"], r["title"][:52], bar,
+                     r["units_accepted"], r["units_total"]))
+        for r in rows:
+            if r["detail"]:
+                print("\n%s counts:" % r["id"])
+                for item in r["detail"]:
+                    print("  %s" % (item,))
+        return 0
 
     if a.command == "claims":
         for c in plan.get("claims", []):
