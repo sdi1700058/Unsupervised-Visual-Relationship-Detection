@@ -45,6 +45,13 @@ SUPERSEDED = {
             "decoder takes bin left edges (SPEC V31)",
     "13 of 14": "window counts from the superseded single-clip run at window 8",
     "14 of 14": "window counts from the superseded single-clip run at window 8",
+    "0.644": "mse_ratio from a 75-frame sampling of one clip; the same clip at "
+             "135 frames is unwinnable, so the figure describes the sampling",
+    "101.44": "planner bbox mse understated by 3/2, because bbox_mse scored an "
+              "empty third object slot and counted it in the denominator; the "
+              "current pair is 20.50 and 152.17",
+    "13.67": "the oracle half of the same 3/2 understatement",
+    "38.1": "E2's pre-correction planner error, paired with the withdrawn 12.0",
     "1.377": "E1's mse_ratio margin, computed over window-times-method rows; "
              "counted per window it is 1.05x",
     "160/160": "E1 row count, not window count; the structured arm has 80 windows",
@@ -53,10 +60,16 @@ SUPERSEDED = {
 }
 
 # A section carrying any of these is understood to have declared itself.
-MARKERS = ("superseded", "pre-review", "withdrawn", "corrected", "wrong",
-           "do not quote")
+MARKERS = ("superseded", "pre-review", "withdrawn", "corrected", "correction",
+           "wrong", "do not quote", "struck")
 
 DEFAULT_PATHS = ("notes/REPORT.md", "notes/docs/*.md")
+
+# Append-only records. A dated entry there quoting a figure that was current on
+# that date is history, not a stale number, and rewriting it would destroy the
+# record. `check_docs.py` already excludes these; the two checkers disagreeing
+# about what counts as history is how CHANGES.md came to be scanned at all.
+HISTORICAL = ("CHANGES.md", "AUDIT.md")
 
 # How far after a hit a marker still counts. A table row is often annotated on
 # the line below it, which is legitimate and must not be reported.
@@ -116,6 +129,8 @@ def main(argv=None):
     for p in patterns:
         paths.extend(sorted(glob.glob(p)) if any(c in p for c in "*?[") else [p])
 
+    paths = [p for p in paths
+             if not any(p.endswith(h) for h in HISTORICAL)]
     hits = find_uncovered(paths)
     scanned = sum(1 for p in paths if os.path.isfile(p))
 

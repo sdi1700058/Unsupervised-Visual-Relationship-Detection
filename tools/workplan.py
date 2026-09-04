@@ -173,8 +173,146 @@ def wording_tier(claim, e):
         return None
     asked = claim.get("claim_type", "scoped")
     if asked not in TIER_ORDER:
-        return licensed
-    return min([asked, licensed], key=TIER_ORDER.index)
+        asked = licensed
+    tier = min([asked, licensed], key=TIER_ORDER.index)
+    # Evidence licenses a tier; only the author grants it. Without this, enough
+    # evidence would silently promote a sentence in a document nobody had read.
+    if tier != "scoped" and not claim.get("approved_by"):
+        return "scoped"
+    return tier
+
+
+# --------------------------------------------------------------------------
+# claim wording, generated into the documents
+# --------------------------------------------------------------------------
+
+CLAIM_START = "<!-- claim: %s -->"
+CLAIM_END = "<!-- /claim -->"
+
+# How each tier is allowed to speak. The scoped form deliberately reports an
+# event and draws no consequence; that is the whole point of it.
+TIER_FRAME = {
+    "scoped": "**Scoped claim.** Measured on %s of %s: %s. This reports what "
+              "happened in one experiment and licenses nothing beyond it.",
+    "existential": "**Existential claim.** Measured on %s of %s: %s. It "
+                   "follows that this is possible on at least this data.",
+    "comparative": "**Comparative claim.** Measured on %s of %s: %s.",
+    "universal": "**Universal claim.** Measured on %s of %s: %s.",
+}
+
+
+def claim_evidence(claim, plan):
+    """The observations a claim rests on."""
+    by_id = dict((o["id"], o) for o in plan.get("observations", []))
+    return [by_id[i] for i in claim.get("evidence", []) if i in by_id]
+
+
+def claim_strength(claim, plan):
+    """A claim's evidence strength, combined **across** corpora.
+
+    Not the strongest single observation. Scoring a claim by its best
+    observation left the independence multiplier inescapable: a second dataset
+    changed nothing, so the arithmetic expression of "one corpus is not enough"
+    could never be satisfied by doing the obvious thing. Registering VidOR
+    beside VidVRD and watching C1 still read `datasets=1` is how that surfaced.
+
+    `support` takes the maximum within a dataset and combines across datasets,
+    so repeating a run on one corpus still buys nothing.
+    """
+    obs = claim_evidence(claim, plan)
+    return support(obs) if obs else 0.0
+
+
+def claim_sentence(claim, plan):
+    """The sentence a claim is licensed to make. Derived, never stored.
+
+    The tier decides the frame and the strongest observation supplies the
+    facts, so the wording cannot outrun the evidence: to say more, add an
+    observation.
+    """
+    obs = claim_evidence(claim, plan)
+    if not obs:
+        return ("**%s has no evidence.** Nothing may be written from it."
+                % claim.get("id", "This claim"))
+    best = max(obs, key=evidence_strength)
+    e = claim_strength(claim, plan)
+    tier = wording_tier(claim, e)
+    if tier is None:
+        return ("**%s: evidence inconclusive** (strength %.2f, below the %.2f "
+                "floor). Current hypothesis, not a finding: %s."
+                % (claim.get("id"), e, TIER_BAR[-1][1], claim.get("asserts")))
+    datasets = sorted(set(d for o in obs for d in (o.get("datasets") or [])))
+    corpus = ", ".join(datasets) if datasets else "an unnamed corpus"
+    count = "%d dataset%s" % (len(datasets), "" if len(datasets) == 1 else "s")
+    total = sum(o.get("n") or 0 for o in obs)
+    sample = "%s independent unit%s" % (total, "" if total == 1 else "s")
+    detail = "%s (%s, strength %.2f)" % (corpus, count, e)
+    return TIER_FRAME[tier] % (sample, detail, best.get("what", ""))
+
+
+def render_claims(plan):
+    """Write each claim's licensed sentence into the documents that state it."""
+    written = []
+    for claim in plan.get("claims", []):
+        body = claim_sentence(claim, plan)
+        start = CLAIM_START % claim["id"]
+        for path in claim.get("appears_in", []):
+            if not os.path.isfile(path):
+                continue
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            if start not in text or CLAIM_END not in text.split(start, 1)[1]:
+                continue
+            head, rest = text.split(start, 1)
+            _, tail = rest.split(CLAIM_END, 1)
+            fresh = head + start + "\n\n" + body + "\n\n" + CLAIM_END + tail
+            if fresh != text:
+                with open(path, "w", encoding="utf-8") as handle:
+                    handle.write(fresh)
+                written.append(path)
+    return written
+
+
+def check_claims(plan):
+    """Documents whose stated wording has drifted from what is licensed."""
+    problems = []
+    for claim in plan.get("claims", []):
+        cid = claim.get("id", "?")
+        appears = claim.get("appears_in") or []
+        e = claim_strength(claim, plan)
+        licensed = licensed_tier(e)
+        if licensed and licensed != "scoped" and not claim.get("approved_by"):
+            asked = claim.get("claim_type", "scoped")
+            grantable = (min([asked, licensed], key=TIER_ORDER.index)
+                         if asked in TIER_ORDER else licensed)
+            if grantable != "scoped":
+                problems.append(
+                    "%s awaits your sign-off: at strength %.2f the evidence "
+                    "licenses '%s', and it stays written as scoped until you "
+                    "grant it" % (cid, e, grantable))
+        if not appears:
+            problems.append("%s names no document; a claim nobody states is a "
+                            "claim nobody can check" % cid)
+            continue
+        body = claim_sentence(claim, plan)
+        start = CLAIM_START % cid
+        for path in appears:
+            if not os.path.isfile(path):
+                problems.append("%s appears_in %s, which is not on disk"
+                                % (cid, path))
+                continue
+            with open(path, encoding="utf-8") as handle:
+                text = handle.read()
+            if start not in text or CLAIM_END not in text.split(start, 1)[1]:
+                problems.append("%s has no generated block in %s; add the "
+                                "markers so the wording cannot drift"
+                                % (cid, path))
+                continue
+            current = text.split(start, 1)[1].split(CLAIM_END, 1)[0].strip()
+            if current != body.strip():
+                problems.append("%s is out of date in %s; run "
+                                "tools/workplan.py render" % (cid, path))
+    return problems
 
 
 # --------------------------------------------------------------------------
@@ -388,14 +526,13 @@ def render_score(plan):
     lines = ["claim  e     tier         wording      inputs"]
     for c in plan.get("claims", []):
         obs = [by_id[i] for i in c.get("evidence", []) if i in by_id]
-        e = max([evidence_strength(o) for o in obs] or [0.0])
-        best = max(obs, key=evidence_strength) if obs else None
+        e = claim_strength(c, plan)
         detail = ""
-        if best:
-            detail = ("tier=%s n=%s datasets=%d paired=%s"
-                      % (tier_of(best), best.get("n"),
-                         len(set(best.get("datasets") or [])),
-                         bool(best.get("paired"))))
+        if obs:
+            datasets = set(d for o in obs for d in (o.get("datasets") or []))
+            detail = ("observations=%d n=%d datasets=%d"
+                      % (len(obs), sum(o.get("n") or 0 for o in obs),
+                         len(datasets)))
         lines.append("%-6s %.2f  %-12s %-12s %s"
                      % (c.get("id"), e, c.get("claim_type", "-"),
                         wording_tier(c, e) or "none", detail))
@@ -405,14 +542,36 @@ def render_score(plan):
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("command", choices=["next", "render", "check", "score",
-                                        "contradictions", "report"])
+                                        "contradictions", "report",
+                                        "sensitivity", "graph", "claims"])
     ap.add_argument("--runs-on", default=None)
     ap.add_argument("--plan", default=None)
     a = ap.parse_args(argv)
     plan = load(a.plan)
 
+    if a.command == "claims":
+        for c in plan.get("claims", []):
+            print("%s  %s" % (c["id"], claim_sentence(c, plan)))
+            print()
+        return 0
+
+    if a.command == "sensitivity":
+        for kind, spec in sorted(plan.get("decisions", {}).items()):
+            weights = spec.get("weights")
+            print("%s: %s" % (kind, "no weights set" if not weights
+                              else "weights %s" % weights))
+        print("\nPass candidate scores to workplan.sensitivity() to see what "
+              "would flip a ranking; DATASETS.md carries the current one.")
+        return 0
+
+    if a.command == "graph":
+        print("dataset and metric usage is charted by "
+              "tools/lit/render_index.py, which writes "
+              "notes/lit/dataset_usage.svg")
+        return 0
+
     if a.command == "check":
-        problems = check(plan)
+        problems = check(plan) + check_claims(plan)
         if not problems:
             print("plan is consistent: %d units, %d assumptions, %d claims"
                   % (len(plan.get("units", [])), len(plan.get("assumptions", [])),
@@ -450,6 +609,8 @@ def main(argv=None):
             with open(path, "w") as handle:
                 handle.write(text)
             print("wrote %s" % path)
+        for touched in render_claims(plan):
+            print("wrote the claim block in %s" % touched)
         return 0
 
     if a.command == "score":

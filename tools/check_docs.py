@@ -75,13 +75,25 @@ PATH_PAT = re.compile(
     r"\b((?:tools|sh|experiments|latplan|eval|data|out|logs|notes)"
     r"/[A-Za-z0-9_./-]+\.(?:py|sh|md|json|csv|txt|npz|npy|yml|html|svg))")
 
+# A dated row records what was true on that date.
+DATED = re.compile(r"\b20\d\d-\d\d-\d\d\b")
+
 # Standing rule: never write that a TASK is complete. Reporting that a chunk of
 # implementation is finished is fine, so the pattern targets the subjects that
 # name work items.
+# Two forms, because a review found the second slipping past: the copula form
+# ("the pipeline is finished") and the bare participle ("before marking done",
+# "already settled").
 DONE_PAT = re.compile(
     r"\b(pipeline|task|evaluation|project|phase|thesis|work|dataset search)\b"
     r"[^.\n]{0,40}?\b(is|are|was|were)\s+(now\s+)?"
-    r"(complete|completed|finished|settled|closed)\b", re.I)
+    r"(complete|completed|finished|settled|closed)\b"
+    r"|(?<!not )(?<!NOT )\b(mark(ing|ed)?|declare|call(ing)?)\s+"
+    r"(it\s+|this\s+|them\s+)?(done|complete|finished|settled)\b", re.I)
+
+# A bare "already settled" was tried and withdrawn the same hour: with no
+# work-item subject it fired on "the arithmetic is already settled without a
+# planner run", which is a statement about evidence and not about a task.
 
 # Lines that quote the rule rather than break it.
 DONE_EXEMPT = re.compile(r"never write|forbidden|do not (write|say)|"
@@ -89,7 +101,9 @@ DONE_EXEMPT = re.compile(r"never write|forbidden|do not (write|say)|"
                          r"was not the assistant|SUPERSEDED|superseded|"
                          r"you do not decide|the user does|only the user|"
                          # Prose describing this check is not prose breaking it.
-                         r"claims that a task|checks (for|three)",
+                         r"claims that a task|checks (for|three)|"
+                         # The rule explaining itself, and headings that negate.
+                         r"not marked|it stops work|wrong on the facts",
                          re.I)
 
 
@@ -121,6 +135,10 @@ def completion_claims(docs=None):
     for path in docs:
         with open(path, encoding="utf-8", errors="replace") as handle:
             for i, line in enumerate(handle, 1):
+                # A dated row is a record of what was true then, the same
+                # exemption the stale-count check makes.
+                if DATED.search(line):
+                    continue
                 if DONE_PAT.search(line) and not DONE_EXEMPT.search(line):
                     hits.append({"doc": path, "line": i,
                                  "text": line.strip()[:90]})
@@ -146,11 +164,6 @@ def _actual_test_count():
 # one feature is a component count and says nothing about the total.
 SUITE_MARKER = re.compile(r"unittest discover|test suite|tests pass|"
                           r"tests?, OK|suite is at", re.I)
-
-# A dated row records what was true on that date. Correct history, not a stale
-# number, and rewriting it would destroy the record.
-DATED = re.compile(r"\b20\d\d-\d\d-\d\d\b")
-
 
 # "not supplied" and "measured as nothing" are different. Conflating them made
 # this function run the whole suite as a subprocess from inside that same
