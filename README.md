@@ -1,6 +1,6 @@
 # labeled-fosae — User Guide
 
-A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video: `vidvrd`, `actiongenome`, and `videonet`.
+A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video. Three corpora are measured: VidVRD, VidOR, and Action Genome. More candidates have a verified download route. `bash sh/dataset.sh list` prints the stage that each corpus reached.
 
 The document is a runbook. It tells you how to install the code, how to bake data, how to train the model, and how to look at the results. The document does not explain the theory. For the theory, read `notes/docs/THEORY.md`.
 
@@ -15,7 +15,9 @@ The FOSAE paper is at [arXiv:1902.08093](https://arxiv.org/abs/1902.08093). Read
 
 ## 2. What This Fork Adds
 
-- **New video domains.** `vidvrd`, `actiongenome`, and `videonet` loaders under `latplan/puzzles/puzzle_vidvrd.py`, `latplan/domains/video/actiongenome.py`, and `sh/download_videonet.sh`.
+- **New video domains.** Two bake loaders: `latplan/puzzles/puzzle_vidvrd.py` and `latplan/domains/video/actiongenome.py`. `sh/download_videonet.sh` downloads VideoNet, but the VideoNet loader is not written yet.
+- **One interface for every corpus.** `bash sh/dataset.sh <name> <stage>` runs the five stages: `download`, `prepare`, `screen`, `oracle`, and `verify`. `bash sh/dataset.sh list` prints the stage that each corpus reached. A stage that exits with code 3 has a verified route and no code behind it.
+- **Ground-truth box readers for the planner.** `tools/planner/oracle.py` reads boxes from the VidVRD annotation format, which VidOR also uses, and from Action Genome and Something-Else. The oracle reads boxes only, so it runs without any video file.
 - **Per-video overfit pipeline.** `setup-dataset.py video_vidvrd <cat> --video-id <VID>` bakes a single-video training set. The training pipeline reads it through the `NPZ_PATH` env var.
 - **Env-var knobs for hyperparameters.** `LR`, `PREENC_LAYERS`, `PREENC_DIM`, `MAX_TEMPERATURE`, `ZEROSUPPRESS`, `DROPOUT`, `NOISE`, `NO_EARLYSTOP`, `EPOCH`, `TRANSITION_MODE`, `BATCH`, `FPS`.
 - **Sherlock HPC workflow.** `sh/submit.sh` composes a hierarchical output directory with a sha1 hash. `run_training.sh` runs post-train hooks: `tools/replot.py`, `viz/recon.py`, and `tools/plot_training_curve.py`.
@@ -54,9 +56,22 @@ python3 -c "from tensorflow.python.client import device_lib; print([d.name for d
 # expect: output contains `/device:GPU:0` AND no `libcudart.so.10.0` dlopen warning
 ```
 
-## 4. Bake a Dataset
+## 4. Get and Bake a Dataset
 
 The bake step is one Python command per data setup. The bake writes an `.npz` file into `data/npz/`.
+
+### 4.0 Get a corpus
+
+`sh/dataset.sh` is the one interface for a corpus. It downloads, unpacks, screens, and builds the ground-truth exports.
+
+```bash
+bash sh/dataset.sh list                            # which stage each corpus reached
+bash sh/dataset.sh vidvrd download                 # fetch the archives
+bash sh/dataset.sh vidor all                       # download, prepare, screen, oracle, verify
+bash sh/dataset.sh actiongenome verify             # say what is present and what is missing
+```
+
+A stage returns exit code 3 when the download route is verified but the code behind the stage is not written. `notes/lit/dataset_sources.json` holds the source of each route and the date that the URL was last read.
 
 ### 4.1 Puzzle datasets
 
@@ -92,6 +107,9 @@ Flags:
 - `--fill-annotations` — forward-fill and backward-fill the trajectory when the annotation density is lower than the frame rate. VidVRD sample: dog-frisbee video goes from 60 to 135 states.
 - `--patch-size N` — patch resolution (default 32).
 - `--out-name STR` — output file stem.
+- `--augment LIST` — clip-consistent augmentations: `hflip`, `translate`, `rescale`, `reverse`. Each one applies to a whole clip, so the motion stays intact.
+- `--augment-copies N` — randomized copies per augmentation that takes a random parameter.
+- `--annotations-dir DIR`, `--frames-dir DIR` — override the default directory layout.
 
 ### 4.3 Video per-category (all-video-in-category, deprecated for main experiment)
 
@@ -128,11 +146,13 @@ Critical override knobs for video overfit:
 | Knob | Overfit value | Default (video) | Reason |
 |------|---------------|-----------------|--------|
 | `LR` | `0.001` | `0.0001` | The video default is too slow for a small overfit set. |
-| `PREENC_LAYERS` | `0` | `2` | The pre-encoder adds capacity that a small overfit set does not need. |
+| `PREENC_LAYERS` | `0` or `2` | `2` | Read the note below the table before you choose. |
 | `NO_EARLYSTOP` | `1` | not set | `EarlyStopMixin` kills training before the Gumbel anneal completes. |
 | `MAX_TEMPERATURE` | `1.0` | `5.0` | The paper default is too hot for the Gumbel discretization. MNIST baseline uses `1.0`. |
 | `--fill-annotations` (bake) | on | off | VidVRD annotation density (~13 fps) is lower than the frame rate (30 fps). |
 | `--max-objects K` (bake) | `real + 1` | 10 | 8 pad slots swamp the reconstruction loss on a 2-object scene. |
+
+**Note on the pre-encoder.** `PREENC_LAYERS=0` matched the MNIST baseline on the first video overfits, and the example above keeps it. A later run with `PREENC_LAYERS=2 PREENC_DIM=1000` reached `val_BCE = 0.1216`, the best measured video result. No planner run used that model yet. Run both arms and compare.
 
 ### 5.2 MNIST puzzle baseline
 
@@ -215,27 +235,57 @@ For every trained model, check three things.
 2. **Training curve.** Open `training_curve.png`. All four panels should trend downwards and plateau. A flat line means no learning.
 3. **Boolean patterns.** Open `booleans_test.png`. Predicates should vary across states. A predicate that is always on or always off is collapsed.
 
-For a planner-eval run (Phase H), see `notes/docs/STATUS.md §Phase H` and `tools/planner/plan_video.py`.
+For a planner run, see `notes/docs/STATUS.md` and `tools/planner/plan_video.py`. Two tools turn a planner result into something readable:
 
-## 8. Where to Find More
+```bash
+MPLCONFIGDIR=$TMPDIR/mpl python3 tools/planner/viz_plannability.py eval/planner/<model>
+python3 tools/planner/make_report.py eval/planner/<model>
+```
+
+`viz_plannability.py` writes three PNG figures and needs matplotlib. `make_report.py` writes `report.html` and `chart.svg` from the standard library only, so it also runs on Python 3.6. `notes/docs/VIZ.md` is the full figure catalogue.
+
+## 8. Check the Repository
+
+Three commands say whether the repository still holds together.
+
+```bash
+.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 601 tests
+python3 tools/check_docs.py                                          # the documents
+python3 tools/workplan.py check                                      # the plan
+```
+
+Run the test suite under `.venv-local/bin/python`. Under a different interpreter some tests skip, and a skipped test hides a failure. `notes/QUALITY.md` holds the full gate and the order to run it in.
+
+`sh/baseline_verify.sh` is the model sentinel. No test in the suite trains anything, so run the sentinel after any change that touches training.
+
+## 9. Where to Find More
 
 - `notes/docs/THEORY.md` — FOSAE theory and architecture.
 - `notes/docs/AUDIT.md` — code alignment with the paper and the upstream repository. Read this before any change to `strips.py` or the loaders.
 - `notes/docs/SPEC.md` — task grid, invariants, and gate list.
 - `notes/docs/STATUS.md` — weekly progress and the phase timeline.
+- `notes/docs/DATASETS.md` — the corpora in use, with the reason for each one.
+- `notes/docs/DATASETS_CONSIDERED.md` — every corpus that came up, and why each one won or lost.
+- `notes/docs/EVAL.md` — the evaluation methods and metrics that this work uses.
+- `notes/docs/EVAL_CONSIDERED.md` — every metric and protocol from the literature, adopted or not.
+- `notes/docs/RELATED_WORK.md` — the paper summaries and the shortlist.
 - `notes/docs/VIZ.md` — figure catalogue.
 - `notes/docs/CHANGES.md` — every change from the upstream fork.
 - `notes/docs/WORKING_RULES.md` — working rules and conventions.
 - `notes/docs/STE.md` — the Simplified Technical English style guide.
 - `notes/docs/SOURCES.md` — paper links and dataset links.
+- `notes/QUALITY.md` — the quality gate that section 8 belongs to.
 
-## 9. Citation
+These documents are outside version control, so a clone does not carry them.
+
+## 10. Citation
 
 If you cite this work, cite the source paper and the LatPlan predecessor.
 
 - Asai, M. (2019). *Unsupervised Grounding of Plannable First-Order Logic Representation from Images*. ICAPS 2019. [arXiv:1902.08093](https://arxiv.org/abs/1902.08093).
 - Asai, M. and Fukunaga, A. (2018). *Classical Planning in Deep Latent Space: Bridging the Subsymbolic-Symbolic Boundary*. IJCAI 2018. [arXiv:1705.05787](https://arxiv.org/abs/1705.05787).
 
-## 10. Change log for this file
+## 11. Change log for this file
 
-- 2025-08-02: STE verification pass against the real `STE.md` rules. All prose sentences pass the ≤ 25-word descriptive limit (Rule 6.3). Every command block preserved verbatim (Rule 11 STE.md — code stays unchanged). Fixed L46 `which loads` → `That file loads` per GR-1 (prefer `that` conjunction; split the relative clause into a new sentence for clarity). Removed §9 duplicate `Related Files` (Section 8 `Where to Find More` already lists every file). Result: 250 → 240 lines.
+- 2026-09-05: Review against the repository. Added section 4.0 for `sh/dataset.sh` and section 8 for the checks. Named VidOR and Action Genome as measured corpora. Corrected the VideoNet claim, because the loader is not written. Added the augmentation and directory flags to section 4.2. Added the measured counter-evidence for `PREENC_LAYERS`. Renumbered the last three sections.
+- 2026-08-02: STE verification pass against the real `STE.md` rules. All prose sentences pass the 25-word descriptive limit (Rule 6.3). Every command block stays verbatim, because the scope section of `STE.md` exempts code. Fixed L46 `which loads` to `That file loads` per GR-1. Removed the duplicate `Related Files` section, because `Where to Find More` already lists every file.

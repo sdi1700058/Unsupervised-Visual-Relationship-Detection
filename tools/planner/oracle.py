@@ -228,6 +228,18 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     incomparable while the docstring invited exactly that comparison: with
     `--max-objects 3` and one real object, the printed floor was a third of
     the truth (8.11 became 2.70).
+
+    **The caller chooses the frames, and the choice is not cosmetic.** This
+    averages over whatever is handed to it, so a floor taken over one window's
+    intermediate frames and a floor taken over a whole clip are different
+    numbers, and any ratio built on them is a different number too. Both are
+    in circulation: `common/harness.py` takes the window, while the paired
+    figure of 2026-08-31 took the whole clip and reused that one value for
+    every window of the clip. Measured over 19 VidVRD clips at window 16, the
+    median oracle ratio is **1.70 per window against 1.56 per clip** — the same
+    runs, the same code here, a 9% gap from the frame set alone. Whichever is
+    meant has to be said out loud; `tools/planner/p1_floor.py` writes both,
+    under names that cannot be mistaken for each other.
     """
     boxes = np.asarray(boxes, dtype=np.float64)
     z = boxes_to_latents(boxes, bins_x, bins_y, width, height,

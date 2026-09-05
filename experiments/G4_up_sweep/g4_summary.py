@@ -85,9 +85,18 @@ def export_facts(path):
     # No allow_pickle. The export holds arrays and scalars only, so the pickle
     # path is not needed and refusing it keeps a hostile npz from executing.
     data = np.load(path)
-    out = {"boxmse": None, "clips": None, "frames": None}
+    out = {"boxmse": None, "clips": None, "frames": None, "distinct": None}
     if "latents" in data.files:
-        out["frames"] = int(data["latents"].shape[0])
+        lat = np.asarray(data["latents"])
+        out["frames"] = int(lat.shape[0])
+        # How many distinct codes the encoder produced. An export with one
+        # distinct code is dead: every frame encodes identically, so the
+        # planner has no state to search and the cell scores badly for a
+        # reason that has nothing to do with U or P. Four exports already on
+        # disk are dead this way, all of them at U20_A2_P10 or U40_A2_P20,
+        # and every one of them was read as a planning result.
+        flat = lat.reshape(lat.shape[0], -1)
+        out["distinct"] = int(len(np.unique(flat, axis=0)))
     if "decoded_boxes" in data.files and "gt_boxes" in data.files:
         dec = np.asarray(data["decoded_boxes"], dtype="float64")
         gt = np.asarray(data["gt_boxes"], dtype="float64")
@@ -172,12 +181,13 @@ def collect(root=ROOT):
         with open(summary) as handle:
             rows = list(csv.DictReader(handle))
         facts = export_facts(exports[key]) if key in exports else \
-            {"boxmse": None, "clips": None, "frames": None}
+            {"boxmse": None, "clips": None, "frames": None, "distinct": None}
         kept, cross = split_windows(rows, facts["clips"])
         record = summarise_rows(kept)
         record.update({
             "u": key[0], "p": key[1], "bits": key[0] * key[1],
             "boxmse": facts["boxmse"], "frames": facts["frames"],
+            "distinct": facts["distinct"],
             "cross_rows": len(cross),
         })
         record.update(trained.get(key, {"best_val": None, "epochs": 0,
@@ -193,8 +203,13 @@ def collect(root=ROOT):
                       "windows": 0, "solved": 0, "scored": 0, "solve_rate": 0.0,
                       "ratio": None, "mse": None, "base": None, "iou": None,
                       "beats": 0, "boxmse": None, "frames": None,
-                      "cross_rows": 0}
+                      "distinct": None, "cross_rows": 0}
         cells[key].update(info)
+        # A cell that trained and exported but never planned is the likeliest
+        # place for a dead latent to hide, because nothing downstream ran to
+        # notice. Read the export here so the reading can still name it.
+        if key in exports:
+            cells[key].update(export_facts(exports[key]))
     return [cells[k] for k in sorted(cells)]
 
 
@@ -247,6 +262,22 @@ def reading(cells):
     key, label, is_val_loss = recon_axis(cells)
     scored = [c for c in cells if c["ratio"] is not None]
     lines = []
+
+    # Dead cells come first, before any ranking. A cell whose encoder emitted
+    # one code is not a hard cell, it is an absent measurement, and letting it
+    # sit in the grid makes the surviving shape look like the winning shape.
+    dead = [c for c in cells if c.get("distinct") is not None
+            and c["distinct"] <= 1]
+    if dead:
+        lines.append(
+            "**%d of %d cells produced a dead latent** and say nothing about "
+            "U or P. In each one the encoder gave a single code for every "
+            "frame, so there was no state for the planner to search: %s. "
+            "Read the rest of this grid as covering only the live cells, and "
+            "treat a shape that is dead here as untested rather than as "
+            "beaten."
+            % (len(dead), len(cells),
+               ", ".join("U%s P%s" % (c.get("u"), c.get("p")) for c in dead)))
 
     if not scored:
         lines.append(
