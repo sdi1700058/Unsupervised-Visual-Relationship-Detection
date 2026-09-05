@@ -51,9 +51,13 @@ MEM_KB="${MEM_KB:-6000000}"
 for pair in "structured:${A}" "unstructured:${B}"; do
     name="${pair%%:*}"; path="${pair#*:}"
     echo "=== planning: ${name} ==="
+    # The cap is applied here, in a subshell. It used to be defined above and
+    # never used, so every E1 planner run was uncapped -- the exact condition
+    # that crashed this workstation once.
+    ( ulimit -v "${MEM_KB}"
     bash tools/planner/eval_plannability.sh "${path}" \
         --methods bfs,pddl --window "${WINDOW:-16}" --budget 30 --name "E1-${name}" \
-        2>&1 | tail -3
+        2>&1 | tail -3 )
     echo
 done
 

@@ -13,6 +13,11 @@ setup(name='latplan',
       install_requires=[
           'tensorflow-gpu==1.15.2',
           'keras==2.2.5',
+          # These pins are for a bare `pip install .`. On the cluster and in
+          # the conda environment, environment.yml is the authority and this
+          # package is installed with --no-deps; the two files disagree on h5py
+          # and protobuf, and re-resolving from here would change a working
+          # environment underneath itself.
           'h5py==2.10.0',
           'numpy>=1.16.0,<1.24.0',
           'scipy==1.4.1',

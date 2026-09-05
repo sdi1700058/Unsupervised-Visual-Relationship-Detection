@@ -207,6 +207,45 @@ TIER_CONSEQUENCE = {
     "universal": "The evidence spans enough corpora to state this generally.",
 }
 
+# This project's own vocabulary, glossed wherever a claim uses it. Ordinary
+# technical words are left alone; these are the ones invented here or given a
+# local meaning. A claim needing a footnote is not a worse claim, but a claim
+# that silently assumes the reader knows "crossover" is.
+GLOSSARY = {
+    "window": ("the planner is given two frames this many apart and has to "
+               "reconstruct the frames between them"),
+    "mse_ratio": ("planner error divided by the error of simply drawing a "
+                  "straight line between the two endpoint boxes; below 1 means "
+                  "the planner beat the straight line"),
+    "floor_ratio": ("planner error divided by the quantisation floor; 1.0 would "
+                    "mean the planner is as good as this representation allows"),
+    "quantisation floor": ("the error left after rounding a box onto the "
+                           "latent's grid, so the best any representation at "
+                           "that resolution could achieve"),
+    "crossover": ("the quantisation floor divided by the straight-line error; "
+                  "below 1 means beating the straight line is arithmetically "
+                  "possible for that clip, whatever the model"),
+    "oracle": ("latents built directly from ground-truth boxes with no model in "
+               "the loop, so whatever it scores is the ceiling"),
+    "distinct windows": ("counted once per start-and-goal pair, not once per "
+                         "row, because each window is scored by more than one "
+                         "planner"),
+    "screened": ("selected in advance by the crossover criterion as clips where "
+                 "beating the straight line is arithmetically possible"),
+    "predicate tier": ("our own grouping of relation words into geometric, "
+                       "configurational and coupled, by what the words mean"),
+    "temporal compression": ("frames a fixed distance apart sitting fewer "
+                             "transitions apart in the latent than in time"),
+}
+
+
+def glossed(text):
+    """The project terms a piece of text uses, with their definitions."""
+    low = text.lower()
+    return [(term, meaning) for term, meaning in sorted(GLOSSARY.items())
+            if term in low]
+
+
 TIER_LABEL = {"scoped": "Scoped claim", "existential": "Existential claim",
               "comparative": "Comparative claim", "universal": "Universal claim"}
 
@@ -281,6 +320,10 @@ def claim_sentence(claim, plan):
               "%s Evidence strength **%.2f** across **%d dataset%s**."
               % (TIER_CONSEQUENCE[tier], e, len(datasets),
                  "" if len(datasets) == 1 else "s")]
+    terms = glossed("\n".join(lines))
+    if terms:
+        lines += ["", "*Terms used here:* " + "; ".join(
+            "**%s**, %s" % (t, m) for t, m in terms) + "."]
     return "\n".join(lines)
 
 

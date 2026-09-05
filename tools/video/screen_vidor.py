@@ -110,6 +110,74 @@ def summarise(rows, window):
     }
 
 
+def render_svg(summary, rows, path):
+    """The crossover distribution, and where the winnable line falls.
+
+    Every piece of work needs something to look at. This screen wrote only JSON
+    until 2026-09-05, which made it the one measured corpus with no figure.
+
+    A histogram rather than a single bar, because the winnable *fraction* is one
+    number over a distribution and the distribution is what a reader needs: the
+    clips sit between 0.014 and 3.9, and a bar saying "63%" hides that entirely.
+    """
+    values = sorted(r[0] for r in rows)
+    if not values:
+        return None
+    edges = [0.0, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0, 2.0, 5.0, float("inf")]
+    # Escaped, not literal: a raw < or > in SVG text content is invalid XML,
+    # and this project has shipped an unopenable figure that way twice.
+    labels = ["&lt;.05", ".05-.1", ".1-.25", ".25-.5", ".5-.75", ".75-1",
+              "1-2", "2-5", "&gt;5"]
+    counts = [0] * (len(edges) - 1)
+    for v in values:
+        for i in range(len(edges) - 1):
+            if edges[i] <= v < edges[i + 1]:
+                counts[i] += 1
+                break
+    top = max(counts) or 1
+    w, h, pad, base = 660, 300, 54, 226
+    step = (w - 2 * pad) // len(counts)
+    parts = ['<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
+             'viewBox="0 0 %d %d">' % (w, h, w, h),
+             '<style>text{font-family:sans-serif}.t{font-size:15px;'
+             'font-weight:bold}.l{font-size:10px}.v{font-size:10px;'
+             'font-weight:bold}.n{font-size:11px;fill:#555}</style>',
+             '<rect width="%d" height="%d" fill="white"/>' % (w, h),
+             '<text x="%d" y="26" class="t">VidOR: crossover at window %d, '
+             'over %d clips</text>' % (pad, summary["window"],
+                                       summary["clips_screened"])]
+    for i, count in enumerate(counts):
+        height = int(150 * count / top)
+        x = pad + i * step
+        # Left of the 1.0 boundary is winnable; right of it is not.
+        fill = "#2b6cb0" if edges[i + 1] <= 1.0 else "#c05621"
+        parts.append('<rect x="%d" y="%d" width="%d" height="%d" fill="%s"/>'
+                     % (x, base - height, step - 6, height, fill))
+        if count:
+            parts.append('<text x="%d" y="%d" class="v">%d</text>'
+                         % (x, base - height - 4, count))
+        parts.append('<text x="%d" y="%d" class="l">%s</text>'
+                     % (x, base + 14, labels[i]))
+    boundary = pad + 6 * step - 3
+    parts.append('<line x1="%d" y1="60" x2="%d" y2="%d" stroke="#333" '
+                 'stroke-dasharray="4,3"/>' % (boundary, boundary, base))
+    parts.append('<text x="%d" y="56" class="n">crossover 1.0: left of this '
+                 'line, beating a straight line is arithmetically possible'
+                 '</text>' % (pad))
+    parts.append('<text x="%d" y="%d" class="n">%d of %d winnable (%.0f%%), '
+                 'median %.3f. A winnable clip is not a clip the planner wins '
+                 'on; see WORKPLAN Q6.</text>'
+                 % (pad, h - 22, summary["winnable"],
+                    summary["clips_screened"],
+                    100 * summary["winnable_fraction"],
+                    summary["median_crossover"]))
+    parts.append("</svg>")
+    svg = "\n".join(parts)
+    with open(path, "w") as handle:
+        handle.write(svg)
+    return path
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--window", type=int, default=16)
@@ -145,6 +213,9 @@ def main(argv=None):
     with open(os.path.join(OUT_DIR, "vidor_screen.json"), "w") as handle:
         json.dump(summary, handle, indent=2)
     print("wrote %s/vidor_screen.json" % OUT_DIR)
+    figure = render_svg(summary, rows, os.path.join(OUT_DIR, "vidor_screen.svg"))
+    if figure:
+        print("wrote %s" % figure)
 
     if a.list:
         directory = os.path.dirname(a.list)
