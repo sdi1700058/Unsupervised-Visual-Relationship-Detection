@@ -114,15 +114,28 @@ def evidence_strength(observation):
 
 
 def _by_dataset(observations):
-    """The strongest observation per dataset.
+    """The strongest observation per dataset, valued as a single dataset.
 
     Taking the maximum **within** a dataset is what stops five runs on one
     dataset from looking like five independent findings.
+
+    **Each share is valued at what one dataset is worth, deliberately.** The
+    reward for breadth belongs to the noisy-or that combines these shares, and
+    applying it here as well counted it twice. Found on 2026-09-05: an
+    observation naming three datasets scored 0.94, while the same measurement
+    written as three observations naming one dataset each scored 0.66. The
+    strength depended on how the row was typed rather than on the evidence,
+    and the larger number was the one being quoted.
     """
     best = {}
     for o in observations:
-        for ds in (o.get("datasets") or ["?"]):
-            e = evidence_strength(o)
+        datasets = o.get("datasets") or []
+        if not datasets:
+            continue
+        share = dict(o)
+        share["datasets"] = datasets[:1]
+        e = evidence_strength(share)
+        for ds in datasets:
             if e > best.get(ds, -1):
                 best[ds] = e
     return best
