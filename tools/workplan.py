@@ -680,6 +680,77 @@ def combinations_measured(plan=None, root="."):
     return sorted(set(out))
 
 
+def _combination_halves(plan, root="."):
+    """`{(dataset, method): the set of sources whose evidence is on disk}`."""
+    halves = {}
+    for combo in plan.get("combinations", []):
+        evidence = combo.get("evidence", "")
+        if not evidence or not os.path.exists(os.path.join(root, evidence)):
+            continue
+        key = (combo["dataset"], combo["method"])
+        # Absent means oracle. Every combination recorded before the source
+        # field existed was an oracle run, so the default must not be trained.
+        halves.setdefault(key, set()).add(combo.get("source", "oracle"))
+    return halves
+
+
+def paired_combinations(plan=None, root="."):
+    """Dataset and method pairs measured at BOTH sources.
+
+    The target of twenty is written in these, at the author's instruction on
+    2026-09-05. A trained number cannot be read on its own: whether an
+    `mse_ratio` of 9.77 is bad depends entirely on what the oracle scored on
+    the same clips, the same windows and the same frames. The oracle gives the
+    ceiling, the trained run gives the actual, and the gap is the finding.
+
+    Counting halves would let cheap oracle runs read as progress, and the
+    oracle needs no cluster at all.
+    """
+    plan = load() if plan is None else plan
+    halves = _combination_halves(plan, root)
+    return sorted("%s x %s" % key for key, sources in halves.items()
+                  if set(["oracle", "trained"]) <= sources)
+
+
+def screening_only(plan=None, root="."):
+    """Halves without their twin. Real work, reported on its own line.
+
+    Screening decides what is worth cluster time, so it is wanted. It is kept
+    off the headline count so that the cheap half cannot stand in for the
+    expensive one.
+    """
+    plan = load() if plan is None else plan
+    halves = _combination_halves(plan, root)
+    out = []
+    for key, sources in halves.items():
+        if set(["oracle", "trained"]) <= sources:
+            continue
+        for source in sorted(sources):
+            out.append("%s x %s (%s)" % (key[0], key[1], source))
+    return sorted(out)
+
+
+def datasets_trained(plan=None, root="."):
+    """Datasets a model has actually been trained on.
+
+    This is the supervisor's requirement C, and the author named it the
+    important number on 2026-09-05. Training needs extracted frames, and on
+    2026-09-05 only VidVRD had any: 326,198 of them, against zero for VidOR,
+    Action Genome and Something-Else. So this count and the usable count are
+    far apart, and the gap between them is the state of the thesis.
+    """
+    plan = load() if plan is None else plan
+    out = []
+    for dataset in plan.get("corpora", []):
+        if not dataset.get("trained"):
+            continue
+        evidence = dataset.get("evidence") or []
+        if evidence and all(os.path.exists(os.path.join(root, e))
+                            for e in evidence):
+            out.append(dataset["name"])
+    return sorted(out)
+
+
 def corpora_usable(plan=None, root="."):
     """Corpora whose boxes load and which have been screened.
 
@@ -738,7 +809,10 @@ def milestone_progress(plan):
     """Countable progress per milestone. Counts artifacts, not intentions."""
     counters = {
         "combinations_measured": lambda: combinations_measured(plan),
+        "paired_combinations": lambda: paired_combinations(plan),
+        "screening_only": lambda: screening_only(plan),
         "corpora_usable": lambda: corpora_usable(plan),
+        "datasets_trained": lambda: datasets_trained(plan),
         "papers_fully_treated": lambda: papers_fully_treated(),
         "parked": lambda: [],
     }
@@ -747,6 +821,11 @@ def milestone_progress(plan):
         got = counters.get(m.get("counter"), lambda: [])()
         units = [u for u in plan.get("units", [])
                  if u.get("milestone") == m["id"]]
+        # Two numbers, and they measure different things. `have` counts
+        # artefacts, so the bar rises only when something was produced.
+        # `units_fraction` counts how far the work has come along the ladder,
+        # so effort in flight is visible without inflating the result.
+        fractions = [ladder_fraction(u) for u in units]
         rows.append({
             "id": m["id"], "title": m["title"],
             "have": len(got), "target": m.get("target", 0),
@@ -754,6 +833,14 @@ def milestone_progress(plan):
             "units_total": len(units),
             "units_accepted": sum(1 for u in units
                                   if u.get("state") == "accepted"),
+            "units_fraction": (sum(fractions) / len(fractions)) if fractions
+                              else 0.0,
+            # A supporting count, shown beside the bar but never inside it.
+            # M2's bar counts datasets trained on, and the wider usable set is
+            # the number that says how far the training half lags the oracle
+            # half. One number without the other hides that gap.
+            "beside": counters.get(m.get("beside"), lambda: [])(),
+            "beside_label": m.get("beside_label", ""),
         })
     return rows
 
@@ -892,9 +979,15 @@ def main(argv=None):
         print("")
         for r in rows:
             print("%-3s %s" % (r["id"], r["title"]))
-            print("    %s   %d of %d        units: %d of %d accepted"
+            print("    %s   %d of %d        units: %d of %d accepted, "
+                  "%.0f%% advanced"
                   % (bar(r["have"], r["target"]), r["have"], r["target"],
-                     r["units_accepted"], r["units_total"]))
+                     r["units_accepted"], r["units_total"],
+                     100.0 * r["units_fraction"]))
+            if r.get("beside"):
+                print("    %-22s   %d %s"
+                      % ("", len(r["beside"]),
+                         r.get("beside_label") or "also counted"))
             print("")
         if not a.detail:
             print("Add --detail to list what each milestone counted.")
