@@ -444,6 +444,58 @@ def load(path=None):
         return json.load(handle)
 
 
+# The states a unit passes through. Every state before `accepted` reports a
+# fact a command can check, which is why a tool may set them. `accepted` is a
+# judgement about whether the work is sufficient, so it belongs to the author
+# alone. `PROGRESS.md` was once found carrying two headings that closed work
+# items on the assistant's own authority, and that is what this prevents.
+#
+# `in_progress` is kept for the units recorded before the ladder existed. It
+# sits where `designed` sits, because a unit called in progress had been
+# started and nothing more was ever claimed for it.
+LADDER = ["not_started", "designed", "built", "measured", "illustrated",
+          "evidence_produced", "accepted"]
+
+LEGACY_STATES = {"in_progress": "designed"}
+
+
+def save(plan, path=None):
+    """Write the plan back. The only writer in this module."""
+    with open(path or PLAN_PATH, "w") as handle:
+        json.dump(plan, handle, indent=2)
+
+
+def set_state(plan, unit_id, state):
+    """Move one unit along the ladder, or refuse and say why."""
+    if state == "accepted":
+        raise ValueError(
+            "only the author sets 'accepted'. It is a judgement about whether "
+            "the work is sufficient, and not a fact a command can check.")
+    if state not in LADDER:
+        raise ValueError("unknown state %r. The ladder is: %s"
+                         % (state, ", ".join(LADDER)))
+    for unit in plan.get("units", []):
+        if unit.get("id") == unit_id:
+            unit["state"] = state
+            return unit
+    raise ValueError("no unit with id %r" % unit_id)
+
+
+def ladder_fraction(unit):
+    """How far along the ladder a unit sits, from 0.0 to 1.0.
+
+    An unrecognised state scores zero rather than raising. The plan is edited
+    by hand, and one bad value must not take down the board that reads it.
+    """
+    state = unit.get("state")
+    state = LEGACY_STATES.get(state, state)
+    try:
+        index = LADDER.index(state)
+    except ValueError:
+        return 0.0
+    return float(index) / (len(LADDER) - 1)
+
+
 def check(plan):
     """Everything wrong with the plan, as a list of sentences."""
     problems = []
@@ -730,13 +782,30 @@ def main(argv=None):
     ap.add_argument("command", choices=["next", "render", "check", "score",
                                         "contradictions", "report",
                                         "sensitivity", "graph", "claims",
-                                        "progress"])
+                                        "progress", "set-state"])
     ap.add_argument("--runs-on", default=None)
     ap.add_argument("--plan", default=None)
     ap.add_argument("--detail", action="store_true",
                     help="with progress, list what each milestone counted")
+    ap.add_argument("--unit", default=None, help="unit id, for set-state")
+    ap.add_argument("--state", default=None,
+                    help="new state, for set-state. One of: %s"
+                         % ", ".join(s for s in LADDER if s != "accepted"))
     a = ap.parse_args(argv)
     plan = load(a.plan)
+
+    if a.command == "set-state":
+        if not a.unit or not a.state:
+            print("set-state needs --unit and --state")
+            return 2
+        try:
+            unit = set_state(plan, a.unit, a.state)
+        except ValueError as exc:
+            print("%s" % exc)
+            return 2
+        save(plan, a.plan)
+        print("%s -> %s" % (unit["id"], unit["state"]))
+        return 0
 
     if a.command == "progress":
         rows = milestone_progress(plan)
