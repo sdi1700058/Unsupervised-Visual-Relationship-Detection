@@ -84,3 +84,32 @@ class TestFindUncovered(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestScope(unittest.TestCase):
+    """A checker only guards what it reads.
+
+    `DEFAULT_PATHS` was `notes/REPORT.md` and `notes/docs/*.md`, so the working
+    documents at the top of `notes/` were never scanned. The withdrawn figure
+    1.377 sat in `NOW.md` for five days, unmarked, while this check reported
+    that no withdrawn number reads as current. A number is withdrawn wherever
+    it appears, not only in the two places the tuple happened to name.
+    """
+
+    def test_the_working_documents_are_in_scope(self):
+        from tools import check_superseded
+        for name in ("notes/NOW.md", "notes/PROGRESS.md", "notes/QUALITY.md",
+                     "notes/WORKBOARD.md", "notes/INTERVIEW.md"):
+            self.assertIn(name, check_superseded.DEFAULT_PATHS,
+                          "%s is not scanned, so a withdrawn number there "
+                          "would go unreported" % name)
+
+    def test_the_documents_directory_is_still_in_scope(self):
+        from tools import check_superseded
+        self.assertIn("notes/docs/*.md", check_superseded.DEFAULT_PATHS)
+
+    def test_the_append_only_records_stay_exempt(self):
+        """A dated entry quoting what was true that day is history."""
+        from tools import check_superseded
+        self.assertIn("CHANGES.md", check_superseded.HISTORICAL)
+        self.assertIn("AUDIT.md", check_superseded.HISTORICAL)

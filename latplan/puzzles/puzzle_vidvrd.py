@@ -159,6 +159,11 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     loaded_video_ids = []
     loaded_primary   = {}
 
+    # What the load throws away. Discarded in silence until 2026-09-06, so
+    # `num_states` reported what survived and nothing reported what did not.
+    _dropped = {"annotated_frames": 0, "empty_annotation": 0,
+                "missing_frame_file": 0, "filled": 0}
+
     for ann_path in ann_files:
         with open(ann_path) as f:
             ann = json.load(f)
@@ -188,16 +193,27 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
         _last_objs = None
         for fid, frame_objs in enumerate(trajectories):
+            _dropped["annotated_frames"] += 1
             if not frame_objs:
                 if fill_annotations and _last_objs is not None:
                     frame_objs = _last_objs
+                    _dropped["filled"] += 1
                 else:
+                    # Counted, not silent. Measured 3,375 of 7,770 trajectory
+                    # entries empty on a 60-video read.
+                    _dropped["empty_annotation"] += 1
                     continue
             else:
                 _last_objs = frame_objs
             # ffmpeg `-frame_pts true` writes source-frame-index filenames (B5).
             frame_path = os.path.join(vid_frames_dir, f"{fid:06d}.jpg")
             if not os.path.exists(frame_path):
+                # The big one. `trajectories` is indexed at the source rate
+                # while the extracted filenames carry the source PTS, so at
+                # frames_3fps only one annotated frame in ten has a file:
+                # measured 441 of 4,395 loaded, 3,954 discarded, and
+                # num_states reported 6 without mentioning the 54 lost.
+                _dropped["missing_frame_file"] += 1
                 continue
 
             pil_img = Image.open(frame_path).convert("RGB")
@@ -247,9 +263,23 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "fill_annotations": fill_annotations,
         "patch_size": _patch_size,
     })
+    last_load_metadata["dropped"] = dict(_dropped)
     print(f"[vidvrd-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(ann_files)} videos, "
           f"{len(images_list)} states")
+    _kept = _dropped["annotated_frames"] - (_dropped["empty_annotation"]
+                                            + _dropped["missing_frame_file"])
+    if _dropped["annotated_frames"]:
+        print("[vidvrd-loader] kept %d of %d annotated frames: %d had no "
+              "extracted jpg, %d had no annotation%s"
+              % (_kept, _dropped["annotated_frames"],
+                 _dropped["missing_frame_file"], _dropped["empty_annotation"],
+                 (", %d filled from a neighbour" % _dropped["filled"])
+                 if _dropped["filled"] else ""))
+        if _dropped["missing_frame_file"] > _kept:
+            print("[vidvrd-loader] WARNING: more frames were discarded than "
+                  "loaded. The trajectory index and the extracted filenames "
+                  "are probably at different rates.")
 
     images_arr = np.array(images_list, dtype=np.uint8)
     bboxes_arr = np.array(bboxes_list, dtype=np.uint16)
@@ -267,15 +297,23 @@ def build_transitions(states, frame_ids, mode="sequential"):
 
     mode='sequential': only pair consecutive frames from the same video (V3).
     mode='all_pairs' : every ordered pair regardless of video (not recommended for VidVRD).
+
+    'sequential' compares the frame NUMBER, not only the video id. Until
+    2026-09-06 it compared the id alone, so every frame this loader skipped in
+    silence -- a missing jpg, an empty annotation -- became an "adjacent" pair.
+    Measured at 30fps over 60 videos: 45 of 4,335 transitions spanned 16 to 271
+    real frames as one action step. Those pairs are still emitted by default so
+    that existing runs reproduce, but they are now counted and reported.
+    Set STRICT_ADJACENCY=1 to drop them instead. See latplan/util/adjacency.py.
     """
     if mode == "sequential":
-        pres, sucs = [], []
-        for i in range(len(states) - 1):
-            vid_i = frame_ids[i].split("/")[0]
-            vid_j = frame_ids[i + 1].split("/")[0]
-            if vid_i == vid_j:
-                pres.append(states[i])
-                sucs.append(states[i + 1])
+        from latplan.util.adjacency import (sequential_pairs, strict_from_env,
+                                            describe)
+        pairs, stats = sequential_pairs(frame_ids, strict=strict_from_env())
+        print("[vidvrd-loader] %s" % describe(stats))
+        last_load_metadata["transitions"] = dict(stats)
+        pres = [states[i] for i, _ in pairs]
+        sucs = [states[j] for _, j in pairs]
         if not pres:
             raise RuntimeError("No sequential transitions found. Check that multiple frames per video were loaded.")
         return np.array([pres, sucs])

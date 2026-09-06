@@ -73,7 +73,14 @@ SUPERSEDED = {
 MARKERS = ("superseded", "pre-review", "withdrawn", "corrected", "correction",
            "wrong", "do not quote", "struck")
 
-DEFAULT_PATHS = ("notes/REPORT.md", "notes/docs/*.md")
+# A number is withdrawn wherever it appears. This was `notes/REPORT.md` and
+# `notes/docs/*.md` only, so the working documents at the top of `notes/` were
+# never read: the withdrawn 1.377 sat unmarked in `NOW.md` for five days while
+# this check reported that no withdrawn number reads as current. The five
+# named below are the ones a reader actually opens.
+DEFAULT_PATHS = ("notes/REPORT.md", "notes/NOW.md", "notes/PROGRESS.md",
+                 "notes/QUALITY.md", "notes/WORKBOARD.md",
+                 "notes/INTERVIEW.md", "notes/docs/*.md")
 
 # Append-only records. A dated entry there quoting a figure that was current on
 # that date is history, not a stale number, and rewriting it would destroy the

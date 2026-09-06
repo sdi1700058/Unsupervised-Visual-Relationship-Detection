@@ -137,6 +137,11 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     images_list, bboxes_list, all_names, frame_ids = [], [], [], []
     loaded_video_ids, loaded_primary = [], {}
 
+    # What the load throws away. Discarded in silence until 2026-09-06, the
+    # same defect the VidVRD loader carried line for line.
+    _dropped = {"annotated_frames": 0, "empty_annotation": 0,
+                "missing_frame_file": 0, "filled": 0}
+
     for vid in video_ids:
         frames_of_vid = vid_to_frames[vid]
         primary = _video_primary_object_category(frames_of_vid, obj_anno)
@@ -168,12 +173,15 @@ def build_dataset(annotations_dir=None, frames_dir=None,
             if pb is not None and len(pb) > 0:
                 person_bbox = tuple(map(float, pb[0]))
 
+            _dropped["annotated_frames"] += 1
             if not visible_objs and person_bbox is None:
+                _dropped["empty_annotation"] += 1
                 continue
 
             frame_filename = fkey.split("/", 1)[1]
             frame_path = os.path.join(vid_frames_dir, frame_filename)
             if not os.path.exists(frame_path):
+                _dropped["missing_frame_file"] += 1
                 continue
 
             pil_img = Image.open(frame_path).convert("RGB")
@@ -227,9 +235,21 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "fps":                fps,
         "patch_size":         _patch_size,
     })
+    last_load_metadata["dropped"] = dict(_dropped)
     print(f"[ag-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(video_ids)} videos, "
           f"{len(images_list)} states")
+    _kept = _dropped["annotated_frames"] - (_dropped["empty_annotation"]
+                                            + _dropped["missing_frame_file"])
+    if _dropped["annotated_frames"]:
+        print("[ag-loader] kept %d of %d annotated frames: %d had no "
+              "extracted image, %d had no annotation"
+              % (_kept, _dropped["annotated_frames"],
+                 _dropped["missing_frame_file"], _dropped["empty_annotation"]))
+        if _dropped["missing_frame_file"] > _kept:
+            print("[ag-loader] WARNING: more frames were discarded than "
+                  "loaded. Check that sh/extract_ag_frames.sh has run and "
+                  "wrote the extension this loader expects.")
 
     images_arr = np.array(images_list, dtype=np.uint8)
     bboxes_arr = np.array(bboxes_list, dtype=np.uint16)
@@ -246,15 +266,22 @@ def build_transitions(states, frame_ids, mode="sequential"):
 
     V3: sequential only (paper-consistent). all_pairs available but
     not recommended for video-world domains.
+
+    'sequential' compares the frame NUMBER, not only the video id. Until
+    2026-09-06 it compared the id alone, so every frame this loader skipped in
+    silence became an "adjacent" pair, breaking the one-step assumption the
+    action model rests on. Such pairs are still emitted by default so existing
+    runs reproduce; they are now counted and reported, and STRICT_ADJACENCY=1
+    drops them. See latplan/util/adjacency.py.
     """
     if mode == "sequential":
-        pres, sucs = [], []
-        for i in range(len(states) - 1):
-            vi = frame_ids[i].split("/", 1)[0]
-            vj = frame_ids[i + 1].split("/", 1)[0]
-            if vi == vj:
-                pres.append(states[i])
-                sucs.append(states[i + 1])
+        from latplan.util.adjacency import (sequential_pairs, strict_from_env,
+                                            describe)
+        pairs, stats = sequential_pairs(frame_ids, strict=strict_from_env())
+        print("[ag-loader] %s" % describe(stats))
+        last_load_metadata["transitions"] = dict(stats)
+        pres = [states[i] for i, _ in pairs]
+        sucs = [states[j] for _, j in pairs]
         if not pres:
             raise RuntimeError("No sequential transitions found.")
         return np.array([pres, sucs])
