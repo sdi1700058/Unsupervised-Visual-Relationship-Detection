@@ -20,6 +20,17 @@ import os
 import sys
 import json
 import argparse
+
+# Run as a file (`python3 viz/recon.py ...`, which is what run_training.sh
+# does) sys.path[0] is viz/, not the project root, so `import latplan` and
+# `from viz.io import ...` both raise ModuleNotFoundError. run_training.sh
+# calls this with `|| echo "[warn] ... non-fatal"`, so the failure was a
+# warning line in a training log and the grid was never written. Same
+# bootstrap as tools/grid.py and tools/planner/onmanifold.py.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
+
 import numpy as np
 
 import matplotlib
@@ -191,12 +202,15 @@ def main():
 
     out_dir = os.path.join(args.model_dir, "viz")
     os.makedirs(out_dir, exist_ok=True)
-    save_with_caption(fig, os.path.join(out_dir, "recon_grid"),
+    png, caption = save_with_caption(fig, os.path.join(out_dir, "recon_grid"),
         what=f"Side-by-side input / reconstruction / absolute-difference for {N} evenly-spaced sample states from the training set (category={category!r}, domain={args.domain}).",
         why="This is the single-glance answer to 'is the model learning?'. If row 2 visually matches row 1 you have a working autoencoder; if row 3 is mostly dark the reconstruction is faithful. Per-state MSE annotated on the diff row.",
         how_to_read="Row 1 = input scene rendered on the FOSAE canvas. Row 2 = decoded scene after encode→decode. Row 3 = |row1 - row2| with the 'hot' colormap (brighter = worse).")
 
-    print(f"[recon] wrote {out_dir}/recon_grid.png + recon_grid.caption.md")
+    # Name the files that exist. viz/io.py retracted the caption sidecar and
+    # writes it only under VIZ_CAPTIONS=1, so the old line announced a file
+    # that was not there.
+    print(f"[recon] wrote {png}" + (f" + {caption}" if caption else ""))
     print(f"[recon] per-state MSE  min={per_state_mse.min():.4f}  max={per_state_mse.max():.4f}  mean={per_state_mse.mean():.4f}")
 
 

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
 """viz/split_test_grid.py — decompose model.py-emitted multi-state grid PNGs
 (`autoencoding_test.png`, `booleans_test.png`) into per-state single-concept
-PNGs + caption.md sidecars (SPEC §D6 / V6).
+PNGs (SPEC §D6 / V6). The caption sidecar named in the original version is
+written only under `VIZ_CAPTIONS=1`; see viz/io.py.
+
+Nothing in this repository calls this script.
 
 model.py is read-only per C2; this script post-processes the grids it writes.
 
@@ -13,6 +16,13 @@ Usage:
 import argparse
 import os
 import sys
+
+# Run as a file, sys.path[0] is viz/ and `from viz.io import ...` raises
+# ModuleNotFoundError before argparse ever runs. Same bootstrap as
+# tools/grid.py and tools/planner/onmanifold.py.
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _ROOT not in sys.path:
+    sys.path.insert(0, _ROOT)
 
 import numpy as np
 from PIL import Image
@@ -86,7 +96,9 @@ def main():
         print(f"No grid images found in {args.out_dir!r} (expected autoencoding_test.png / booleans_test.png)", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Wrote {len(written)} per-state PNG + caption.md pairs to {args.out_dir}")
+    # PNGs only. viz/io.py writes the caption sidecar under VIZ_CAPTIONS=1 and
+    # not otherwise, so counting "pairs" named a file that was not written.
+    print(f"Wrote {len(written)} per-state PNG(s) to {args.out_dir}")
 
 
 if __name__ == "__main__":

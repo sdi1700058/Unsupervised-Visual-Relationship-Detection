@@ -24,14 +24,36 @@ source venv/bin/activate 2>/dev/null || source activate.sh
 OUT_ROOT="out/video/vidvrd"
 CSV="eval/exports/G5_train.csv"
 
-echo "u,p,patch,best_val,epochs,bits_set" > "${CSV}"
+echo "u,p,patch,best_val,epochs,distinct_codes,bits_set" > "${CSV}"
 
+# A run directory that is absent is the whole arm missing. Exiting 0 here made
+# SLURM record COMPLETED for an export job that exported nothing, which is the
+# defect run_training.sh was changed for.
+shopt -s nullglob
+RUNS=("${OUT_ROOT}"/FirstOrderSAE_*catG5-winnable*)
+shopt -u nullglob
+if (( ${#RUNS[@]} == 0 )); then
+    echo "no G5 run directories under ${OUT_ROOT} -- every arm failed" >&2
+    exit 1
+fi
+
+rc=0
 NEXPORT=0
 NDEAD=0
-for RUN in "${OUT_ROOT}"/FirstOrderSAE_*catG5-winnable*; do
+for RUN in "${RUNS[@]}"; do
     [[ -d "${RUN}" ]] || continue
     NAME="$(basename "${RUN}")"
-    PATCH="$(echo "${NAME}" | grep -oE 'p[0-9]+_fps' | grep -oE '[0-9]+' || echo "")"
+    # U and P read from the run directory, not assumed. The row used to carry
+    # a hard-coded "40,10", so a sweep launched with U= or P= overridden wrote
+    # a CSV that described a configuration it had not run.
+    U="$(echo "${NAME}" | sed -n 's/.*_U\([0-9][0-9]*\)_A.*/\1/p')"
+    P="$(echo "${NAME}" | sed -n 's/.*_P\([0-9][0-9]*\)_cat.*/\1/p')"
+    PATCH="$(echo "${NAME}" | sed -n 's/.*[-_]p\([0-9][0-9]*\)_fps.*/\1/p')"
+    if [[ -z "${U}" || -z "${P}" || -z "${PATCH}" ]]; then
+        echo "SKIP ${NAME}: cannot read U, P and the patch size from the name" >&2
+        rc=1
+        continue
+    fi
     OUT="eval/exports/${NAME#FirstOrderSAE_}.npz"
 
     echo "=== ${NAME}"
@@ -40,6 +62,7 @@ for RUN in "${OUT_ROOT}"/FirstOrderSAE_*catG5-winnable*; do
         NEXPORT=$((NEXPORT + 1))
     else
         echo "FAILED ${NAME}"
+        rc=1
         continue
     fi
 
@@ -69,19 +92,31 @@ PY
         echo "no training_history.csv in ${NAME}"
     fi
 
-    BITS="$(python3 - "${OUT}" <<'PY'
+    # Liveness is the number of DISTINCT codes, not the number of set bits.
+    # An encoder that emits one code for every frame is dead whatever that
+    # code is, and the old test -- bits_set == 0 -- saw only the all-zero
+    # case, so a constant all-ones latent counted as alive and was scored.
+    # The failure path used to print an empty string, which the counter then
+    # read as "not dead"; now an unreadable export is a failure of this job.
+    if ! CODES="$(python3 - "${OUT}" <<'PY'
 import sys
 import numpy as np
-try:
-    z = np.load(sys.argv[1])
-    a = np.asarray(z["latents"])
-    print(int(a.reshape(a.shape[0], -1).sum()))
-except Exception:
-    print("")
+z = np.load(sys.argv[1])
+a = np.asarray(z["latents"])
+flat = a.reshape(a.shape[0], -1)
+print("%d %d" % (len(np.unique(flat, axis=0)), int(flat.sum())))
 PY
-)"
-    [[ "${BITS}" == "0" ]] && NDEAD=$((NDEAD + 1))
-    echo "40,10,${PATCH},${BEST},${EPOCHS},${BITS}" >> "${CSV}"
+)"; then
+        echo "cannot read the latents of ${OUT}" >&2
+        rc=1
+        DISTINCT=""
+        BITS=""
+    else
+        DISTINCT="${CODES%% *}"
+        BITS="${CODES##* }"
+        if (( DISTINCT <= 1 )); then NDEAD=$((NDEAD + 1)); fi
+    fi
+    echo "${U},${P},${PATCH},${BEST},${EPOCHS},${DISTINCT},${BITS}" >> "${CSV}"
 done
 
 echo
@@ -106,7 +141,16 @@ Push the exports and the training summary together:
     git add -f eval/exports/*catG5-winnable*.npz eval/exports/G5_train.csv
     git commit -m "G5 exports" && git push
 
-Then, on the workstation:
+THERE IS NO experiments/G5_patch_size/score_local.sh. This line used to name
+one and G5 has never had it, nor a README. Until one is written, score an arm
+by hand the way G4 does, one export at a time:
 
-    git pull && bash experiments/G5_patch_size/score_local.sh
+    bash tools/planner/eval_plannability.sh eval/exports/<arm>.npz \
+        --methods bfs,pddl --window 16 --budget 30 --name G5-p<patch>
+
+and read best_val ONLY down a column, never across arms: the patch size
+changes the size of the image half of the feature vector, so each arm's loss
+is a differently weighted quantity. See the header of run_sherlock.sh.
 EOF
+
+exit "${rc}"

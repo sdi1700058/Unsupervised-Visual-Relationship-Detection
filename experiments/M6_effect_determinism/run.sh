@@ -48,10 +48,14 @@ vidor_clips() {
 }
 
 # build_oracle <annotation-json> <output-npz> <encoding>
+#
+# stdout is suppressed and stderr is not. It used to be `>/dev/null 2>&1`, so
+# "could not build" was the whole report and a clip lost to a missing reader,
+# a malformed annotation or the memory cap all looked the same.
 build_oracle() {
     [ -f "$2" ] && return 0
     "$PY" tools/planner/oracle.py "$1" --out "$2" --encoding "$3" \
-        --max-objects 3 --no-fill >/dev/null 2>&1 \
+        --max-objects 3 --no-fill >/dev/null \
         || echo "  could not build $2" >&2
 }
 

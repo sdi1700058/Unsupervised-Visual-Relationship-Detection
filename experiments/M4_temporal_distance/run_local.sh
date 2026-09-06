@@ -48,11 +48,17 @@ fi
 ARGS=("vidvrd-oracle=${VIDVRD_DIR}" "vidor-oracle=${VIDOR_DIR}")
 
 # The single clip invariant V35 was measured on, oracle beside trained. This
-# is the only pair in the run that reproduces V35's own comparison exactly.
-[[ -f eval/exports/oracle-150010-fixed.npz ]] && \
-    ARGS+=("V35clip-oracle=eval/exports/oracle-150010-fixed.npz")
-[[ -f eval/exports/H14-P10-150010.npz ]] && \
-    ARGS+=("V35clip-trainedP10=eval/exports/H14-P10-150010.npz")
+# is the only pair in the run that reproduces V35's own comparison exactly,
+# so its absence is said out loud: a figure quietly missing that pair looks
+# like a figure that never promised it.
+for V35 in "V35clip-oracle=eval/exports/oracle-150010-fixed.npz" \
+           "V35clip-trainedP10=eval/exports/H14-P10-150010.npz"; do
+    if [[ -f "${V35#*=}" ]]; then
+        ARGS+=("${V35}")
+    else
+        echo "absent, so the V35 pair is incomplete in this figure: ${V35#*=}" >&2
+    fi
+done
 
 # Every H14 arm, over all 88 of its clips rather than its best one. V36
 # records that the H14 headline was taken on the model's best clip.

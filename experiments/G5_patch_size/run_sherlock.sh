@@ -25,6 +25,25 @@
 # acceptably used patch 48 and 64. Nothing has ever measured the two against
 # each other on the same data.
 #
+# WHAT THE ARMS DO NOT SHARE, and it is the same table.
+# Because the patch decides that balance, it also decides WHAT THE LOSS IS.
+# Every arm minimises one figure over a differently sized and differently
+# weighted feature vector, so `val_loss` here is four quantities with one
+# name. A lower number at patch 32 than at patch 8 is not a better
+# reconstruction; it is a loss in which the box block, the part that is hard
+# to fit, has been reweighted from about half of the total down to a
+# sixteenth. Each arm also has its OWN constant-solution floor -- the entropy
+# of its own mean feature -- and a run that stops there has learned nothing
+# whatever the number reads.
+#
+# So: read `val_loss` DOWN a column and never ACROSS the arms. "Reconstruction
+# improves" below means, and can only mean, one of
+#   - the same arm improving against its own earlier run, or
+#   - the decoded boxes and the decoded patches scored SEPARATELY, in their
+#     own units, which is the only comparison the four arms share.
+# The planning axis is not affected: `mse_ratio` is measured in canvas pixels
+# against a straight line, and that scale is the same in all four arms.
+#
 # WHAT EACH OUTCOME MEANS, decided before the run.
 #   Reconstruction improves AND planning improves -> patch 8 was a mistake and
 #       every earlier planner number was taken on a starved model. Rebake.
@@ -130,9 +149,20 @@ for PATCH in ${PATCH_LIST}; do
     # A clip whose frames are missing is skipped silently by the loader, so a
     # partial extraction would shrink one arm while its name still claims 88.
     # An arm baked on fewer clips than its neighbours measures the data volume.
-    LOADED="$(grep -oE '[0-9]+ videos? loaded' "${BAKE_LOG}" | tail -1 \
-              | grep -oE '^[0-9]+' || true)"
-    if [[ -n "${LOADED}" && "${LOADED}" != "${NCLIPS}" ]]; then
+    #
+    # The pattern is the loader's own line, verified against
+    # latplan/puzzles/puzzle_vidvrd.py:
+    #     [vidvrd-loader] category_filter=None strict=False loaded 88/88 videos, N states
+    # It used to read `[0-9]+ videos? loaded`, which that line never says, so
+    # LOADED was always empty and the `-n` guard passed every bake unchecked.
+    LOADED="$(sed -n 's/.*loaded \([0-9][0-9]*\)\/[0-9][0-9]* videos.*/\1/p' \
+              "${BAKE_LOG}" | tail -1)"
+    if [[ -z "${LOADED}" ]]; then
+        echo "FATAL: no '[vidvrd-loader] ... loaded N/M videos' line in" >&2
+        echo "       ${BAKE_LOG}, so the clip count could not be checked." >&2
+        exit 3
+    fi
+    if [[ "${LOADED}" != "${NCLIPS}" ]]; then
         echo "FATAL: patch ${PATCH} baked ${LOADED} clips, expected ${NCLIPS}." >&2
         echo "       Frames are missing. See ${BAKE_LOG}." >&2
         exit 3

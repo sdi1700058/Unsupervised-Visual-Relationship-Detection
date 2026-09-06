@@ -47,6 +47,13 @@ for f in "${EXPORTS[@]}"; do
     [[ -f "${ANN_DIR}/${stem}.json" ]] && ANNS+=("${ANN_DIR}/${stem}.json")
 done
 
+# Say how many matched. M1 and M2 skip on a count below two and three, and
+# their messages blame the number of clips; the other way to get a low count
+# is a stem that does not name a file in ANN_DIR at all -- which is what
+# happens to VidOR exports, whose ids carry a subdirectory that
+# build_oracle_corpus.sh flattens to a dash. Same skip, different cause.
+echo "matched ${#ANNS[@]} annotation(s) under ${ANN_DIR} to ${#EXPORTS[@]} export(s)"
+
 echo
 echo "=========================================="
 echo "M1  does the latent encode the relations?"

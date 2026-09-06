@@ -44,6 +44,27 @@ echo "=== latent geometry (screen, no planning) ==="
 "${PY}" tools/planner/latent_geometry.py "${A}" "${B}" || true
 echo
 
+# KNOWN HOLE, stated because it changes what these numbers are.
+#
+# Each arm is ELEVEN clips in one concatenated export, and the window slider in
+# tools/planner/common/windows.py walks a frame index and knows nothing about
+# clip boundaries. A window can therefore begin in one clip and end in the
+# next, where it scores a cut rather than motion. Ten cuts per arm are inside
+# the frame axis here.
+#
+# G1 avoids it by slicing the export per clip first, and G4 by dropping the
+# rows whose endpoints sit in different clips. E1 does neither, and cannot do
+# either as it stands: tools/planner/e1_summary.py keys a window by
+# (init, goal) with no clip in the key, so per-clip slices would collapse
+# eleven distinct windows into one and the row count would be wrong in the
+# other direction. Closing this needs that key to carry the export, which is
+# not this script's to change.
+#
+# Both arms carry the defect, but not necessarily in equal measure: README.md
+# records a median of 75 frames per clip in arm A and 60 in arm B, so B has
+# more boundaries per frame and loses more of its windows to a cut. Read a
+# small margin as inconclusive on that ground alone.
+#
 # 6 GB and a short budget: an unbounded search over a wide latent can exhaust
 # memory, and this has crashed a workstation before.
 # Scoped by the callers below rather than applied to the whole script, which

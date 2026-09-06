@@ -159,6 +159,22 @@ def reading(seen, test):
     if seen is None or test is None:
         return ("**No reading.** One arm produced no summary at all.", caveats)
 
+    # A summary.csv with a header and no rows is not a solve rate of zero, it
+    # is no measurement. `eval_plannability.sh` writes exactly that and exits
+    # 0 when it cannot build a window for any export, which happens when the
+    # slice step kept no clip as long as the window -- and `score_local.sh`
+    # reuses slices cut for an earlier, shorter window unless RESLICE=1. Every
+    # branch below divides by the window count, so without this guard an arm
+    # that scored nothing at all reads as "the held-out arm solved no window",
+    # a measured negative with a named cause. The cause would be the harness.
+    if seen["windows"] == 0 or test["windows"] == 0:
+        return ("**No reading.** An arm holds no window at all: %d in sample "
+                "and %d held out. That is an empty run, not a solve rate of "
+                "zero. Check the slice step in `score_local.sh`: a clip "
+                "shorter than the window yields no window, and slices cut "
+                "for an earlier window are reused unless RESLICE=1."
+                % (seen["windows"], test["windows"]), caveats)
+
     if seen["solved"] == 0 and test["solved"] == 0:
         return ("**Reading: no window was solved in either arm.** The likeliest "
                 "cause is that the model did not train at 70 clips, which says "

@@ -18,8 +18,10 @@ Its `summarise_rows` is imported here rather than copied, so the per-window
 best-of-two-planners rule stays in one place.
 
 Python 3.6 clean, standard library plus numpy. numpy is optional; without it
-the round-trip reconstruction column and the clip-boundary filter are dropped
-and the rest still renders.
+the round-trip reconstruction column, the clip-boundary filter AND the
+dead-latent check are dropped and the rest still renders. The third one is the
+one that matters: the reading says so in place of the dead-cell paragraph,
+rather than leaving a dead cell in the table as a planning result.
 """
 
 import csv
@@ -278,6 +280,17 @@ def reading(cells):
             "beaten."
             % (len(dead), len(cells),
                ", ".join("U%s P%s" % (c.get("u"), c.get("p")) for c in dead)))
+    elif all(c.get("distinct") is None for c in cells):
+        # Silence here is not the same as a live grid. Without numpy nothing
+        # counted the distinct codes, so the paragraph above cannot appear
+        # even when a cell is dead, and a dead cell in the table reads as a
+        # cell that planned badly.
+        lines.append(
+            "**Liveness was not checked.** The distinct-code count needs "
+            "numpy and numpy is absent here, so a cell whose encoder emitted "
+            "one code for every frame is in the table below as a planning "
+            "result. Run `tools/planner/liveness.py` over the exports before "
+            "reading any ordering.")
 
     if not scored:
         lines.append(

@@ -169,10 +169,23 @@ bake_split () {
     # puzzle_vidvrd skips a clip whose frames are missing and carries on, so a
     # partial frame extraction would shrink a split in silence while the stem
     # still claims 70 or 18. Fail loudly instead.
+    #
+    # The pattern is the loader's own line, verified against
+    # latplan/puzzles/puzzle_vidvrd.py:
+    #     [vidvrd-loader] category_filter=None strict=False loaded 70/88 videos, N states
+    # It used to read `[0-9]+ videos? loaded`, which matches nothing that line
+    # says, so `loaded` was always empty and the `-n` guard below let every
+    # bake through unchecked. An unreadable count is now fatal too: a check
+    # that cannot find its input must report failure, not success.
     local loaded
-    loaded="$(grep -oE '[0-9]+ videos? loaded' "${log}" | tail -1 \
-              | grep -oE '^[0-9]+' || true)"
-    if [[ -n "${loaded}" && "${loaded}" != "${want}" ]]; then
+    loaded="$(sed -n 's/.*loaded \([0-9][0-9]*\)\/[0-9][0-9]* videos.*/\1/p' \
+              "${log}" | tail -1)"
+    if [[ -z "${loaded}" ]]; then
+        echo "FATAL: no '[vidvrd-loader] ... loaded N/M videos' line in ${log}," >&2
+        echo "       so the clip count of ${stem} could not be checked." >&2
+        exit 3
+    fi
+    if [[ "${loaded}" != "${want}" ]]; then
         echo "FATAL: baked ${loaded} clips into ${stem}, expected ${want}." >&2
         echo "       Frames are missing on this machine. See ${log}." >&2
         exit 3

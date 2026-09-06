@@ -114,9 +114,20 @@ else
     # puzzle_vidvrd skips a clip whose frames are missing and carries on, so a
     # partial frame extraction would silently shrink the grid while the stem
     # still says "winnable88". Fail loudly instead.
-    LOADED="$(grep -oE '[0-9]+ videos? loaded' "${BAKE_LOG}" | tail -1 \
-              | grep -oE '^[0-9]+' || true)"
-    if [[ -n "${LOADED}" && "${LOADED}" != "${NCLIPS}" ]]; then
+    #
+    # The pattern is the loader's own line, verified against
+    # latplan/puzzles/puzzle_vidvrd.py:
+    #     [vidvrd-loader] category_filter=None strict=False loaded 88/88 videos, N states
+    # It used to read `[0-9]+ videos? loaded`, which that line never says, so
+    # LOADED was always empty and the `-n` guard passed every bake unchecked.
+    LOADED="$(sed -n 's/.*loaded \([0-9][0-9]*\)\/[0-9][0-9]* videos.*/\1/p' \
+              "${BAKE_LOG}" | tail -1)"
+    if [[ -z "${LOADED}" ]]; then
+        echo "FATAL: no '[vidvrd-loader] ... loaded N/M videos' line in" >&2
+        echo "       ${BAKE_LOG}, so the clip count could not be checked." >&2
+        exit 3
+    fi
+    if [[ "${LOADED}" != "${NCLIPS}" ]]; then
         echo "FATAL: baked ${LOADED} clips, expected ${NCLIPS}." >&2
         echo "       Frames are missing on this machine. See ${BAKE_LOG}." >&2
         exit 3

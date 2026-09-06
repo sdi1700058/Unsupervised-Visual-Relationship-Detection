@@ -41,20 +41,51 @@ B_IDS="ILSVRC2015_train_00211004,ILSVRC2015_train_01081001,ILSVRC2015_train_0105
 section "E1  bake both arms, no fill"
 
 bake_arm () {
-    local name="$1" ids="$2"
+    local name="$1" ids="$2" want="$3"
     if [[ -f "${NPZ}/${name}.npz" ]]; then echo "have  ${name}"; return 0; fi
-    echo "bake  ${name}"
+    echo "bake  ${name}  (${want} clips, no fill)"
+    local log="logs/E1-bake-${name}.$$.log"
     if python3 setup-dataset.py video_vidvrd all \
            --video-id "${ids}" --fps "${FPS}" \
-           --max-objects 3 --patch-size 8 --out-name "${name}"; then
+           --max-objects 3 --patch-size 8 --out-name "${name}" \
+           2>&1 | tee "${log}"; then
         NBAKED=$((NBAKED + 1))
     else
-        echo "  BAKE FAILED ${name}"; NFAILED=$((NFAILED + 1))
+        echo "  BAKE FAILED ${name}"; NFAILED=$((NFAILED + 1)); return 0
+    fi
+
+    # The loader skips a clip whose frames are missing and carries on. This is
+    # a MATCHED comparison, so an arm quietly baked at 9 clips instead of 11
+    # would break the pairing the whole experiment rests on while both stems
+    # still read E1-structured and E1-unstructured. G1, G4 and G5 check the
+    # same line; the pattern is the loader's own, from
+    # latplan/puzzles/puzzle_vidvrd.py:
+    #     [vidvrd-loader] category_filter=None strict=False loaded 11/11 videos, N states
+    local loaded
+    loaded="$(sed -n 's/.*loaded \([0-9][0-9]*\)\/[0-9][0-9]* videos.*/\1/p' \
+              "${log}" | tail -1)"
+    if [[ -z "${loaded}" ]]; then
+        echo "FATAL: no '[vidvrd-loader] ... loaded N/M videos' line in ${log}," >&2
+        echo "       so the clip count of ${name} could not be checked." >&2
+        exit 3
+    fi
+    if [[ "${loaded}" != "${want}" ]]; then
+        echo "FATAL: baked ${loaded} clips into ${name}, expected ${want}." >&2
+        echo "       The arms would no longer be matched. See ${log}." >&2
+        exit 3
     fi
 }
 
-bake_arm "E1-structured"   "${A_IDS}"
-bake_arm "E1-unstructured" "${B_IDS}"
+N_A="$(echo "${A_IDS}" | tr ',' '\n' | grep -c .)"
+N_B="$(echo "${B_IDS}" | tr ',' '\n' | grep -c .)"
+if [[ "${N_A}" != "${N_B}" ]]; then
+    echo "FATAL: the arms hold ${N_A} and ${N_B} clips. They are pinned as a" >&2
+    echo "       matched pair, one unstructured clip per structured one." >&2
+    exit 2
+fi
+
+bake_arm "E1-structured"   "${A_IDS}" "${N_A}"
+bake_arm "E1-unstructured" "${B_IDS}" "${N_B}"
 
 section "E1  train, identical configuration on each arm"
 
@@ -67,6 +98,17 @@ submit "A structured"   "E1-structured"   32G 4:00:00
 submit "B unstructured" "E1-unstructured" 32G 4:00:00
 
 sweep_totals
+
+# A driver that queued nothing must not exit 0. SLURM records the exit status
+# and nothing else, so `sacct` read COMPLETED for a run that baked nothing and
+# submitted nothing -- the same defect run_training.sh was changed for. G1, G4
+# and G5 already refuse; E1 was the last one that did not.
+if (( NFAILED > 0 || ${#SUBMITTED_IDS[@]} < 2 )); then
+    echo >&2
+    echo "E1 needs BOTH arms and queued ${#SUBMITTED_IDS[@]} (${NFAILED} failure(s))." >&2
+    echo "One arm alone answers nothing: the comparison is the experiment." >&2
+    exit 1
+fi
 
 cat <<'NOTE'
 
