@@ -55,8 +55,6 @@ ALLOWED_ABSENT = {
         "planned destination, SPEC.md F1, explicitly still pending",
     "latplan/domains/video/videonet.py":
         "planned loader, SPEC.md VN2, not yet written",
-    "notes/docs/GUIDE.md":
-        "planned document, SPEC.md task E3, not yet written",
     "tools/workplan.py":
         "planned tool, DESIGN_WORKPLAN.md section 5, built in phase P0",
     "tools/video/screen_actiongenome.py":
