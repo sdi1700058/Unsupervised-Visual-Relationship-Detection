@@ -165,6 +165,50 @@ class TestOneCriterionTwoTools(unittest.TestCase):
                          "screen says winnable=%s, survey says winnable=%s "
                          "(screen %.4f, survey %.4f)"
                          % (screen < 1.0, ratio < 1.0, screen, ratio))
+        # A diagonal is a straight line, so both must say unwinnable. Without
+        # this the test above passes on the verdict the two tools would agree
+        # on even if neither computed anything.
+        self.assertGreater(screen, 1.0)
+        self.assertGreater(ratio, 1.0)
+
+    def _detour(self, path, n=45):
+        """One object that leaves the straight line between the endpoints.
+
+        The other branch of the criterion. Checking agreement on an
+        unwinnable clip alone tests one side of a verdict, and a criterion
+        that returned "unwinnable" for everything would pass it.
+        """
+        xs = [0., 0., 0., 0., 200., 0., 0., 0., 0.] * (n // 9)
+        traj = [[{"tid": 0, "bbox": {"xmin": x + 50.0, "ymin": 100.0,
+                                     "xmax": x + 90.0, "ymax": 140.0}}]
+                for x in xs]
+        doc = {"video_id": "DETOUR_0001", "width": 640, "height": 360,
+               "fps": 30, "subject/objects": [{"tid": 0, "category": "dog"}],
+               "relation_instances": [], "trajectories": traj}
+        with open(path, "w") as handle:
+            json.dump(doc, handle)
+        return path
+
+    def test_the_two_implementations_agree_on_a_winnable_clip_too(self):
+        from screen_vidvrd import window_crossover
+        from tools.planner.window_survey import survey_clip
+
+        with tempfile.TemporaryDirectory() as tmp:
+            p = self._detour(os.path.join(tmp, "DETOUR_0001.json"))
+            with open(p) as f:
+                doc = json.load(f)
+            screen = window_crossover(self._per_object(doc),
+                                      doc["width"], doc["height"], window=8)
+            survey = survey_clip(p, 1, 60, 40, fill=False, windows=(8,))
+
+        self.assertIsNotNone(screen)
+        self.assertIsNotNone(survey)
+        ratio = survey["per_window"].get(8)
+        self.assertIsNotNone(ratio)
+        self.assertEqual(screen < 1.0, ratio < 1.0,
+                         "screen %.4f, survey %.4f" % (screen, ratio))
+        self.assertLess(screen, 1.0)
+        self.assertLess(ratio, 1.0)
 
 
 if __name__ == "__main__":

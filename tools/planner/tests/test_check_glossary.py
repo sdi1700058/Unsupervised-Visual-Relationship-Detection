@@ -43,6 +43,64 @@ class TestTerms(unittest.TestCase):
         self.assertEqual(check_glossary.terms(os.path.join(self.dir, "no.md")),
                          {})
 
+    def ban_corpus(self):
+        """Append the refusal table the real glossary carries."""
+        with open(self.path, "a") as handle:
+            handle.write("\n## Terms deliberately not used\n\n")
+            handle.write("| avoid | use instead | why |\n|---|---|---|\n")
+            handle.write("| corpus | dataset | it arrived undefined |\n")
+
+    def test_the_refusal_table_is_not_read_as_definitions(self):
+        """The bug that made this check pass vacuously on its first real run.
+
+        The glossary lists the words this project refuses in a table of their
+        own, in order to refuse them. Reading those rows as definitions
+        registered `corpus` as a defined term.
+
+        Every fixture here stopped at the definition table, so removing the
+        heading guard from `terms` left all eleven tests in this file green.
+        """
+        self.ban_corpus()
+        found = check_glossary.terms(self.path)
+        self.assertIn("dataset", found)
+        self.assertNotIn("corpus", found)
+
+    def test_the_refusal_table_is_found_even_when_its_heading_is_renamed(self):
+        """The heading was the single point of failure.
+
+        `STOP_HEADING` matches one phrase. Rewording that heading -- an
+        ordinary edit, on a document outside version control, so it leaves no
+        diff -- put the refusal rows back into the definition set and
+        readmitted every word the table exists to ban. The table's own column
+        names are structure rather than prose, so they are checked too.
+        """
+        with open(self.path, "a") as handle:
+            handle.write("\n## Words we replaced\n\n")
+            handle.write("| avoid | use instead | why |\n|---|---|---|\n")
+            handle.write("| corpus | dataset | it arrived undefined |\n")
+        found = check_glossary.terms(self.path)
+        self.assertIn("dataset", found)
+        self.assertNotIn("corpus", found)
+        doc = os.path.join(self.dir, "b.md")
+        with open(doc, "w") as handle:
+            handle.write("The corpus loads cleanly.\n")
+        hits = check_glossary.undefined_terms([doc], found)
+        self.assertEqual([h["term"] for h in hits], ["corpus"])
+
+    def test_a_word_the_refusal_table_names_is_still_caught_in_a_document(self):
+        """The consequence, stated where a reader will see the cost.
+
+        With the refusal row read as a definition, every use of the word in
+        every document was skipped and a planted violation went undetected.
+        """
+        self.ban_corpus()
+        doc = os.path.join(self.dir, "a.md")
+        with open(doc, "w") as handle:
+            handle.write("The corpus loads cleanly.\n")
+        hits = check_glossary.undefined_terms(
+            [doc], check_glossary.terms(self.path))
+        self.assertEqual([h["term"] for h in hits], ["corpus"])
+
 
 class TestUndefined(unittest.TestCase):
 

@@ -40,8 +40,15 @@ boxes as `xyxy`, in two files of the same release. Measured over 7,841 records:
 100% of object records are consistent with `xywh` and only 19% with `xyxy`.
 Reading one as the other produces plausible boxes in the wrong places and
 raises nothing, which is the worst failure available to this project. So the
-conversion is named here (`to_xyxy`), the person file's own `bbox_mode` field
-is checked before any box is read, and a load refuses rather than guesses.
+person file's own `bbox_mode` field is checked here before any box is read, and
+a load refuses rather than guesses.
+
+`to_xyxy` names both conventions in one place, but **the production conversion
+is not this function**: the object records are widened inline by
+`oracle.boxes_from_actiongenome_clip`, which this module calls and cannot
+import from (the dependency runs the other way). `to_xyxy` is the independent
+reading the tests compare that reader against, which is worth more than a
+shared helper would be — a shared helper would move with the bug.
 
 Standard library plus numpy, and pillow by way of the canvas scaler. Python 3.6
 clean, because the cluster runs 3.6.1.
@@ -169,8 +176,11 @@ def _finish(name, clip_id, boxes, meta):
 
     `absent` is recomputed here from the boxes rather than taken from the
     reader, so the number means the same thing in every dataset and a survey can
-    add them up. Each reader already counts absent slot-frames its own way, and
-    the two agree: an absent slot is written as an all-zero box.
+    add them up. The readers each count absent slot-frames their own way and
+    **the counts differ**: a reader counts only the slots it named, so a clip
+    with two objects loaded at `num_objs=4` reports 0 absent while the boxes
+    carry 4 all-zero slot-frames per state. This count is the one that means
+    "all-zero box", so it is the one that survives.
     """
     boxes = np.asarray(boxes, dtype=np.float32)
     if boxes.ndim != 3 or boxes.shape[-1] != 4:

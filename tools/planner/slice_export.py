@@ -58,13 +58,22 @@ def clip_index(frame_ids):
     return [(c, tuple(clips[c])) for c in order]
 
 
+# Arrays that have a row per TRANSITION rather than a row per frame. They are
+# named rather than inferred, because the rule below is a shape test: a clip of
+# n frames whose action set happens to hold n rows would be silently truncated
+# to the clip's length, and the export would ship a fraction of its operators
+# with nothing to show for it. Copied through whole, since the action model is
+# mined across the whole export and is not a property of one clip.
+NOT_PER_FRAME = ("actions",)
+
+
 def slice_export(data, start, stop):
-    """Slice every per-frame array together; copy scalars through."""
+    """Slice every per-frame array together; copy everything else through."""
     n = len(data["frame_ids"])
     out = {}
     for k in data.files:
         a = data[k]
-        if a.ndim >= 1 and a.shape[0] == n:
+        if k not in NOT_PER_FRAME and a.ndim >= 1 and a.shape[0] == n:
             out[k] = a[start:stop]
         else:
             out[k] = a

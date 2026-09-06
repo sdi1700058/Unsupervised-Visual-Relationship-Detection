@@ -147,7 +147,13 @@ def main(argv=None):
 
     print("\nW = net0.h5 present, R = recon_grid.png present, "
           "A = actions.csv present")
-    print(f"metric: {shown[0]['metric']}")
+    # `models` is non-empty before the filters, not after. --plannable or
+    # --weights-only can empty it, and reading shown[0] then raised IndexError
+    # on the one question the flags exist to ask.
+    if shown:
+        print(f"metric: {shown[0]['metric']}")
+    else:
+        print("no model survived the filters, so there is no metric to name.")
 
     ready = [m for m in models
              if m["has_weights"] and m["moved"]

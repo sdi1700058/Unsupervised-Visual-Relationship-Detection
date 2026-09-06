@@ -75,9 +75,17 @@ class TestLadder(unittest.TestCase):
         self.assertEqual(workplan.ladder_fraction({}), 0.0)
 
     def test_the_legacy_in_progress_state_still_scores(self):
-        """Units recorded before the ladder existed must stay readable."""
-        self.assertGreaterEqual(workplan.ladder_fraction(
-            {"state": "in_progress"}), 0.0)
+        """Units recorded before the ladder existed must stay readable.
+
+        The assertion here was `>= 0.0`, which holds for every value the
+        function can return, including the 0.0 it gives an unrecognised
+        state. Emptying `LEGACY_STATES` left the test green, so it proved
+        nothing about the legacy state it names.
+        """
+        self.assertEqual(workplan.ladder_fraction({"state": "in_progress"}),
+                         workplan.ladder_fraction({"state": "designed"}))
+        self.assertGreater(workplan.ladder_fraction({"state": "in_progress"}),
+                           workplan.ladder_fraction({"state": "banana"}))
 
 
 class TestSave(unittest.TestCase):

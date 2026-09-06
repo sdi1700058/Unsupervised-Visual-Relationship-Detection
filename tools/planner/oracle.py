@@ -621,6 +621,16 @@ def build_export(boxes, out_path, bins_x=DEFAULT_BINS_X,
         "actions": actions.astype(np.int8),
         "n_bits": np.int64(latents.shape[1]),
         "model_name": np.str_(f"oracle-bins{bins_x}x{bins_y}"),
+        # The bin count travels with the export, because the quantisation
+        # floor is a property of the encoding and not of the canvas. Before
+        # this was written, `common/harness.py` computed the floor at the
+        # decoder's 60x40 whatever the export used, so `floor_ratio` on
+        # `eval/exports/oracle-real-5005-b16.npz` would have divided a
+        # 16x16 error by a 60x40 floor: 335.07 against 19.94, a factor of
+        # 16.8. A reader of `model_name` can see the bins; arithmetic cannot.
+        "bins_x": np.int64(bins_x),
+        "bins_y": np.int64(bins_y),
+        "encoding": np.str_(encoding),
     }
     if frame_ids is not None:
         payload["frame_ids"] = np.asarray(frame_ids)

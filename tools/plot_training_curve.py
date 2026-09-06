@@ -207,9 +207,18 @@ def main():
     train_loss = series.pop("loss", [])
     val_loss   = series.pop("val_loss", [])
 
+    # `rstrip(".outerr")` strips a CHARACTER SET, not a suffix: it ate every
+    # trailing '.', 'o', 'u', 't', 'e' and 'r', so `logs/torture.out` and
+    # `logs/rotor.err` both wrote to `logs/.curve.png` — a hidden file, and the
+    # same one for two different runs.
+    stem = args.target
+    for suffix in (".out", ".err"):
+        if stem.endswith(suffix):
+            stem = stem[:-len(suffix)]
+            break
     out_path = args.output or (
         os.path.join(args.target, "training_curve.png") if os.path.isdir(args.target)
-        else args.target.rstrip(".outerr").rstrip(".") + ".curve.png")
+        else stem + ".curve.png")
 
     # Keep only "interesting" series; drop per-batch noise (loss0..lossN, val_loss0..)
     def _interesting(k):

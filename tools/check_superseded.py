@@ -144,6 +144,17 @@ def main(argv=None):
     hits = find_uncovered(paths)
     scanned = sum(1 for p in paths if os.path.isfile(p))
 
+    # Reading no file is not the same as reading every file and finding
+    # nothing. `notes/` is outside version control, so a fresh checkout has
+    # none of the documents this scans, and "0 files scanned, no withdrawn
+    # number reads as current" is a green line about an empty scope.
+    if not scanned:
+        print("no document matched %s, so nothing was scanned."
+              % ", ".join(patterns))
+        print("  A gate that cannot find its input reports failure rather "
+              "than success.")
+        return 1
+
     if not hits:
         print("%d files scanned, no withdrawn number reads as current."
               % scanned)

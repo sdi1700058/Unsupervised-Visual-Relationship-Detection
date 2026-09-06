@@ -162,11 +162,19 @@ def iter_py_files(targets):
                         yield os.path.join(root, f)
 
 
-def _tracked_sources():
-    """Every tracked Python file, or an empty list outside a checkout."""
+def _tracked_sources(root="."):
+    """Every tracked Python file, or an empty list outside a checkout.
+
+    **`git ls-files` runs in `root`, not in the current directory.** It used to
+    run wherever the caller happened to be, so with `--root` pointing at a
+    second repository this listed the wrong repository's files, joined them to
+    the right repository's path, found none of them on disk and scanned
+    nothing. The `--root` flag exists for exactly that split-repository case,
+    so the flag disabled the check it was added to serve.
+    """
     try:
         out = subprocess.check_output(["git", "ls-files", "*.py"],
-                                      stderr=subprocess.STDOUT)
+                                      stderr=subprocess.STDOUT, cwd=root)
     except (subprocess.CalledProcessError, OSError):
         return []
     return [p for p in out.decode("utf-8", "replace").split("\n") if p]
@@ -192,7 +200,8 @@ def main(argv=None):
     # evidence about the new code. A planted walrus operator in
     # tools/planner/ went undetected. The tools themselves also run on the
     # cluster, so the narrow scope was wrong on its own terms.
-    targets = args.paths or (["."] if args.all else _tracked_sources()
+    targets = args.paths or (["."] if args.all
+                             else _tracked_sources(args.root)
                              or list(CLUSTER_PATHS))
     targets = [os.path.join(args.root, t) if not os.path.isabs(t) else t
                for t in targets]
@@ -218,6 +227,14 @@ def main(argv=None):
         print(f"\n{total} finding{'' if total == 1 else 's'} across "
               f"{scanned} file{'' if scanned == 1 else 's'}. "
               "Sherlock runs python/3.6.1.")
+        return 1
+    # Scanning nothing is not passing. This printed "0 files scanned, nothing
+    # needs more than Python 3.6." and exited zero, which is a green line
+    # reporting on no code at all -- the same vacuous pass that let a planted
+    # walrus operator through once already.
+    if not scanned:
+        print(f"no Python files found under {args.root!r}. A check that reads "
+              "nothing reports failure rather than success.")
         return 1
     print(f"{scanned} files scanned, nothing needs more than Python 3.6.")
     return 0

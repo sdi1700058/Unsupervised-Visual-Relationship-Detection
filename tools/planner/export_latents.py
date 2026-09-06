@@ -21,7 +21,7 @@ Contents of the export:
     gt_boxes       (n_frames, n_obj, 4)    annotated boxes, canvas pixels
     decoded_boxes  (n_frames, n_obj, 4)    boxes the decoder gives for each
                                            latent, so scoring needs no decoder
-    U, A, P, n_bits, model_name, npz_path, frame_ids
+    U, A, P, n_bits, model_name, frame_ids
 
 decoded_boxes is what makes the decoder unnecessary later. Any latent a plan
 visits is reachable from the training transitions, so it is one of the latents

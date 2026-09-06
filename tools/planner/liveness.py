@@ -129,19 +129,30 @@ def read_train_csv(path):
 
 def plateau_shapes(rows, tolerance=PLATEAU_TOLERANCE,
                    min_runs=PLATEAU_MIN_RUNS):
-    """The `(u, p)` shapes sitting on the largest shared loss value.
+    """The `(u, p)` shapes in the largest cluster of near-identical losses.
 
-    The plateau is found in the data rather than compared against a constant.
-    The largest cluster of runs whose best validation loss agrees within
-    `tolerance` is the degenerate solution, because a real optimum depends on
-    the architecture and a constant-output solution does not.
+    The plateau is found in the data rather than compared against a constant,
+    because a real optimum depends on the architecture and a constant-output
+    solution does not.
+
+    **This is a candidate, not a verdict, and the caller has to read the value
+    it sits at.** The function knows nothing about which end of the loss range
+    is degenerate, so a set of genuinely good shapes that happen to converge
+    tightly is reported the same way: three runs at 0.198 and two at 0.5245
+    return the three. `main` prints the value beside the shapes and says to
+    check them against the dead list, which is the check that settles it.
+
+    Equal-sized clusters are broken toward the higher loss, since that is where
+    the constant-latent solution sits.
     """
     values = sorted(rows, key=lambda r: r["best_val"])
     best = []
     for i, anchor in enumerate(values):
         group = [r for r in values[i:]
                  if r["best_val"] - anchor["best_val"] <= tolerance]
-        if len(group) > len(best):
+        # `>=`, scanning upward, so an equal-sized cluster at a higher loss
+        # wins. `min_runs` discards the singletons this admits.
+        if len(group) >= len(best):
             best = group
     if len(best) < min_runs:
         return set()

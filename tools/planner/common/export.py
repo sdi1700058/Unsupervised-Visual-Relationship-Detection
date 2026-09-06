@@ -35,6 +35,14 @@ class Export:
         self.parameters = {k: int(data[k]) for k in ("U", "A", "P")
                            if k in data.files}
 
+        # The bbox bin count, when the writer recorded it. `oracle.py` does;
+        # `export_latents.py` does not, because a trained model's decoder is
+        # fixed at `common/decode.py`'s PICSIZE // 5 and there is nothing to
+        # record. None therefore means "the decoder's own resolution", which
+        # is what a reader should fall back to.
+        self.bins_x = int(data["bins_x"]) if "bins_x" in data.files else None
+        self.bins_y = int(data["bins_y"]) if "bins_y" in data.files else None
+
         # Row lookup by exact latent, so the common case costs nothing.
         self._index = {row.tobytes(): i for i, row in enumerate(self.latents)}
         self.fallback_count = 0
@@ -66,7 +74,16 @@ class Export:
         otherwise.
         """
         if self.actions is not None:
-            half = self.actions.shape[1] // 2
+            width = self.actions.shape[1]
+            if width % 2:
+                # An odd width cannot be a (pre, suc) pair. Floor-dividing it
+                # drops a bit from every successor and the planner mines an
+                # action model one proposition short, which raises nothing.
+                # `pddl/planner.read_actions_csv` already refuses this.
+                raise ValueError(
+                    "%s: actions is %d columns wide, which is not two latents "
+                    "of equal width" % (self.path, width))
+            half = width // 2
             return self.actions[:, :half], self.actions[:, half:]
         return self.latents[:-1], self.latents[1:]
 

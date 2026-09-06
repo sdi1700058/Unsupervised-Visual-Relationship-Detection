@@ -252,6 +252,17 @@ def main(argv=None):
     ranked = rank(candidates, weights)
     scored = [r for r in ranked if r["score"] is not None]
 
+    # The plan holds the selections, which are the thing `--check-order`
+    # judges. Without it the check has no subject and reported "every
+    # selection is in score order" over zero selections, in the same words it
+    # uses for a real pass. The plan is outside version control, so a fresh
+    # checkout hits this path.
+    if a.check_order and not os.path.isfile(a.plan):
+        print("no plan at %s, so there are no selections to check." % a.plan)
+        print("  A gate that cannot find its input reports failure rather "
+              "than success.")
+        return 2
+
     plan = {}
     if os.path.isfile(a.plan):
         with open(a.plan) as handle:

@@ -70,11 +70,33 @@ class TestRender(unittest.TestCase):
         self.assertIn("prefers-color-scheme: dark", svg)
 
     def test_a_claim_shows_its_confidence_mark(self):
+        """The mark is the point of the row.
+
+        Asserting only that the id appears left the confidence column
+        untested, so the panel could have dropped it and stayed green.
+        """
         plan = a_plan()
         plan["claims"] = [{"id": "C1", "asserts": "something happened",
                            "claim_type": "existential"}]
         svg = dashboard.render(plan)
         self.assertIn("C1", svg)
+        self.assertIn("strength", svg)
+        # No evidence licenses no tier, and the row says so rather than
+        # leaving the column blank.
+        self.assertIn("inconclusive", svg)
+
+    def test_a_claim_the_evidence_licenses_is_marked_with_its_tier(self):
+        """The other side of it: a real tier reaches the figure."""
+        plan = a_plan()
+        plan["claims"] = [{"id": "C2", "asserts": "the oracle beat it",
+                           "claim_type": "existential", "evidence": ["O1"]}]
+        plan["observations"] = [{"id": "O1", "n": 22, "datasets": ["vidvrd"],
+                                 "paired": True, "supports": True,
+                                 "source": "eval/planner/x/summary.csv"}]
+        svg = dashboard.render(plan)
+        self.assertIn("C2", svg)
+        self.assertIn("scoped", svg)
+        self.assertNotIn("inconclusive", svg)
 
 
 class TestMain(unittest.TestCase):

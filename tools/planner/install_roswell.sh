@@ -41,7 +41,10 @@ if command -v sbcl >/dev/null 2>&1; then
     log "found system sbcl at ${SBCL_BIN}"
 elif command -v ml >/dev/null 2>&1; then
     # Sherlock Lmod path.
-    log "attempting `ml load sbcl` (Sherlock)"
+    # Single quotes: backticks inside a double-quoted string are command
+    # substitution, so this line used to RUN `ml load sbcl` and paste its
+    # output into the log, before the `if` below had decided to.
+    log 'attempting: ml load sbcl (Sherlock)'
     if ml load sbcl 2>/dev/null; then
         SBCL_BIN="$(command -v sbcl)"
         log "loaded module sbcl → ${SBCL_BIN}"

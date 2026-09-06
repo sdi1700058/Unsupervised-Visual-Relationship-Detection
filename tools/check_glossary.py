@@ -62,6 +62,18 @@ ROW = re.compile(r"^\|\s*\**`?([A-Za-z_][A-Za-z_0-9 ]*?)`?\**\s*\|\s*(.+?)\s*\|\
 # docstring warns about.
 STOP_HEADING = re.compile(r"^#+\s*terms deliberately not used", re.I)
 
+# The refusal table's own header row, which is the second and structural way
+# to recognise it.
+#
+# The heading alone was a single point of failure: renaming it -- an ordinary
+# editorial act on a document that is outside version control, so it leaves no
+# diff -- put the refusal rows back into the definition set, readmitted
+# `corpus`, and made every use of it in every document skip again. That is the
+# vacuous pass this module's docstring says already happened once. A table's
+# column names are part of its structure rather than its prose, so they are
+# the sturdier marker of the two and both are honoured.
+STOP_TABLE_HEADER = re.compile(r"^\|\s*avoid\s*\|", re.I)
+
 
 def terms(path=GLOSSARY):
     """`{term: definition}` read from the glossary table.
@@ -75,7 +87,8 @@ def terms(path=GLOSSARY):
         return out
     with open(path, encoding="utf-8", errors="replace") as handle:
         for line in handle:
-            if STOP_HEADING.match(line.strip()):
+            if (STOP_HEADING.match(line.strip())
+                    or STOP_TABLE_HEADER.match(line.strip())):
                 break
             found = ROW.match(line.strip())
             if not found:

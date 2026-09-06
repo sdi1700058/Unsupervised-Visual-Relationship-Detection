@@ -170,3 +170,34 @@ class TestContradiction(unittest.TestCase):
         hits = self.mod.contradicted_in([path], "12 of 22",
                                         anchor="beats the straight line")
         self.assertTrue(hits)
+
+    def test_check_reports_a_contradiction_as_stale(self):
+        """`check` is what the gate calls, and the wiring was untested.
+
+        Every test above calls `contradicted_in` directly, and the two
+        `check` tests elsewhere in the suite pass headlines with no anchor,
+        so `contradicted_in` returned nothing for them. Changing `check` to
+        ignore its result left the whole suite green.
+        """
+        path = self.write("the oracle beat it on 12 of 22 clips\n"
+                          "| beats the straight line | 12 of 99 |\n")
+        headlines = {"claim 1": {"compute": lambda: "12 of 22",
+                                 "docs": [path],
+                                 "anchor": "beats the straight line",
+                                 "why": ""}}
+        result = self.mod.check(headlines)
+        self.assertEqual(len(result["stale"]), 1)
+        # The document carries the right value, so nothing is missing. It is
+        # the wrong value beside it that makes the headline stale.
+        self.assertEqual(result["stale"][0][3], [])
+        self.assertTrue(result["stale"][0][4])
+
+    def test_check_passes_a_document_that_only_carries_the_right_value(self):
+        path = self.write("| beats the straight line | 12 of 22 |\n")
+        headlines = {"claim 1": {"compute": lambda: "12 of 22",
+                                 "docs": [path],
+                                 "anchor": "beats the straight line",
+                                 "why": ""}}
+        result = self.mod.check(headlines)
+        self.assertEqual(result["stale"], [])
+        self.assertEqual(len(result["ok"]), 1)

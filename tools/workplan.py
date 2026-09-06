@@ -1043,6 +1043,21 @@ def main(argv=None):
                     help="new state, for set-state. One of: %s"
                          % ", ".join(s for s in LADDER if s != "accepted"))
     a = ap.parse_args(argv)
+
+    # `load` returns an empty skeleton when the file is absent, which is right
+    # for the read-only views but wrong for the two commands the gate runs:
+    # `check` announced "plan is consistent: 0 units, 0 assumptions, 0 claims"
+    # about a file that was not there. The plan is outside version control, so
+    # a fresh checkout takes that path and both gate entries go green having
+    # read nothing.
+    if a.command in ("check", "verify") and not os.path.isfile(a.plan
+                                                               or PLAN_PATH):
+        print("no plan at %s, so there is nothing to check."
+              % (a.plan or PLAN_PATH))
+        print("  A gate that cannot find its input reports failure rather "
+              "than success.")
+        return 2
+
     plan = load(a.plan)
 
     if a.command == "set-state":

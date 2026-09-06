@@ -73,11 +73,21 @@ TIER_COLOUR = {"attribute": "#12805c",
 
 
 def lift(row):
-    """Probe score minus the harder of the two controls."""
+    """Probe score minus the harder of the two controls, or None.
+
+    None when NEITHER control could be scored, matching
+    `predicate_probe.verdict`, which refuses the same case. Falling back to a
+    base of 0.0 would report the raw probe score as if it were a lift, and a
+    predicate whose controls are both undefined would then top the tier table
+    on no evidence at all.
+    """
     if row.get("ridge") is None:
         return None
-    base = max(row.get("prior") or 0.0, row.get("shuffled") or 0.0)
-    return row["ridge"] - base
+    controls = [v for v in (row.get("prior"), row.get("shuffled"))
+                if v is not None]
+    if not controls:
+        return None
+    return row["ridge"] - max(controls)
 
 
 def by_tier(rows, tier_fn):

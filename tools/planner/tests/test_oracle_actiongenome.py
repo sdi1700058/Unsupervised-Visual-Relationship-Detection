@@ -40,6 +40,15 @@ class TestRuns(unittest.TestCase):
         self.assertEqual(oracle.ag_runs_within([5], 3), [[5]])
 
 
+def _has_pillow():
+    """`load_canvas_scaler` reaches the loader, which imports PIL."""
+    try:
+        import PIL  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
 class TestBoxConventions(unittest.TestCase):
     """Guards the xywh/xyxy split without needing the dataset on disk."""
 
@@ -59,6 +68,58 @@ class TestBoxConventions(unittest.TestCase):
         person = {0: {"bbox": [], "bbox_size": (480, 270)}}
         boxes, meta = oracle.boxes_from_actiongenome_clip(objects, person)
         self.assertEqual(meta["frames"], 1)
+
+
+class TestTheConventionsAsApplied(unittest.TestCase):
+    """The conventions in the boxes, not in the prose that describes them.
+
+    `TestBoxConventions` above reads the docstring, so it holds however the
+    body behaves. Reading the object record as a corner pair -- the one
+    failure this module calls corrupting every trajectory without raising
+    anything -- left every test in this file green.
+    """
+
+    def _clip(self):
+        objects, person = {}, {}
+        for f in (0, 4, 8):
+            objects[f] = [{"class": "cup", "visible": True,
+                           "bbox": [10.0, 20.0, 30.0, 40.0]}]
+            person[f] = {"bbox": [[100.0, 50.0, 160.0, 200.0]],
+                         "bbox_size": (480, 270), "bbox_mode": "xyxy"}
+        return objects, person
+
+    def _loaded(self):
+        objects, person = self._clip()
+        boxes, meta = oracle.boxes_from_actiongenome_clip(objects, person,
+                                                          num_objs=2)
+        scale, _, _ = oracle.load_canvas_scaler()
+        return boxes, meta, scale
+
+    @unittest.skipUnless(_has_pillow(), "needs pillow (present in .venv-local)")
+    def test_an_object_record_is_read_as_xywh(self):
+        """`[10, 20, 30, 40]` covers x from 10 to 40, not from 10 to 30."""
+        boxes, meta, scale = self._loaded()
+        cup = meta["slots"].index("cup")
+        right = tuple(float(v) for v in scale([10.0, 20.0, 40.0, 60.0],
+                                              480, 270))
+        wrong = tuple(float(v) for v in scale([10.0, 20.0, 30.0, 40.0],
+                                              480, 270))
+        self.assertEqual(tuple(boxes[0, cup]), right)
+        # The guard is worth nothing if the two readings coincide.
+        self.assertNotEqual(right, wrong)
+
+    @unittest.skipUnless(_has_pillow(), "needs pillow (present in .venv-local)")
+    def test_a_person_record_is_read_as_xyxy(self):
+        boxes, meta, scale = self._loaded()
+        person = meta["slots"].index("person")
+        self.assertEqual(tuple(boxes[0, person]),
+                         tuple(float(v) for v in
+                               scale([100.0, 50.0, 160.0, 200.0], 480, 270)))
+
+    @unittest.skipUnless(_has_pillow(), "needs pillow (present in .venv-local)")
+    def test_the_person_is_the_last_slot(self):
+        _, meta, _ = self._loaded()
+        self.assertEqual(meta["slots"][-1], "person")
 
 
 if __name__ == "__main__":
