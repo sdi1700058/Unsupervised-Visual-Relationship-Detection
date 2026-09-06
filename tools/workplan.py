@@ -543,21 +543,63 @@ def next_unit(plan, runs_on=None):
 # --------------------------------------------------------------------------
 
 def combinations_measured(plan=None, root="."):
-    """(dataset, method) pairs whose declared evidence is on disk.
+    """(dataset, method, source) triples whose declared evidence is on disk.
 
     Declared in the plan, not detected by globbing. Globbing matched
     `eval/probe/vidor` and `eval/probe/se_batch`, which hold oracle exports
     rather than probe results, and missed two real results at the same time.
     A milestone counter has to be the harder of the two to fool, so it reads a
     declaration and then checks the file is there.
+
+    **`source` is part of the key, and that is deliberate.** It is `oracle`
+    when the latents encode ground-truth boxes and `trained` when a network
+    produced them. The supervisor asked for the problem to be split exactly
+    that way, so the two answer different questions and each is a combination
+    in its own right. Keeping them apart is also a guard: an oracle number has
+    already been read as a trained one once in this project, and a shared key
+    would have hidden it.
     """
     plan = load() if plan is None else plan
     out = []
     for combo in plan.get("combinations", []):
         path = os.path.join(root, combo.get("evidence", ""))
         if combo.get("evidence") and os.path.exists(path):
-            out.append("%s x %s" % (combo["dataset"], combo["method"]))
+            out.append("%s x %s (%s)" % (combo["dataset"], combo["method"],
+                                         combo.get("source", "oracle")))
+    return sorted(set(out))
+
+
+def corpora_usable(plan=None, root="."):
+    """Corpora whose boxes load and which have been screened.
+
+    That pair is the point at which the oracle can score a corpus, and the
+    oracle needs boxes rather than frames, so it is reachable without the
+    cluster. A corpus that has only been downloaded does not count: an archive
+    on disk has never once been the hard part.
+    """
+    plan = load() if plan is None else plan
+    out = []
+    for corpus in plan.get("corpora", []):
+        evidence = corpus.get("evidence") or []
+        if evidence and all(os.path.exists(os.path.join(root, e))
+                            for e in evidence):
+            trained = " trained" if corpus.get("trained") else ""
+            out.append("%s%s" % (corpus["name"], trained))
     return sorted(out)
+
+
+def bar(have, target, width=22):
+    """A progress bar, for reading the milestones at a glance.
+
+    Plain block characters rather than a chart, because this is printed in a
+    terminal beside the numbers it summarises and has to stay readable when
+    the numbers are what matters.
+    """
+    if not target:
+        return "-" * width + "   n/a"
+    filled = int(round(width * min(1.0, float(have) / target)))
+    return "%s%s  %3d%%" % ("#" * filled, "." * (width - filled),
+                            int(round(100.0 * have / target)))
 
 
 def papers_fully_treated(index_path="notes/lit/index.json"):
@@ -585,6 +627,7 @@ def milestone_progress(plan):
     """Countable progress per milestone. Counts artifacts, not intentions."""
     counters = {
         "combinations_measured": lambda: combinations_measured(plan),
+        "corpora_usable": lambda: corpora_usable(plan),
         "papers_fully_treated": lambda: papers_fully_treated(),
         "parked": lambda: [],
     }
@@ -690,22 +733,29 @@ def main(argv=None):
                                         "progress"])
     ap.add_argument("--runs-on", default=None)
     ap.add_argument("--plan", default=None)
+    ap.add_argument("--detail", action="store_true",
+                    help="with progress, list what each milestone counted")
     a = ap.parse_args(argv)
     plan = load(a.plan)
 
     if a.command == "progress":
         rows = milestone_progress(plan)
-        print("%-5s %-52s %-11s %s" % ("", "milestone", "counted", "units"))
+        print("")
         for r in rows:
-            bar = "%d of %d" % (r["have"], r["target"])
-            print("%-5s %-52s %-11s %d accepted of %d"
-                  % (r["id"], r["title"][:52], bar,
+            print("%-3s %s" % (r["id"], r["title"]))
+            print("    %s   %d of %d        units: %d of %d accepted"
+                  % (bar(r["have"], r["target"]), r["have"], r["target"],
                      r["units_accepted"], r["units_total"]))
+            print("")
+        if not a.detail:
+            print("Add --detail to list what each milestone counted.")
+            return 0
         for r in rows:
             if r["detail"]:
-                print("\n%s counts:" % r["id"])
+                print("%s counts:" % r["id"])
                 for item in r["detail"]:
                     print("  %s" % (item,))
+                print("")
         return 0
 
     if a.command == "claims":
