@@ -131,36 +131,84 @@ def summarise(cells):
     return counts
 
 
-# How each method is run. The oracle half needs boxes only, so it runs locally.
-# A method absent here has no runner yet, and the grid says so rather than
-# emitting a command that would fail.
+# How each method is actually run, as a template.
+#
+# **These are the real command lines, not a convention.** The first version
+# emitted `--dataset X --source Y` for every method, and no runner accepts
+# those flags: `m4_temporal.py` takes positional paths, and the others differ
+# again. A command that cannot run is worse than no command, because it looks
+# like work waiting to happen.
+#
+# `{export}` is the dataset's oracle latents, `{ann}` its annotation root, and
+# `{out}` the output directory. A template naming a placeholder the dataset
+# cannot fill produces no command, and the reason is reported.
 RUNNERS = {
-    "M4 temporal distance": "tools/planner/m4_temporal.py",
-    "M6 effect determinism": "tools/planner/m6_determinism.py",
-    "M7 triplet mAP": "tools/planner/m7_map.py",
-    "M1 probing": "tools/planner/predicate_probe.py",
-    "M2 compositional": "tools/planner/compositional.py",
-    "M3 plan validity": "tools/planner/plan_validity.py",
-    "interpolation": "tools/planner/eval_plannability.sh",
+    "M4 temporal distance":
+        "{py} tools/planner/m4_temporal.py {name}-{source}={export} "
+        "--out-dir {out}",
+    # Pooled, not one row per clip. m6 takes LABEL=a,b,c to treat several
+    # exports as one dataset; passing a directory reads nothing and passing
+    # each file separately would measure 25 datasets of one clip each.
+    "M6 effect determinism":
+        "{py} tools/planner/m6_determinism.py "
+        "\"{name}-{source}=$(ls {export}/*.npz | paste -sd,)\" "
+        "--out-dir {out}",
+    "M7 triplet mAP":
+        "{py} tools/planner/m7_map.py --annotations {ann} --export {export} "
+        "--out-dir {out}",
+    "M1 probing":
+        "{py} tools/planner/predicate_probe.py --annotation {ann} "
+        "--out-dir {out}",
+    "M2 compositional":
+        "{py} tools/planner/compositional.py --export {export} "
+        "--out-dir {out}",
+    "M3 plan validity":
+        "{py} tools/planner/plan_validity.py {export}/*.npz --out-dir {out}",
+    "interpolation":
+        "bash tools/planner/eval_plannability.sh {export} --window 16",
 }
 
+# The interpreter that has pillow. Bare python3 silently skips work that needs
+# it, and a silent skip has already been read as a pass on this project.
+PY = ".venv-local/bin/python"
 
-def plan_commands(cells):
+
+def plan_commands(cells, datasets=None):
     """One command per runnable cell, and nothing for a cell that cannot run."""
+    where = {}
+    for dataset in datasets or []:
+        where[dataset.get("name")] = dataset
+
     commands = []
     for cell in cells:
         if cell["state"] != NEVER_RUN:
             continue
-        runner = RUNNERS.get(cell["method"])
-        if runner is None:
+        template = RUNNERS.get(cell["method"])
+        if template is None:
             commands.append(
-                "# no runner yet for %s; write one before this cell can run "
-                "(%s, %s)" % (cell["method"], cell["dataset"], cell["source"]))
+                "# no runner yet for %s (%s, %s). Write one before this cell "
+                "can run." % (cell["method"], cell["dataset"], cell["source"]))
             continue
-        commands.append(
-            "python3 %s --dataset %s --source %s --out-dir eval/grid/%s-%s-%s"
-            % (runner, cell["dataset"], cell["source"], cell["dataset"],
-               cell["method"].split()[0], cell["source"]))
+        dataset = where.get(cell["dataset"], {})
+        export = dataset.get("oracle_export") or ""
+        ann = dataset.get("annotations") or ""
+        if "{export}" in template and not export:
+            commands.append(
+                "# %s has no oracle export yet, so %s cannot run on it. Build "
+                "one with tools/planner/oracle.py."
+                % (cell["dataset"], cell["method"]))
+            continue
+        if "{ann}" in template and not ann:
+            commands.append(
+                "# %s has no annotation root recorded, so %s cannot run."
+                % (cell["dataset"], cell["method"]))
+            continue
+        out = "eval/grid/%s-%s-%s" % (cell["dataset"],
+                                      cell["method"].split()[0],
+                                      cell["source"])
+        commands.append(template.format(py=PY, name=cell["dataset"],
+                                        source=cell["source"], export=export,
+                                        ann=ann, out=out))
     return commands
 
 
@@ -204,7 +252,8 @@ def main(argv=None):
     if gaps:
         print("\n%d cell(s) could run now. Nothing is submitted; this is a "
               "dry run.\n" % len(gaps))
-        for command in plan_commands(gaps):
+        for command in plan_commands(
+                gaps, plan.get('datasets_for_grid')):
             print("    %s" % command)
     return 0
 
