@@ -190,6 +190,7 @@ def main(argv=None):
 
     index = load()
     stale, written, skipped = [], [], []
+    checked = 0
     for path, name in sorted(TARGETS.items()):
         if not os.path.isfile(path):
             skipped.append("%s (absent)" % path)
@@ -201,6 +202,7 @@ def main(argv=None):
         if not found:
             skipped.append("%s (no '%s' markers)" % (path, name))
             continue
+        checked += 1
         if new == text:
             continue
         if a.check:
@@ -217,7 +219,17 @@ def main(argv=None):
             print("%d generated block(s) out of date: %s"
                   % (len(stale), ", ".join(stale)))
             return 1
-        print("generated blocks are up to date")
+        if not checked:
+            # Reading nothing is not the same as finding nothing wrong. This
+            # said "up to date" and exited 0 when every target was missing or
+            # had lost its markers, which is a green gate over an unread file.
+            print("no generated block was read, so nothing was checked.\n"
+                  "  Every target is absent or has lost its markers. A block "
+                  "that cannot be found\n"
+                  "  cannot be stale, and that is not the same as being "
+                  "current.")
+            return 1
+        print("generated blocks are up to date (%d checked)" % checked)
         return 0
     for path in written:
         print("  updated %s" % path)

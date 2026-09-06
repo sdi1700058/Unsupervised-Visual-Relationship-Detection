@@ -34,8 +34,16 @@ conda env create -f environment.yml
 # protobuf 3.20.3 becomes 3.19.6 and h5py <3.0 becomes ==2.10.0. environment.yml
 # is the authority for what this project runs on.
 conda run -n fosae pip install -e . --no-deps
-conda activate fosae
+
+# No `conda activate` here. In a non-interactive script it needs the shell hook
+# and aborts under `set -e` without it, which used to take the keras.json copy
+# below down with it; and even when it works the activation dies with this
+# shell. Activate yourself, once the script is done.
 
 mkdir -p ~/.keras
 cp keras-tf.json ~/.keras/keras.json
+
+echo
+echo "Done. Now activate the environment in your own shell:"
+echo "    conda activate fosae"
 

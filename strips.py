@@ -56,9 +56,16 @@ default_parameters = {
 }
 # Active `parameters` block. Two modes — toggle by uncommenting only ONE block:
 #
-#   (1) Single-trial FIXED paper-faithful values (default; KNOWN WORKING per
-#       old_working_strips.py). Use this for paper-spec reproducibility with
-#       LIMIT=1 (default). Matches Asai 2019 §6 8-puzzle paper picks.
+#   (1) Single trial, one value per knob (default; used with LIMIT=1). This is
+#       the upstream grid narrowed to one point and then hand-tuned. Five of
+#       the values below carry a "was X" comment, and X is what the grid in
+#       (2) starts from: dropout, noise, zerosuppress, zerosuppress_delay and
+#       max_temperature are this project's picks rather than the paper's, and
+#       none of them has a measurement recorded beside it. The file this block
+#       once cited as the known-working source, old_working_strips.py, is
+#       gitignored and absent from the repository, so a reader with a clone
+#       cannot check that claim. Treat (1) as a working default, not as a
+#       reproduction of Asai 2019 §6.
 #   (2) Full upstream grid (commented below). Use with LIMIT=300 INIT_POP=20
 #       POPULATION=10 to reproduce the paper's full grid search.
 #
@@ -81,7 +88,7 @@ parameters = {
     'preencoder_layers':[0],
     'preencoder_l1':[0.0],
     'preencoder_delay':[0.1],       # 0.1 default — earlystop fires @ epoch 200; previous 0.9 caused ZeroDivisionError in LinearEarlyStopping (epoch_end - epoch_start = 0)
-    'max_temperature':[1.0],        # was default 5.0 — lower start temp keeps Gumbel latent near-discrete from epoch 1; high temp early was the suspected reason for non-learning
+    'max_temperature':[1.0],        # was default 5.0. The schedule now runs 1.0 -> min_temperature 0.7, i.e. almost flat. It does NOT make the latent near-discrete: the MIN_TEMPERATURE note in _apply_env_overrides says 0.7 never gets near-discrete, and 1.0 is above 0.7. An untested guess at the cause of non-learning.
     'preencoder_output_activation':[("relu","MSE")],
     'loss':["BCE"],
     'eval':["MSE"],
@@ -456,11 +463,15 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
     default_parameters["aeclass"]    = aeclass
     default_parameters["activation"] = "self.blocks_activation"
     default_parameters["epoch"]      = epoch
-    _apply_env_overrides(parameters)
     parameters['preencoder_layers']              = [2]
     parameters['preencoder_dimention']           = [256]
     parameters['preencoder_output_activation']   = [("linear", "MSE")]
     parameters['lr']                             = [0.0001]
+    # After the four lines above, not before them. `lr` is one of the env
+    # knobs, so calling this first meant LR=... was read and then silently
+    # overwritten by 0.0001 on every labeled_objects run. vidvrd() and
+    # actiongenome() already order it this way.
+    _apply_env_overrides(parameters)
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
 

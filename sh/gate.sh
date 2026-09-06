@@ -94,11 +94,18 @@ run "glossary"           python3 tools/check_glossary.py
 run "plan consistency"   python3 tools/workplan.py check
 run "unit verification"  python3 tools/workplan.py verify
 run "dataset order"      python3 tools/score_datasets.py --check-order
+# A generated cross-reference block goes stale silently: the prose still reads
+# as current and nothing in the document says it was machine-written. The
+# review found one carrying 26 of 28 shortlisted papers while the gate was
+# green, because nothing ran this.
+run "generated blocks"   python3 tools/lit/render_index.py --check
 
 # Headlines and liveness are conditional: one needs its script, the other needs
 # exports on disk. A check that cannot run says so rather than passing.
 if [[ -f tools/check_headlines.py ]]; then
     run "headlines"      python3 tools/check_headlines.py
+else
+    printf '\n=== headlines\n    skipped: tools/check_headlines.py is not here\n'
 fi
 if [[ -d eval/exports ]]; then
     run "export liveness" "${PY}" tools/planner/liveness.py --exports eval/exports

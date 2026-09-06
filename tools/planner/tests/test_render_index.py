@@ -8,7 +8,9 @@ document without markers is skipped rather than mangled.
 """
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
@@ -137,3 +139,41 @@ class TestChart(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCheckCannotPassVacuously(unittest.TestCase):
+    """A check that read nothing must not report that everything is current.
+
+    `--check` printed "generated blocks are up to date" and exited 0 when
+    every target was missing or carried no markers. That was tolerable while
+    nothing ran it. Putting it in `sh/gate.sh` turns the silence into a green
+    gate over an unread file, which is the defect this review exists to find.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.cwd = os.getcwd()
+        self._targets = dict(ri.TARGETS)
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        ri.TARGETS.clear()
+        ri.TARGETS.update(self._targets)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_no_target_present_is_a_failure(self):
+        ri.TARGETS.clear()
+        ri.TARGETS["no/such/file.md"] = "shortlist-usage"
+        self.assertEqual(ri.main(["--check"]), 1)
+
+    def test_a_target_with_no_markers_is_a_failure(self):
+        path = os.path.join(self.dir, "a.md")
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write("# nothing generated here\n")
+        ri.TARGETS.clear()
+        ri.TARGETS[path] = "shortlist-usage"
+        self.assertEqual(ri.main(["--check"]), 1)
+
+    def test_the_real_targets_still_pass(self):
+        """The other direction, so the guard is not simply always red."""
+        self.assertEqual(ri.main(["--check"]), 0)

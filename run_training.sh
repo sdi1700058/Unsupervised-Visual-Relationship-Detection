@@ -11,8 +11,13 @@
 #   AECLASS    — model class (default FirstOrderSAE)
 #   U, A, P    — hyperparameters that compose run_tag
 #   CATEGORY   — vidvrd category filter (or None / empty)
-#   EXTRACT_FOL=0  — disable extract_fol.py post-step
-#   VISUALIZE=0    — disable visualize_fol.py post-step
+#   EXTRACT_FOL    — 1 runs extract_fol.py, anything else skips it. sh/submit.sh
+#                    exports EXTRACT_FOL=1 unless you set it, so through submit.sh
+#                    the step is opt-out; under a bare `sbatch run_training.sh` it
+#                    is opt-in, because the default here is 0.
+#   FOL_VIZ=1      — run the legacy visualize_fol.py per-unit dump (default off).
+#                    VISUALIZE is exported by sh/submit.sh and documented in the
+#                    README but nothing in this script reads it; it does nothing.
 #
 # Monitor:  squeue -u $USER  /  tail -f logs/<job>.<JOBID>.out  /  seff <JOBID>
 
@@ -103,10 +108,11 @@ OUT_DIR="${JOB_OUT_DIR:-${OUT_DIR:-}}"
 #   2) viz/recon.py               → single-glance bulk reconstruction grid
 #   3) tools/plot_training_curve  → training/val loss curve from CSV
 #
-# extract_fol.py (FOL predicate extraction) opt-in via EXTRACT_FOL=1 — it's
-# slow + noisy. visualize_fol.py is DEPRECATED from the auto-hook (still
-# callable manually); user feedback was that its per-unit/per-state PNG dump
-# was overwhelming. Enable with FOL_VIZ=1 if needed.
+# extract_fol.py (FOL predicate extraction) runs when EXTRACT_FOL=1. It is slow
+# and noisy, so the default here is off; sh/submit.sh turns it on for every job
+# it composes. visualize_fol.py is DEPRECATED from the auto-hook (still callable
+# manually); user feedback was that its per-unit/per-state PNG dump was
+# overwhelming. Enable with FOL_VIZ=1 if needed.
 echo ""
 echo "--- Post-train hooks ---"
 if [[ -z "${OUT_DIR}" ]]; then
@@ -115,7 +121,9 @@ if [[ -z "${OUT_DIR}" ]]; then
     echo "       python3 viz/recon.py               <out_dir>"
     echo "       python3 tools/plot_training_curve  <out_dir>"
 elif [[ ! -f "${OUT_DIR}/net0.h5" ]]; then
-    echo "[skip] ${OUT_DIR}/net0.h5 not found — training likely did not complete cleanly."
+    echo "[fail] ${OUT_DIR}/net0.h5 not found. Training produced no model."
+    echo "       The job is not COMPLETED. It ran and it did not train."
+    NO_MODEL=1
 else
     echo "[info] Output dir: ${OUT_DIR}"
 
@@ -169,3 +177,14 @@ else
 fi
 set -o pipefail
 echo "================================================================"
+
+# A job that trained nothing must not report success. Until 2026-09-06 a
+# missing net0.h5 printed a skip line and the script exited 0, so sacct
+# recorded COMPLETED and every tool that reads job state -- and every person
+# reading it over their shoulder -- was told the run had finished. Exporting
+# a model that was never written then failed for reasons that looked
+# unrelated.
+if [[ "${NO_MODEL:-0}" == "1" ]]; then
+    echo "exiting 3: no model was written, so this job did not complete."
+    exit 3
+fi
