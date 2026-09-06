@@ -28,6 +28,7 @@ import argparse
 import json
 import math
 import os
+import xml.dom.minidom
 import sys
 
 
@@ -496,6 +497,64 @@ def ladder_fraction(unit):
     return float(index) / (len(LADDER) - 1)
 
 
+def verify_unit(plan, unit_id, root="."):
+    """Check a unit against the three artefacts it owes.
+
+    The three are code with a test, an evidence file, and a figure. A unit
+    missing any of them is not finished, whatever its state says.
+
+    This is the guard against the failure that has cost this project most: a
+    number stated in a document that no file on disk can reproduce. The pair
+    `floor_ratio` 1.56 and "oracle closer on 19 of 19" sat in four documents
+    for five days while no summary carried the column that produced it.
+    """
+    unit = None
+    for candidate in plan.get("units", []):
+        if candidate.get("id") == unit_id:
+            unit = candidate
+            break
+    if unit is None:
+        raise ValueError("no unit with id %r" % unit_id)
+
+    evidence = unit.get("evidence") or []
+    checks = []
+
+    present = [e for e in evidence if os.path.exists(os.path.join(root, e))]
+    checks.append({
+        "name": "evidence",
+        "ok": bool(evidence) and len(present) == len(evidence),
+        "detail": "%d of %d evidence file(s) on disk"
+                  % (len(present), len(evidence))})
+
+    figures = [e for e in present if e.endswith(".svg") or e.endswith(".png")]
+    figure_ok = bool(figures)
+    detail = "%d figure(s)" % len(figures)
+    for figure in figures:
+        # A png is a figure and is not XML, so only svg is parsed.
+        if not figure.endswith(".svg"):
+            continue
+        try:
+            xml.dom.minidom.parse(os.path.join(root, figure))
+        except Exception as exc:            # noqa: BLE001 - reported, not raised
+            figure_ok = False
+            detail = "%s does not parse: %s" % (figure, exc)
+            break
+    checks.append({"name": "figure", "ok": figure_ok, "detail": detail})
+
+    tests = [t for t in (unit.get("touches") or [])
+             if "test" in os.path.basename(t)]
+    # Only a unit that produces code owes a test file. A measurement unit owes
+    # its evidence, which the first check already covers.
+    produces_code = unit.get("produces") == "code"
+    checks.append({
+        "name": "test",
+        "ok": bool(tests) or not produces_code,
+        "detail": "%d test file(s) named in touches" % len(tests)})
+
+    return {"unit": unit_id, "ok": all(c["ok"] for c in checks),
+            "checks": checks}
+
+
 def check(plan):
     """Everything wrong with the plan, as a list of sentences."""
     problems = []
@@ -782,7 +841,7 @@ def main(argv=None):
     ap.add_argument("command", choices=["next", "render", "check", "score",
                                         "contradictions", "report",
                                         "sensitivity", "graph", "claims",
-                                        "progress", "set-state"])
+                                        "progress", "set-state", "verify"])
     ap.add_argument("--runs-on", default=None)
     ap.add_argument("--plan", default=None)
     ap.add_argument("--detail", action="store_true",
@@ -806,6 +865,27 @@ def main(argv=None):
         save(plan, a.plan)
         print("%s -> %s" % (unit["id"], unit["state"]))
         return 0
+
+    if a.command == "verify":
+        # With no --unit, check every unit that claims to have produced
+        # something. Those are the ones whose numbers reach a document.
+        targets = [a.unit] if a.unit else [
+            u["id"] for u in plan.get("units", [])
+            if u.get("state") in ("measured", "illustrated",
+                                  "evidence_produced")]
+        if not targets:
+            print("no unit claims to have produced anything yet")
+            return 0
+        failed = 0
+        for unit_id in targets:
+            out = verify_unit(plan, unit_id)
+            print("%s %s" % ("ok  " if out["ok"] else "FAIL", unit_id))
+            for entry in out["checks"]:
+                if not entry["ok"]:
+                    print("       %-9s %s" % (entry["name"], entry["detail"]))
+            failed += 0 if out["ok"] else 1
+        print("\n%d of %d unit(s) failed verification" % (failed, len(targets)))
+        return 1 if failed else 0
 
     if a.command == "progress":
         rows = milestone_progress(plan)
