@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
 """One image that answers "where is this thesis", in ten seconds.
 
-**Why an image and not a document.** The author has autonomy-blindness by
-design: with work running unattended they are easily left with no idea what is
-happening unless they can see the bottom line in bulk, in a humanly
-understandable way. Four documents already exist and none of them answers the
-question at a glance.
+**Why an image and not a document.** A reader needs the bottom line in bulk,
+in a form a person can take in at a glance. Four documents already describe the
+state of this work and none of them answers "where is it" without being read
+end to end.
 
 Four panels, top to bottom.
 

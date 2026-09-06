@@ -90,7 +90,7 @@ def out_of_order(plan, ranked):
     position = {}
     for i, row in enumerate(ranked):
         position[row["name"]] = i
-    selected = [d for d in plan.get("corpora", []) if d.get("selected")]
+    selected = [d for d in plan.get("datasets", []) if d.get("selected")]
     best_unselected = None
     for i, row in enumerate(ranked):
         if row["score"] is None:

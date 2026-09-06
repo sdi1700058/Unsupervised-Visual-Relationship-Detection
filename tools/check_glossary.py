@@ -52,13 +52,31 @@ EXEMPT = re.compile(r"do not (write|use|say)|avoid|banned|use instead|"
 ROW = re.compile(r"^\|\s*\**`?([A-Za-z_][A-Za-z_0-9 ]*?)`?\**\s*\|\s*(.+?)\s*\|\s*$")
 
 
+# Where the definitions stop. Everything below this heading lists words the
+# project refuses to use, and those rows are not definitions.
+#
+# Reading them as definitions made this check pass vacuously on its first real
+# run: `corpus` appeared in the refusal table, was registered as a defined
+# term, and every use of it in every document was then skipped. A planted
+# violation went undetected, which is precisely the failure the module's own
+# docstring warns about.
+STOP_HEADING = re.compile(r"^#+\s*terms deliberately not used", re.I)
+
+
 def terms(path=GLOSSARY):
-    """`{term: definition}` read from the glossary table."""
+    """`{term: definition}` read from the glossary table.
+
+    Only the definition table. The refusal table below it names words in order
+    to ban them, so treating its rows as definitions would readmit exactly the
+    words the check exists to catch.
+    """
     out = {}
     if not os.path.isfile(path):
         return out
     with open(path, encoding="utf-8", errors="replace") as handle:
         for line in handle:
+            if STOP_HEADING.match(line.strip()):
+                break
             found = ROW.match(line.strip())
             if not found:
                 continue

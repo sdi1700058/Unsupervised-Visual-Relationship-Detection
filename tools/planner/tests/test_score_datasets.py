@@ -95,7 +95,7 @@ class TestOutOfOrder(unittest.TestCase):
                                            candidate("worse", structure=0.1)])
 
     def test_selecting_a_lower_ranked_dataset_is_reported(self):
-        plan = {"corpora": [{"name": "worse", "selected": True}]}
+        plan = {"datasets": [{"name": "worse", "selected": True}]}
         bad = score_datasets.out_of_order(plan, self.ranked)
         self.assertEqual(len(bad), 1)
         self.assertEqual(bad[0]["dataset"], "worse")
@@ -103,18 +103,18 @@ class TestOutOfOrder(unittest.TestCase):
     def test_a_written_reason_makes_it_pass(self):
         """The rule is not that the top must win. It is that a departure is
         argued rather than drifted into."""
-        plan = {"corpora": [{"name": "worse", "selected": True,
+        plan = {"datasets": [{"name": "worse", "selected": True,
                              "reason": "it ships compositional splits"}]}
         self.assertEqual(score_datasets.out_of_order(plan, self.ranked), [])
 
     def test_selecting_the_top_ranked_dataset_passes(self):
-        plan = {"corpora": [{"name": "best", "selected": True}]}
+        plan = {"datasets": [{"name": "best", "selected": True}]}
         self.assertEqual(score_datasets.out_of_order(plan, self.ranked), [])
 
     def test_an_unscored_selection_is_reported(self):
         """Selecting something nobody measured is the original failure."""
         ranked = score_datasets.rank([candidate("best"), {"name": "mystery"}])
-        plan = {"corpora": [{"name": "mystery", "selected": True}]}
+        plan = {"datasets": [{"name": "mystery", "selected": True}]}
         bad = score_datasets.out_of_order(plan, ranked)
         self.assertEqual(len(bad), 1)
 

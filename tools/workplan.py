@@ -811,7 +811,7 @@ def datasets_trained(plan=None, root="."):
     """
     plan = load() if plan is None else plan
     out = []
-    for dataset in plan.get("corpora", []):
+    for dataset in plan.get("datasets", []):
         if not dataset.get("trained"):
             continue
         evidence = dataset.get("evidence") or []
@@ -821,7 +821,7 @@ def datasets_trained(plan=None, root="."):
     return sorted(out)
 
 
-def corpora_usable(plan=None, root="."):
+def datasets_usable(plan=None, root="."):
     """Datasets whose boxes load and which have been screened.
 
     That pair is the point at which the oracle can score a dataset, and the
@@ -831,7 +831,7 @@ def corpora_usable(plan=None, root="."):
     """
     plan = load() if plan is None else plan
     out = []
-    for dataset in plan.get("corpora", []):
+    for dataset in plan.get("datasets", []):
         evidence = dataset.get("evidence") or []
         if evidence and all(os.path.exists(os.path.join(root, e))
                             for e in evidence):
@@ -881,7 +881,7 @@ def milestone_progress(plan):
         "combinations_measured": lambda: combinations_measured(plan),
         "paired_combinations": lambda: paired_combinations(plan),
         "screening_only": lambda: screening_only(plan),
-        "corpora_usable": lambda: corpora_usable(plan),
+        "datasets_usable": lambda: datasets_usable(plan),
         "datasets_trained": lambda: datasets_trained(plan),
         "papers_fully_treated": lambda: papers_fully_treated(),
         "parked": lambda: [],

@@ -1,8 +1,8 @@
 """The dashboard. Four panels, one image, and it must open.
 
-The author has autonomy-blindness by design: with work running unattended they
-are easily left with no idea what is happening unless they can see the bottom
-line in bulk, in a humanly understandable way. This is that image.
+A reader needs the bottom line in bulk, in a form a person can take in at a
+glance. This is that image, and these tests hold it to being openable and
+complete.
 """
 
 import os
