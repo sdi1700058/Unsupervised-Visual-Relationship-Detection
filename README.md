@@ -225,7 +225,7 @@ python3 tools/plot_training_curve.py $OUT           # loss curve
 python3 tools/list_runs.py                          # sacct sweep, sorted by val_BCE_min
 ```
 
-`tools/list_runs.py` reads `sacct` for the user, picks completed jobs, extracts `val_BCE_min` from `training_history.csv`, and lists them best-first.
+`tools/list_runs.py` reads `sacct` for the user, picks completed jobs, extracts `val_BCE_min` from `training_history.csv`, and lists them best-first. It needs `sacct`, so run it on the cluster; anywhere else it says so and exits 1 rather than reporting a listing it could not read.
 
 ## 7. Success Criteria
 
@@ -249,7 +249,7 @@ python3 tools/planner/make_report.py eval/planner/<model>
 Three commands say whether the repository still holds together.
 
 ```bash
-.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 761 tests
+.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 772 tests
 python3 tools/check_docs.py                                          # the documents
 python3 tools/workplan.py check                                      # the plan
 ```

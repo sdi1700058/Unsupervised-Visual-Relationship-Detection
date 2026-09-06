@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
-"""tools/list_runs.py — robust ranking sweep over FOSAE training jobs.
+"""Rank FOSAE training jobs by reading the scheduler.
 
-Iterates SLURM sacct output for COMPLETED jobs in a date window, finds the
-matching log files under logs/, extracts each job's OUT_DIR, and prints
-key metrics from training_history.csv (val_BCE_min, train_BCE_min,
-val_activation_last, epochs). Sorted by val_BCE_min ascending.
+Reads `sacct` in parsable mode for jobs in a date window, finds each job's log
+under `logs/`, extracts its `OUT_DIR`, and prints the metrics from
+`training_history.csv`, sorted by `val_BCE_min` ascending.
 
-Defensive against the things that have broken previous one-liners:
-  * sacct format variation across slurm versions (uses -P parsable mode)
-  * older `column` lacking `-N` (no fancy table; plain printf)
-  * jobs whose log got renamed / pruned / aborted before writing OUT_DIR
-  * jobs that crashed mid-training (no training_history.csv)
-  * CSV column count mismatch (puzzle has 17 cols; uses header-name lookup)
+**It runs only where `sacct` runs, which is the cluster.** Off the cluster it
+raises `NoScheduler` and prints nothing. That is deliberate and it is the whole
+point of this module's history: until 2026-09-06 `list_jobs` did not call
+`sacct` at all. It globbed `logs/*.out`, appended one hard-coded
+`(jobid, "COMPLETED")` row on every invocation, and announced itself as a mock
+in a debug line -- while this docstring claimed it iterated sacct output and
+was defensive about format variation across Slurm versions.
+
+The invented job id is deliberately not repeated here. `test_list_runs.py`
+greps this file for it, so naming it in prose would disarm the guard.
+
+A tool that reports which runs exist was inventing one of them and documenting
+itself as authoritative. A fabricated job id in a listing is the same class of
+error as a number in a document that no file supports, and worse for being
+automated. So the rule here is that no answer is produced unless the scheduler
+gave one.
 
 Usage:
     python3 tools/list_runs.py
@@ -33,17 +42,58 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def list_jobs(start, states=("COMPLETED",), user=None, debug=False):
+class NoScheduler(RuntimeError):
+    """`sacct` is not on this machine, so no job listing can be produced."""
+
+
+# A job step, not a job. sacct emits `12345`, `12345.batch` and `12345.extern`
+# for one submission, and counting all three would treble every total.
+_STEP = re.compile(r"^\d+\.")
+
+
+def parse_sacct(text):
+    """`[(jobid, state)]` from sacct parsable output, steps excluded.
+
+    The state may carry a reason, as in `CANCELLED by 12345`. Only the state
+    is kept, because the reason is not one.
+    """
     rows = []
-    import glob, re
-    for out in glob.glob("logs/*.out"):
-        m = re.search(r'\.(\d+)\.out$', out)
-        if m:
-            jid = m.group(1)
-            rows.append((jid, "COMPLETED"))
-    print(f"DEBUG: Mocked sacct returned {len(rows)} jobs from logs/")
-    rows.append(("25601994", "COMPLETED"))
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line or "|" not in line:
+            continue
+        jobid, _, state = line.partition("|")
+        if jobid == "JobID" or _STEP.match(jobid):
+            continue
+        rows.append((jobid, state.split()[0] if state.split() else ""))
     return rows
+
+
+def list_jobs(start, states=("COMPLETED",), user=None, debug=False,
+              sacct="sacct"):
+    """Jobs from the scheduler, or `NoScheduler` if there is none.
+
+    Never invents a row. See the module docstring for why that has to be said.
+    """
+    cmd = [sacct, "-X", "-P", "-n", "--format=JobID,State",
+           "-S", start, "-u", user or getpass.getuser()]
+    if states:
+        cmd += ["--state", ",".join(states)]
+    if debug:
+        print("DEBUG: %s" % " ".join(cmd))
+    try:
+        out = subprocess.check_output(cmd, stderr=subprocess.STDOUT)
+    except OSError as exc:
+        raise NoScheduler(
+            "sacct is not available on this machine, so no job listing can be "
+            "produced. This tool reads the cluster scheduler and runs only "
+            "there. (%s)" % exc)
+    except subprocess.CalledProcessError as exc:
+        raise NoScheduler(
+            "sacct failed with exit %d: %s"
+            % (exc.returncode,
+               exc.output.decode("utf-8", "replace").strip()[:200]))
+    return parse_sacct(out.decode("utf-8", "replace"))
 
 def find_log(jobid, debug=False):
     # Try .out first, fall back to .err, or any log containing the jobid
@@ -167,7 +217,7 @@ def summarize(out_dir):
     }
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--start", default="2026-05-01",
                     help="sacct --starttime value (default 2026-05-01). 'today' / 'now-3days' also accepted")
@@ -175,14 +225,21 @@ def main():
     ap.add_argument("--include-failed", action="store_true",
                     help="also include FAILED / TIMEOUT jobs (these may still have partial training_history.csv)")
     ap.add_argument("--debug", action="store_true", help="Print debug information")
-    args = ap.parse_args()
+    ap.add_argument("--sacct", default="sacct",
+                    help="scheduler command to read (default sacct)")
+    args = ap.parse_args(argv)
 
     states = ("COMPLETED",)
     if args.include_failed:
         states = ("COMPLETED", "FAILED", "TIMEOUT")
         
     user = os.environ.get("USER", getpass.getuser())
-    jobs = list_jobs(args.start, states, user=user, debug=args.debug)
+    try:
+        jobs = list_jobs(args.start, states, user=user, debug=args.debug,
+                         sacct=args.sacct)
+    except NoScheduler as exc:
+        sys.stderr.write("%s\n" % exc)
+        return 1
 
     if args.debug:
         print(f"DEBUG: Found {len(jobs)} jobs from sacct")
@@ -220,7 +277,8 @@ def main():
         print(f"{v_s:<14} {t_s:<15} {a_s:<10} {ep:>5}  {jid:<10} {st:<11} {h:<10} {npz}")
 
     print(f"\n{len(rows)} rows total ({sum(1 for r in rows if r[0] != float('inf'))} with metrics)")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
