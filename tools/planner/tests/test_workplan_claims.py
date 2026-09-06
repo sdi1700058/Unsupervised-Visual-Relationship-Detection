@@ -241,8 +241,18 @@ class TestApprovalGate(unittest.TestCase):
         self.assertEqual(workplan.wording_tier(c, workplan.claim_strength(c, p)),
                          "scoped")
 
-    def test_a_claim_awaiting_sign_off_is_reported(self):
+    def test_a_claim_awaiting_sign_off_is_reported_as_a_notice(self):
+        """Surfaced, but not as a failure.
+
+        The claim is already written at the safe tier, so nothing is wrong: the
+        author simply has a decision waiting. Failing the gate here would turn
+        it red every time the evidence got STRONGER, which punishes the
+        behaviour the gate exists to encourage.
+        """
         c = claim(claim_type="existential", evidence=["O1", "O2"],
                   appears_in=[])
         p = plan([c], [obs("O1", n=22), obs("O2", n=24, datasets=("vidor",))])
-        self.assertTrue(any("awaits" in x for x in workplan.check_claims(p)))
+        notices = []
+        problems = workplan.check_claims(p, notices)
+        self.assertTrue(any("awaits" in x for x in notices))
+        self.assertFalse(any("awaits" in x for x in problems))
