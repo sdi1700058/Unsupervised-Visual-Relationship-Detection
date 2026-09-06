@@ -202,7 +202,7 @@ count. `sh/h14_score.sh` does not do this, so a `mse_ratio` from G4 is not
 directly comparable with one from H14.
 
 **One dataset.** Every number here comes from VidVRD. Any ordering of the cells
-is a hypothesis until a second corpus reproduces it, and the figure says so in
+is a hypothesis until a second dataset reproduces it, and the figure says so in
 its footer.
 
 ## What has been verified, and what has not
