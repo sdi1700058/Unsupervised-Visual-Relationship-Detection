@@ -1100,12 +1100,51 @@ def main(argv=None):
         return 0
 
     if a.command == "sensitivity":
+        # The candidate files each decision ranks. Reading them here is what
+        # makes this command answer its own question; until 2026-09-05 it
+        # printed the weights and told the reader to do the work themselves,
+        # so the robustness of a ranking was never actually checked.
+        SOURCES = {"dataset": "notes/lit/dataset_candidates.json",
+                   "metric": "notes/lit/method_candidates.json"}
         for kind, spec in sorted(plan.get("decisions", {}).items()):
             weights = spec.get("weights")
-            print("%s: %s" % (kind, "no weights set" if not weights
-                              else "weights %s" % weights))
-        print("\nPass candidate scores to workplan.sensitivity() to see what "
-              "would flip a ranking; DATASETS.md carries the current one.")
+            if not weights:
+                print("%s: no weights set" % kind)
+                continue
+            print("\n%s: %s" % (kind, ", ".join(
+                "%s %.2f" % (k, v) for k, v in sorted(weights.items(),
+                                                      key=lambda x: -x[1]))))
+            path = SOURCES.get(kind)
+            if not path or not os.path.isfile(path):
+                print("   no candidate file, so nothing to rank")
+                continue
+            with open(path) as handle:
+                raw = json.load(handle)
+            rows = raw.get("candidates", raw)
+            scored = {}
+            for row in rows:
+                if all(row.get(c) is not None for c in weights):
+                    scored[row["name"]] = dict(
+                        (c, float(row[c])) for c in weights)
+            if len(scored) < 2:
+                print("   fewer than two fully scored candidates")
+                continue
+            found = sensitivity(scored, weights)
+            if not found:
+                print("   the top two cannot be separated by any single "
+                      "weight")
+                continue
+            print("   top two: %s over %s, by %.3f"
+                  % (found["top"], found["second"], found["gap"]))
+            print("   smallest flip: move %s from %.2f to %.2f, a change of "
+                  "%.3f" % (found["criterion"], found["from"], found["to"],
+                            found["move"]))
+            # A ranking that flips on a change smaller than the weight itself
+            # is a ranking to report rather than to act on.
+            verdict = ("FRAGILE, so treat the top two as tied"
+                       if found["move"] < found["from"] * 0.5
+                       else "holds under a reasonable change")
+            print("   %s" % verdict)
         return 0
 
     if a.command == "graph":

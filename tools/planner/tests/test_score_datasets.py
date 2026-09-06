@@ -191,3 +191,39 @@ class TestMethodWeights(unittest.TestCase):
         svg = score_datasets.render_svg(ranked, score_datasets.METHOD_WEIGHTS)
         xml.dom.minidom.parseString(svg)
         self.assertIn("discriminates", svg)
+
+
+class TestSensitivityIsUsable(unittest.TestCase):
+    """The sensitivity command must answer its own question.
+
+    Until 2026-09-05 it printed the weights and told the reader to work out
+    the answer themselves, so the robustness of a ranking was never actually
+    checked. It now reads the candidate files.
+    """
+
+    def setUp(self):
+        sys.path.insert(0, os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            os.pardir, os.pardir, os.pardir))
+        from tools import workplan
+        self.workplan = workplan
+
+    def test_a_fragile_lead_is_found(self):
+        """Two candidates a hair apart flip on a small weight change."""
+        weights = {"a": 0.5, "b": 0.5}
+        cands = {"top": {"a": 0.60, "b": 0.50},
+                 "second": {"a": 0.50, "b": 0.59}}
+        found = self.workplan.sensitivity(cands, weights)
+        self.assertIsNotNone(found)
+        self.assertEqual(found["top"], "top")
+        self.assertEqual(found["second"], "second")
+        self.assertGreater(found["gap"], 0)
+
+    def test_identical_candidates_cannot_be_separated(self):
+        weights = {"a": 0.5, "b": 0.5}
+        same = {"x": {"a": 0.5, "b": 0.5}, "y": {"a": 0.5, "b": 0.5}}
+        self.assertIsNone(self.workplan.sensitivity(same, weights))
+
+    def test_one_candidate_gives_nothing_rather_than_raising(self):
+        self.assertIsNone(self.workplan.sensitivity(
+            {"only": {"a": 1.0}}, {"a": 1.0}))
