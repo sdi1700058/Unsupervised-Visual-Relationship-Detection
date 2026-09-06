@@ -25,6 +25,7 @@ under a modern interpreter and is deliberately out of scope.
 import argparse
 import ast
 import os
+import subprocess
 import sys
 
 # Everything here is imported by a job running under python/3.6.1.
@@ -161,6 +162,16 @@ def iter_py_files(targets):
                         yield os.path.join(root, f)
 
 
+def _tracked_sources():
+    """Every tracked Python file, or an empty list outside a checkout."""
+    try:
+        out = subprocess.check_output(["git", "ls-files", "*.py"],
+                                      stderr=subprocess.STDOUT)
+    except (subprocess.CalledProcessError, OSError):
+        return []
+    return [p for p in out.decode("utf-8", "replace").split("\n") if p]
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Flag Python 3.7+ syntax on the cluster-side code path.")
@@ -173,7 +184,16 @@ def main(argv=None):
                     help="the repository holding the code to scan")
     args = ap.parse_args(argv)
 
-    targets = args.paths or (["."] if args.all else list(CLUSTER_PATHS))
+    # Every tracked source file by default, not only the cluster path.
+    #
+    # Until 2026-09-06 the default was CLUSTER_PATHS, ten entries naming the
+    # files that run on Sherlock. Everything written since then sat outside
+    # it, so "54 files scanned, nothing needs more than Python 3.6" was never
+    # evidence about the new code. A planted walrus operator in
+    # tools/planner/ went undetected. The tools themselves also run on the
+    # cluster, so the narrow scope was wrong on its own terms.
+    targets = args.paths or (["."] if args.all else _tracked_sources()
+                             or list(CLUSTER_PATHS))
     targets = [os.path.join(args.root, t) if not os.path.isabs(t) else t
                for t in targets]
     targets = [t for t in targets if os.path.exists(t)]

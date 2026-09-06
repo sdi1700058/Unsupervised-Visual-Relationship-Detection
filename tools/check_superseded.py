@@ -37,6 +37,16 @@ import sys
 # value -> why it was withdrawn. The reason is printed with any hit, so a
 # reader learns why rather than only that.
 SUPERSEDED = {
+    # Replaced on 2026-09-05 when the author made the per-window quantisation
+    # floor canonical. The pair reproduces exactly under the per-clip recipe it
+    # came from, so it is a correct number under a definition the project no
+    # longer uses, which is precisely what this registry is for.
+    "1.56": "oracle median floor_ratio under the per-clip floor; the canonical "
+            "per-window figure is 1.70",
+    "71.94": "trained median floor_ratio under the per-clip floor; the "
+             "canonical per-window figure is 80.93",
+    "46.1x": "oracle-to-trained separation under the per-clip floor; the "
+             "canonical per-window figure is 47.5x",
     "0.046": "pre-review mse_ratio; the Hungarian pairing was solved against "
              "absent boxes and the oracle floor used the wrong dequantiser",
     "0.082": "single-clip mse_ratio at window 8; that clip is a 33x outlier "
