@@ -35,6 +35,7 @@ import argparse
 import csv
 import glob
 import os
+import re
 import statistics
 import sys
 
@@ -84,6 +85,74 @@ def missing_from(paths, needle):
     return out
 
 
+# A count reads "N of M".
+COUNT = re.compile(r"^(\d+) of (\d+)$")
+
+# Any count on a line, whatever its digits.
+ANY_COUNT = re.compile(r"(?<![\d.])\d+ of \d+(?![\d])")
+
+
+def contradicted_in(paths, needle, anchor=None):
+    """Counts that sit on a headline's own line but disagree with it.
+
+    `missing_from` asks only whether the correct value appears somewhere in a
+    document. It never asked whether a wrong one appeared beside it, and since
+    the generated claim blocks always carry the correct value, a corrupted
+    headline table passed unnoticed in three of the four tracked documents.
+
+    **An anchor is required and that is the point.** A bare "N of M" cannot be
+    judged on its own: a different denominator is usually a different sample
+    rather than an error, and a first attempt keyed on the denominator missed
+    the very corruption it was written to catch. Anchoring on the phrase that
+    labels the row means only the line claiming to state this headline is
+    judged, which is the only line where a disagreement is a defect.
+
+    Without an anchor this returns nothing, because guessing which counts on a
+    page refer to which measurement is exactly the error being guarded.
+    """
+    if not anchor or not COUNT.match(needle.strip()):
+        return []
+    hits = []
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        seen_anchor = False
+        with open(path, encoding="utf-8", errors="replace") as handle:
+            for i, line in enumerate(handle, 1):
+                if anchor.lower() not in line.lower():
+                    continue
+                # Only the FIRST anchored line in each document.
+                #
+                # The row label recurs: "beats the straight line" heads the
+                # headline table and also several later tables reporting
+                # different experiments on different samples. Judging them all
+                # against one value reported real rows as contradictions. The
+                # headline table comes first, so the first match is the one
+                # claiming to state the headline.
+                #
+                # This is a heuristic and it has a failure mode worth naming:
+                # if the headline table is ever moved below another table
+                # using the same label, the check silently changes target. A
+                # section anchor would be stronger and is the right fix if
+                # this ever misfires.
+                if seen_anchor:
+                    break
+                seen_anchor = True
+                # One row often carries several headlines in separate
+                # columns: the oracle count, then the trained counts. If the
+                # value is present the row states this headline correctly, and
+                # the other counts on it belong to other columns.
+                if needle in line:
+                    continue
+                for match in ANY_COUNT.finditer(line):
+                    if match.group(0) != needle:
+                        hits.append({"doc": path, "line": i,
+                                     "found": match.group(0),
+                                     "expected": needle,
+                                     "text": line.strip()[:80]})
+    return hits
+
+
 def _medians(pattern, column="mse_ratio", min_motion=6):
     """One median per run directory matching `pattern`, skipping empty runs."""
     out = []
@@ -128,6 +197,7 @@ HEADLINES = {
     "oracle beats the baseline": {
         "compute": _oracle_beats_baseline,
         "docs": [DOCS["map"], DOCS["report"], DOCS["eval"], DOCS["status"]],
+        "anchor": "beats the straight line",
         "why": "Claim 1's headline count. It sat at n=10 for a day while n=22 "
                "was on disk, and then sat at n=10 in EVAL.md and STATUS.md for "
                "a further day while the check passed on the other two.",
@@ -140,6 +210,7 @@ HEADLINES = {
     "trained beats the baseline": {
         "compute": _trained_beats_baseline,
         "docs": [DOCS["map"], DOCS["report"], DOCS["eval"], DOCS["status"]],
+        "anchor": "beats the straight line",
         "why": "Claim 2's headline count.",
     },
 }
@@ -155,8 +226,12 @@ def check(headlines=None):
             skipped.append(name)
             continue
         missing = missing_from(spec["docs"], value)
-        if missing:
-            stale.append((name, value, spec.get("why", ""), missing))
+        # Present is not enough. A document can carry the right value in one
+        # place and a wrong one in another, which is how a corrupted headline
+        # table went unnoticed beside a correct generated claim block.
+        wrong = contradicted_in(spec["docs"], value, spec.get("anchor"))
+        if missing or wrong:
+            stale.append((name, value, spec.get("why", ""), missing, wrong))
         else:
             ok.append((name, value))
     return {"stale": stale, "ok": ok, "skipped": skipped}
@@ -180,12 +255,16 @@ def main(argv=None):
               % (len(result["ok"]), len(result["skipped"])))
         return 0
 
-    print("%d headline(s) the documents do not carry:\n" % len(result["stale"]))
-    for name, value, why, missing in result["stale"]:
+    print("%d headline(s) the documents do not carry, or contradict:\n"
+          % len(result["stale"]))
+    for name, value, why, missing, wrong in result["stale"]:
         print("  %s" % name)
         print("    the data now says: %s" % value)
         for path in missing:
             print("    missing from:      %s" % path)
+        for hit in wrong:
+            print("    contradicted at:   %s:%d says %s"
+                  % (hit["doc"], hit["line"], hit["found"]))
         print("    %s\n" % why)
     print("Update the documents, or say why the older figure is the one to "
           "quote.")

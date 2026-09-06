@@ -14,6 +14,7 @@ documents are checked for the current value.
 
 import os
 import sys
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -94,3 +95,78 @@ class TestRegistry(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestContradiction(unittest.TestCase):
+    """Presence is not enough: a wrong value beside the right one must fail.
+
+    Found 2026-09-06. `missing_from` asked only whether the correct value
+    appeared somewhere in the document. Corrupting the headline table while
+    the generated claim block still carried the right number passed the check,
+    and the claim blocks are present in three of the four tracked documents,
+    so the check was neutralised where it mattered most.
+    """
+
+    def setUp(self):
+        from tools import check_headlines
+        self.mod = check_headlines
+        self.dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def write(self, text):
+        path = os.path.join(self.dir, "doc.md")
+        with open(path, "w") as handle:
+            handle.write(text)
+        return path
+
+    def test_a_wrong_count_beside_the_right_one_is_reported(self):
+        path = self.write("the oracle beat it on 12 of 22 clips\n"
+                          "| beats the straight line | 12 of 99 |\n")
+        hits = self.mod.contradicted_in([path], "12 of 22",
+                                        anchor="beats the straight line")
+        self.assertEqual(len(hits), 1)
+        self.assertIn("12 of 99", hits[0]["found"])
+
+    def test_the_right_count_alone_is_not_reported(self):
+        path = self.write("the oracle beat it on 12 of 22 clips\n")
+        self.assertEqual(self.mod.contradicted_in(
+            [path], "12 of 22", anchor="beats the straight line"), [])
+
+    def test_a_count_on_an_unanchored_line_is_left_alone(self):
+        """A different sample elsewhere in the document is not a
+        contradiction. Only the line claiming this headline is judged."""
+        path = self.write("a subset gave 6 of 10\n"
+                          "beats the straight line | 12 of 22\n")
+        self.assertEqual(self.mod.contradicted_in(
+            [path], "12 of 22", anchor="beats the straight line"), [])
+
+    def test_a_headline_that_is_not_a_count_is_skipped(self):
+        """A bare decimal cannot be told from any other decimal, so the
+        contradiction test does not apply to it and says so by doing nothing."""
+        path = self.write("median 0.84 here and 0.99 elsewhere\n")
+        self.assertEqual(self.mod.contradicted_in(
+            [path], "0.84", anchor="median"), [])
+
+    def test_a_missing_file_is_not_a_contradiction(self):
+        self.assertEqual(
+            self.mod.contradicted_in(
+                [os.path.join(self.dir, "absent.md")], "12 of 22",
+                anchor="beats"), [])
+
+    def test_other_columns_on_the_same_row_are_not_contradictions(self):
+        """One row carries several headlines. If the value is present the row
+        states this one correctly, and the neighbouring counts are other
+        columns rather than errors."""
+        path = self.write(
+            "| beats the straight line | 12 of 22 | 0 of 10 | 0 of 10 |\n")
+        self.assertEqual(self.mod.contradicted_in(
+            [path], "12 of 22", anchor="beats the straight line"), [])
+
+    def test_a_row_missing_the_value_entirely_is_reported(self):
+        path = self.write(
+            "| beats the straight line | 12 of 99 | 0 of 10 |\n")
+        hits = self.mod.contradicted_in([path], "12 of 22",
+                                        anchor="beats the straight line")
+        self.assertTrue(hits)
