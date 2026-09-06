@@ -6,7 +6,7 @@ Two things are checked here that nothing else in the suite can check.
 1. **Agreement.** When a mask happens to be a rectangle, the mask metric must
    return what the box metric returns. That is the only way to know the new
    pipeline is measuring the same quantity as the old one, and it is testable
-   today on the box corpora already on disk.
+   today on the box datasets already on disk.
 2. **The vanishing object.** The mask code drops any object smaller than half
    a grid cell. `oracle._code_width` documents the same class of bug on the box
    side, where an object in the top bin decoded as absent. The mask code must
@@ -74,7 +74,7 @@ class TestMaskToBox(unittest.TestCase):
         self.assertTrue(np.allclose(boxes[1, 1], [10, 10, 12, 12]))
 
     def test_box_to_mask_to_box_is_the_identity_on_integer_boxes(self):
-        """The corpora on disk hold boxes, so this round trip must be exact."""
+        """The datasets on disk hold boxes, so this round trip must be exact."""
         from tools.planner.m8_mask import boxes_to_masks, masks_to_boxes
 
         rng = np.random.RandomState(0)
@@ -436,7 +436,7 @@ class TestAgreementWithTheBoxMetric(unittest.TestCase):
     def test_non_integer_boxes_agree_only_to_rasterisation_accuracy(self):
         """Honest about the one place the two cannot agree exactly.
 
-        A real corpus box lands between pixels after the canvas rescale. A mask
+        A real dataset box lands between pixels after the canvas rescale. A mask
         cannot hold half a pixel, so the two metrics differ by the area the
         rasteriser rounds. The check reports that number instead of hiding it.
         """
@@ -485,7 +485,7 @@ class TestFigure(unittest.TestCase):
         """A caveat that runs off the edge is a caveat nobody reads."""
         from tools.planner.m8_mask import write_figure
 
-        long_note = ("the raw canvas boxes of this corpus are already whole "
+        long_note = ("the raw canvas boxes of this dataset are already whole "
                      "pixels, because the canvas scaler rounds, so the "
                      "rasteriser costs nothing here and this row repeats the "
                      "one above, which is worth saying at length to be sure "

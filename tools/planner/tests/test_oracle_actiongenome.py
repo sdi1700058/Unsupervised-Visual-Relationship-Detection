@@ -27,7 +27,7 @@ class TestRuns(unittest.TestCase):
                          [[0, 4], [40, 44]])
 
     def test_it_returns_frames_and_not_lengths(self):
-        """The near-twin in the corpus screen returns lengths. This must not."""
+        """The near-twin in the dataset screen returns lengths. This must not."""
         self.assertEqual(oracle.ag_runs_within([1, 2, 3], 1), [[1, 2, 3]])
 
     def test_no_frames_is_no_runs(self):
@@ -41,7 +41,7 @@ class TestRuns(unittest.TestCase):
 
 
 class TestBoxConventions(unittest.TestCase):
-    """Guards the xywh/xyxy split without needing the corpus on disk."""
+    """Guards the xywh/xyxy split without needing the dataset on disk."""
 
     def test_the_object_convention_is_recorded_in_the_docstring(self):
         doc = oracle.boxes_from_actiongenome_clip.__doc__

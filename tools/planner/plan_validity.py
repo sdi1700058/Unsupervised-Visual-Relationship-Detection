@@ -123,7 +123,7 @@ def plan_validity(trace_boxes, model, width=None, height=None, slack=1.0):
     where VidVRD sits at 3.6. A scrambled trajectory has that much room to
     hide under the bound.
 
-    95th percentile with slack 1.0 was chosen by sweeping both corpora, and
+    95th percentile with slack 1.0 was chosen by sweeping both datasets, and
     the thing that stops it going tighter is that a REAL trajectory must keep
     scoring high validity:
 
@@ -331,7 +331,7 @@ def main(argv=None):
     if len(results) == 1:
         print(verdict(results[0][1]))
     else:
-        # A corpus verdict, not the first row's. Printing one clip's verdict
+        # A dataset verdict, not the first row's. Printing one clip's verdict
         # over a table of twenty reads as a statement about all of them.
         seps = [r["discrimination"]["separation"] for _, r in results]
         vals = [r["validity"] for _, r in results]

@@ -36,7 +36,7 @@ argument, and a persuasive one, but nothing has tested it.
 
 Criterion 0 currently outranks annotation density in the dataset strategy on
 the strength of reasoning alone. If it is real, the dataset search should be
-reorganised around it and the robotics corpora move to the front. If it is not,
+reorganised around it and the robotics datasets move to the front. If it is not,
 that reorganisation would be a mistake and the effort belongs elsewhere.
 
 ## Design — a paired, matched comparison
@@ -74,7 +74,7 @@ difference between the arms is structure.
 
 | result | reading | what follows |
 |---|---|---|
-| **A's planner error materially below B's** (well past the 38% margin) | Criterion 0 is real and operative at this scale | Reorganise the dataset search around structure. Robotics corpora move to the front. |
+| **A's planner error materially below B's** (well past the 38% margin) | Criterion 0 is real and operative at this scale | Reorganise the dataset search around structure. Robotics datasets move to the front. |
 | **A ≈ B** | Structure does not predict plannability at this data volume | Criterion 0 is not disproven, but it stops being the organising principle. Look at volume and model capacity instead. |
 | **B better than A** | The criterion is backwards | Take it seriously. Re-examine the predicate classification in `screen_vidvrd.PREDICATE_TIERS` first, since it is a judgement. |
 | **Both fail to train** (`val_loss` above ~0.4) | ~1,000 transitions is too few, whatever the structure | Neither arm says anything about Criterion 0. Rerun at the full 88-clip / 8,522-transition scale. |

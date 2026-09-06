@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# dataset.sh — one interface for every corpus: get it, prepare it, measure it.
+# dataset.sh — one interface for every dataset: get it, prepare it, measure it.
 #
 #   bash sh/dataset.sh list
 #   bash sh/dataset.sh vidor download
@@ -15,12 +15,12 @@
 #
 #   download   fetch archives into data/video/<name>/. Resumable.
 #   prepare    unpack, and put annotations where the readers expect them.
-#   screen     measure the corpus and write a winnable clip list. No model.
+#   screen     measure the dataset and write a winnable clip list. No model.
 #   oracle     build ground-truth-box exports for the screened clips.
 #   verify     say what is present and what is missing, and exit non-zero if
 #              a stage has not produced what it claims.
 #
-# **A stage that has not been run end to end says so.** Where a corpus has only
+# **A stage that has not been run end to end says so.** Where a dataset has only
 # a verified download route and no tested bake, its later stages print what is
 # needed rather than pretending. Provenance and the date each url was last
 # fetched are in notes/lit/dataset_sources.json.
@@ -143,7 +143,7 @@ actiongenome_verify() {
 }
 
 # ===========================================================================
-# VidVRD — the original corpus. Kept so every stage has one worked reference.
+# VidVRD — the original dataset. Kept so every stage has one worked reference.
 # ===========================================================================
 vidvrd_download() { bash sh/download_vidvrd.sh; }
 vidvrd_prepare()  { say "download_vidvrd.sh extracts as it goes"; }
@@ -162,7 +162,7 @@ vidvrd_verify() {
 }
 
 # ===========================================================================
-# Corpora with a verified download route and no tested bake. Each says so.
+# Datasets with a verified download route and no tested bake. Each says so.
 # ===========================================================================
 something_else_download() {
     say "per-frame boxes for 180,049 videos, four parts, on Google Drive"
@@ -195,15 +195,15 @@ something_else_verify()  {
 }
 
 open_x_download() {
-    say "dozens of robot corpora in one RLDS format"
+    say "dozens of robot datasets in one RLDS format"
     say "  https://github.com/google-deepmind/open_x_embodiment (verified 2026-09-04)"
     command -v gsutil &>/dev/null || { warn "needs gsutil; on the cluster try 'module load google-cloud-sdk'"; return 1; }
-    say "available corpora:"
+    say "available datasets:"
     gsutil ls gs://gresearch/robotics/ | head -40
     say "measure one before pulling it:  gsutil du -sh gs://gresearch/robotics/<name>"
 }
 open_x_prepare() { warn "no loader yet: RLDS episodes need a reader writing boxes"; return 3; }
-open_x_screen()  { warn "blocked on a detector: this corpus ships no boxes"; return 3; }
+open_x_screen()  { warn "blocked on a detector: this dataset ships no boxes"; return 3; }
 open_x_oracle()  { warn "blocked on prepare"; return 3; }
 open_x_verify()  { [[ -d "${DATA}/open_x" ]] && say "directory present" || warn "nothing downloaded"; }
 
@@ -237,7 +237,7 @@ do_list() {
     printf '%-16s %-9s %-9s %-8s %s\n' dataset download prepare screen "oracle / notes"
     printf '%-16s %-9s %-9s %-8s %s\n' ---------------- --------- --------- -------- ---------------
     printf '%-16s %-9s %-9s %-8s %s\n' vidor yes yes yes 'yes, scored 2026-09-04'
-    printf '%-16s %-9s %-9s %-8s %s\n' vidvrd yes yes yes 'yes, the reference corpus'
+    printf '%-16s %-9s %-9s %-8s %s\n' vidvrd yes yes yes 'yes, the reference dataset'
     printf '%-16s %-9s %-9s %-8s %s\n' actiongenome manual n/a yes 'loader tested, no export yet'
     printf '%-16s %-9s %-9s %-8s %s\n' something_else gdown yes yes 'reader exists, 8 clips scored'
     printf '%-16s %-9s %-9s %-8s %s\n' open_x gsutil no no 'needs an RLDS reader + detector'

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# download_datasets.sh — fetch a candidate corpus, one at a time, on the cluster.
+# download_datasets.sh — fetch a candidate dataset, one at a time, on the cluster.
 #
 #   bash sh/download_datasets.sh list
 #   bash sh/download_datasets.sh something_else
@@ -9,7 +9,7 @@
 #   bash sh/download_datasets.sh robovqa
 #
 # Every target is independent and resumable. Nothing here downloads video unless
-# the target says so, because the oracle needs boxes and not frames: a corpus
+# the target says so, because the oracle needs boxes and not frames: a dataset
 # with annotations alone is already measurable.
 #
 # Sources and provenance are in notes/lit/dataset_sources.json, where each url
@@ -37,7 +37,7 @@ target            video?  tool needed     what arrives
 ----------------  ------  --------------  ------------------------------------
 something_else    no      gdown           per-frame boxes, 180,049 videos
 vidor             no      wget            10k videos of relation triplets
-open_x            no      gsutil          many robot corpora, one RLDS format
+open_x            no      gsutil          many robot datasets, one RLDS format
 language_table    no      gsutil          442,226 real robot episodes
 robovqa           no      git             long-horizon robotics episodes
 epic_kitchens     yes     python          egocentric video, boxes, verb-noun
@@ -48,7 +48,7 @@ LIST
 }
 
 # --- 1. Something-Else -----------------------------------------------------
-# Boxes only, no video. The single cheapest genuine second corpus: 180,049
+# Boxes only, no video. The single cheapest genuine second dataset: 180,049
 # videos of per-frame boxes, plus the compositional splits M2 needs.
 target_something_else() {
     local out="${DATA}/something_else/raw"
@@ -78,14 +78,14 @@ target_vidor() {
 }
 
 # --- 3. Open X-Embodiment --------------------------------------------------
-# Dozens of robot corpora in one RLDS format, so one loader serves all of them.
+# Dozens of robot datasets in one RLDS format, so one loader serves all of them.
 # Every episode was recorded under a task, which is the highest structure
 # available. Boxes come from a detector at bake time.
 target_open_x() {
     local out="${DATA}/open_x"
     mkdir -p "${out}"
     need gsutil "part of google-cloud-sdk; on the cluster try 'module load google-cloud-sdk'" || return 1
-    say "listing the available corpora rather than pulling all of them"
+    say "listing the available datasets rather than pulling all of them"
     gsutil ls gs://gresearch/robotics/ | head -40
     say ""
     say "pick one and fetch it, for example:"
@@ -133,7 +133,7 @@ target_epic_kitchens() {
 target_kinetics() {
     local out="${DATA}/kinetics"
     mkdir -p "${out}"
-    say "cloning the download helper; the corpus is large, so fetch one split"
+    say "cloning the download helper; the dataset is large, so fetch one split"
     git clone --depth 1 https://github.com/cvdfoundation/kinetics-dataset "${out}/scripts" \
         || say "already cloned"
     say "read ${out}/scripts/README.md and run one split at a time"

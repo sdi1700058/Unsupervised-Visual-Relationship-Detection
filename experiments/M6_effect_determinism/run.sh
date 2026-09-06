@@ -25,7 +25,7 @@ mkdir -p "$EXPORTS" "$OUT"
 # ---------------------------------------------------------------------------
 # Which clips. The screened lists live under eval/, which is gitignored, so a
 # fresh checkout falls back to the first clips in name order. The fallback is
-# stated rather than silent, because the two sets are not the same corpus.
+# stated rather than silent, because the two sets are not the same dataset.
 # ---------------------------------------------------------------------------
 vidvrd_clips() {
     if [ -f eval/vidvrd_winnable_clips.txt ]; then

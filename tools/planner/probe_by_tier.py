@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Break an M1 probe result down by predicate tier, and draw it.
 
-The aggregate M1 number hides the thing worth knowing. On the oracle corpus
+The aggregate M1 number hides the thing worth knowing. On the oracle dataset
 the overall lift is **-0.003**, which reads as "the code carries nothing" —
 but per predicate it splits cleanly, and the split confirms a judgement made
 independently months earlier.
@@ -53,7 +53,7 @@ trajectories, so no function of boxes alone separates them — over one frame or
 over many. *(measured; only a one-step delta was tried, so a longer temporal
 window remains untested.)*
 
-    python3 tools/planner/probe_by_tier.py eval/probe/M1-oracle-corpus/probe.json
+    python3 tools/planner/probe_by_tier.py eval/probe/M1-oracle-dataset/probe.json
 """
 
 import argparse

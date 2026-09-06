@@ -8,7 +8,7 @@ properties that matter most, and why each exists:
   must be reproducible from stored fields alone, and no score may be stored.
 - **`n` counts independent units, not rows.** E1 was scored at n=276, which was
   80 windows times 2 methods with the windows overlapping at stride 1.
-- **Repeating a run on one corpus must not compound.** Otherwise five runs on
+- **Repeating a run on one dataset must not compound.** Otherwise five runs on
   one dataset look like strong support.
 - **Wording is derived from licence.** A claim whose evidence does not reach the
   bar is re-worded down a tier rather than argued about.

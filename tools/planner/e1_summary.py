@@ -7,7 +7,7 @@ the data said. Structured reached 80 of 80 windows; unstructured reached 4 of
 58. The summary compared the two median errors as though they described
 comparable samples, found unstructured lower, and printed *"structure does not
 predict plannability"*. Those 4 windows are the only ones the unstructured
-planner could reach at all, so they are the easiest 7% of its corpus, measured
+planner could reach at all, so they are the easiest 7% of its dataset, measured
 against the whole of the other arm.
 
 It also mis-stated the counts as 160 and 116, which were **rows**: one window
@@ -167,7 +167,7 @@ def reading(a, b):
             caveats.append("On `mse_ratio` the unstructured arm is %.2fx "
                            "better." % (1.0 / gain))
 
-    # Selection bias, whenever an arm reached only part of its corpus.
+    # Selection bias, whenever an arm reached only part of its dataset.
     for label, arm in (("structured", a), ("unstructured", b)):
         if arm["solve_rate"] < SELECTION_FLOOR:
             caveats.append("The %s error figures cover only the %d of %d "

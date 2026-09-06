@@ -382,10 +382,10 @@ def ag_runs_within(frames, max_gap):
     """Maximal runs of frame numbers whose consecutive gaps are <= max_gap.
 
     `tools/video/screen_actiongenome.py` has a near-twin returning run
-    *lengths*, for the corpus screen. This one returns the frames themselves,
+    *lengths*, for the dataset screen. This one returns the frames themselves,
     which the loader needs. They stay separate on purpose: this module imports
     nothing beyond numpy so it runs on the cluster's Python 3.6 venv, while the
-    screen reads the corpus through pickle.
+    screen reads the dataset through pickle.
     """
     if not frames:
         return []
@@ -406,7 +406,7 @@ def boxes_from_actiongenome_clip(objects_by_frame, person_by_frame,
     Action Genome annotates a fraction of frames, so a clip is usable only
     where its annotated frames sit close enough together to read as
     consecutive states. The **longest run** within `max_gap` is taken and the
-    rest of the clip is discarded, which is why the corpus yields 553 usable
+    rest of the clip is discarded, which is why the dataset yields 553 usable
     clips rather than either 9,601 or none.
 
     **The person goes in the last slot**, for the same reason Something-Else

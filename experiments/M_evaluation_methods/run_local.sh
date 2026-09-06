@@ -22,7 +22,7 @@ MEM_KB="${MEM_KB:-8000000}"
 HOLD_OUT="${HOLD_OUT:-bird}"
 mkdir -p "${OUT}"
 
-# Default corpus: the oracle exports built from the screened clips. Pass your
+# Default dataset: the oracle exports built from the screened clips. Pass your
 # own exports as arguments to score a trained model instead.
 if [[ $# -gt 0 ]]; then
     EXPORTS=("$@")
@@ -33,7 +33,7 @@ else
 fi
 
 if (( ${#EXPORTS[@]} == 0 )); then
-    echo "No exports. Build the oracle corpus first:" >&2
+    echo "No exports. Build the oracle dataset first:" >&2
     echo "  bash experiments/M_evaluation_methods/build_oracle_corpus.sh" >&2
     exit 2
 fi

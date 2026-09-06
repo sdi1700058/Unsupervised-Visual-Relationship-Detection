@@ -141,7 +141,7 @@ class TestValLossCorrelation(unittest.TestCase):
         self.assertEqual(liveness.plateau_shapes(rows[:1]), set())
 
     def test_the_plateau_value_is_measured_not_hardcoded(self):
-        """0.5245 is what this corpus produced, not a constant of nature.
+        """0.5245 is what this dataset produced, not a constant of nature.
 
         Hard-coding it would silently mislabel a different dataset, which is
         the mistake this project keeps making with numbers.

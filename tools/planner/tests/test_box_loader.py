@@ -1,19 +1,19 @@
 #!/usr/bin/env python3
-"""Every corpus must arrive in the same shape, from a registry entry.
+"""Every dataset must arrive in the same shape, from a registry entry.
 
 The oracle needs boxes and nothing else. That is the fact that makes a second
-and a third corpus cost days instead of weeks: on 2026-08-31 eight
+and a third dataset cost days instead of weeks: on 2026-08-31 eight
 Something-Else clips were scored with no video on disk at all. The cost that
-remained was in the code, not in the data — each corpus had its own reader with
+remained was in the code, not in the data — each dataset had its own reader with
 its own return shape and its own branch through the oracle command line.
 
 So these tests hold two things:
 
-1. **One shape.** Whatever the corpus, a load returns `(boxes, meta)` with
+1. **One shape.** Whatever the dataset, a load returns `(boxes, meta)` with
    boxes `(n_frames, num_objs, 4)` in canvas pixels, and `meta` carrying the
-   same keys. The loop at the end asserts that over every registered corpus at
+   same keys. The loop at the end asserts that over every registered dataset at
    once, which is the only test here that would fail if somebody added a
-   corpus that returns something else.
+   dataset that returns something else.
 2. **The Action Genome box trap.** Object records are `xywh` and person
    records are `xyxy`, in two files of the same release. Measured over 7,841
    records: 100% of object records are consistent with `xywh` and only 19%
@@ -21,7 +21,7 @@ So these tests hold two things:
    place and raises nothing, which is the worst failure this project can have.
 
 Every fixture here is written inline into a temporary directory. Nothing reads
-the corpora themselves, so the suite stays fast and runs where the data is
+the datasets themselves, so the suite stays fast and runs where the data is
 absent — which is most machines.
 """
 
@@ -138,7 +138,7 @@ def write_actiongenome(root, clip_id="001YG.mp4", frames=(89, 92, 95, 98),
 
 
 class Fixtures(unittest.TestCase):
-    """A temporary root per corpus, torn down after each test."""
+    """A temporary root per dataset, torn down after each test."""
 
     def setUp(self):
         self.tmp = tempfile.mkdtemp(prefix="box_loader_")
@@ -159,31 +159,31 @@ class Fixtures(unittest.TestCase):
 class TestRegistry(Fixtures):
 
     def test_the_corpora_measured_so_far_are_registered(self):
-        names = box_loader.corpora()
+        names = box_loader.datasets()
         for expected in ("actiongenome", "something_else", "vidvrd", "vidor",
                          "videonet"):
             self.assertIn(expected, names)
 
     def test_an_unknown_corpus_names_the_known_ones(self):
-        """Adding a corpus is registering one, so the error must say what is
+        """Adding a dataset is registering one, so the error must say what is
         registered rather than only that the name is wrong."""
         try:
             box_loader.load_clip("nonesuch", "x")
         except KeyError as exc:
             self.assertIn("something_else", str(exc))
         else:
-            self.fail("an unknown corpus must raise")
+            self.fail("an unknown dataset must raise")
 
     def test_every_entry_carries_a_lister_and_a_loader(self):
-        for name in box_loader.corpora():
+        for name in box_loader.datasets():
             entry = box_loader.get(name)
             self.assertTrue(callable(entry.list_clips), name)
             self.assertTrue(callable(entry.load_clip), name)
             self.assertTrue(entry.root, name)
 
     def test_listing_a_corpus_that_is_not_on_disk_is_empty_not_an_error(self):
-        """The survey has to run on a machine with no corpora at all."""
-        for name in box_loader.corpora():
+        """The survey has to run on a machine with no datasets at all."""
+        for name in box_loader.datasets():
             self.assertEqual(
                 box_loader.list_clips(name, root=os.path.join(self.tmp, "no")),
                 [], name)
@@ -357,7 +357,7 @@ class TestVidvrdFamily(Fixtures):
         boxes, meta = box_loader.load_clip("videonet", clip, root=root,
                                            num_objs=2)
         self.assertEqual(len(boxes), 4)
-        self.assertEqual(meta["corpus"], "videonet")
+        self.assertEqual(meta["dataset"], "videonet")
         self.assertIn("AUTO-ANNOTATED", box_loader.get("videonet").note)
 
     def test_listing_finds_annotations_in_nested_folders(self):
@@ -367,13 +367,13 @@ class TestVidvrdFamily(Fixtures):
         self.assertEqual(len(box_loader.list_clips("vidvrd", root=root)), 2)
 
 
-# --- the shape every corpus shares -----------------------------------------
+# --- the shape every dataset shares -----------------------------------------
 
 class TestOneShape(Fixtures):
     """The point of the unit: a caller writes one code path, not four."""
 
     def each_corpus(self):
-        """(corpus, root, clip_id) for every registered corpus, from fixtures."""
+        """(dataset, root, clip_id) for every registered dataset, from fixtures."""
         ag = self.root("ag")
         se = self.root("se")
         vd = self.root("vidvrd")
@@ -394,7 +394,7 @@ class TestOneShape(Fixtures):
             boxes, meta = box_loader.load_clip(name, clip, root=root,
                                                num_objs=3)
             self.assertEqual(sorted(meta), sorted(box_loader.META_KEYS), name)
-            self.assertEqual(meta["corpus"], name)
+            self.assertEqual(meta["dataset"], name)
             self.assertEqual(meta["clip_id"], clip)
             self.assertEqual(meta["objects"], 3, name)
             self.assertEqual(meta["frames"], len(boxes), name)
@@ -414,7 +414,7 @@ class TestOneShape(Fixtures):
 
     @needs_pillow
     def test_the_absent_count_is_the_number_of_all_zero_slots(self):
-        """One definition of "absent" across corpora, so the survey can add
+        """One definition of "absent" across datasets, so the survey can add
         them up. The readers count it their own way; the two must agree."""
         for name, root, clip in self.each_corpus():
             boxes, meta = box_loader.load_clip(name, clip, root=root,
@@ -424,7 +424,7 @@ class TestOneShape(Fixtures):
 
     @needs_pillow
     def test_the_oracle_encodes_what_every_corpus_returns(self):
-        """The whole point: boxes in, planner latents out, no branch per corpus."""
+        """The whole point: boxes in, planner latents out, no branch per dataset."""
         from tools.planner.oracle import boxes_to_latents
 
         for name, root, clip in self.each_corpus():
@@ -494,7 +494,7 @@ class TestSurvey(Fixtures):
 
     @needs_pillow
     def test_a_clip_that_cannot_be_read_is_counted_not_fatal(self):
-        """One broken file in 7,000 must not end a survey of the corpus."""
+        """One broken file in 7,000 must not end a survey of the dataset."""
         root = self.root("vidvrd")
         write_vidvrd(root, clip_id="good")
         with open(os.path.join(root, "broken.json"), "w") as handle:
@@ -508,11 +508,11 @@ class TestSurvey(Fixtures):
 class TestCommandLine(Fixtures):
 
     def test_a_root_can_be_given_per_corpus(self):
-        """One survey has to cover a corpus that sits somewhere unusual — a
-        sample file, say — beside the corpora that sit where they belong."""
+        """One survey has to cover a dataset that sits somewhere unusual — a
+        sample file, say — beside the datasets that sit where they belong."""
         self.assertEqual(
             box_loader.parse_roots(["something_else=/data/sample.json"],
-                                   box_loader.corpora()),
+                                   box_loader.datasets()),
             {"something_else": "/data/sample.json"})
 
     def test_a_bare_root_needs_a_single_corpus(self):
@@ -523,7 +523,7 @@ class TestCommandLine(Fixtures):
 
     def test_a_root_for_an_unregistered_corpus_is_refused(self):
         self.assertRaises(SystemExit, box_loader.parse_roots,
-                          ["nonesuch=/data/x"], box_loader.corpora())
+                          ["nonesuch=/data/x"], box_loader.datasets())
 
     @needs_pillow
     def test_the_command_writes_a_table_and_a_figure_that_open(self):
@@ -533,13 +533,13 @@ class TestCommandLine(Fixtures):
         root = self.root("vidvrd")
         write_vidvrd(root, clip_id="test/ILSVRC2015_train_00005004")
         out = os.path.join(self.tmp, "out")
-        code = box_loader.main(["--corpus", "vidvrd", "--root", root,
+        code = box_loader.main(["--dataset", "vidvrd", "--root", root,
                                 "--limit", "5", "--out-dir", out])
         self.assertEqual(code, 0)
 
         with open(os.path.join(out, "box_loader_reach.json")) as handle:
             written = json.load(handle)
-        self.assertEqual(written["corpora"][0]["clips_loaded"], 1)
+        self.assertEqual(written["datasets"][0]["clips_loaded"], 1)
 
         import xml.dom.minidom
         xml.dom.minidom.parse(os.path.join(out, "box_loader_reach.svg"))
@@ -550,7 +550,7 @@ class TestFigure(Fixtures):
     def test_the_figure_escapes_angle_brackets(self):
         """A raw < in SVG text is invalid XML. This project has shipped an
         unopenable figure that way three times."""
-        rows = [{"corpus": "vidvrd", "available": True, "clips_listed": 3,
+        rows = [{"dataset": "vidvrd", "available": True, "clips_listed": 3,
                  "clips_loaded": 3, "long_clips": 3, "failed": 0,
                  "median_frames": 128, "median_objects": 2,
                  "median_distinct": 40, "dead_clips": 0,
@@ -566,7 +566,7 @@ class TestFigure(Fixtures):
         parallel tuples, and shortening one of them raised IndexError from
         inside the figure writer rather than anywhere near the mistake."""
         columns = box_loader._columns(8)
-        rows = [{"corpus": "vidvrd", "available": True, "clips_listed": 3,
+        rows = [{"dataset": "vidvrd", "available": True, "clips_listed": 3,
                  "clips_loaded": 3, "long_clips": 3, "failed": 0,
                  "median_frames": 128, "median_objects": 2,
                  "median_distinct": 40, "dead_clips": 0,
@@ -579,7 +579,7 @@ class TestFigure(Fixtures):
         self.assertEqual(svg.count('y="122"'), len(columns))
 
     def test_a_dead_corpus_says_so_under_the_table(self):
-        rows = [{"corpus": "actiongenome", "available": True,
+        rows = [{"dataset": "actiongenome", "available": True,
                  "clips_listed": 200, "clips_loaded": 200, "long_clips": 8,
                  "failed": 0, "median_frames": 3, "median_objects": 3,
                  "median_distinct": 1, "dead_clips": 96,
@@ -588,8 +588,8 @@ class TestFigure(Fixtures):
         self.assertIn("96 of 200 clips carry one state only", svg)
 
     def test_a_corpus_read_from_elsewhere_says_so_in_the_figure(self):
-        """A number from a 13-video sample must not read as the corpus."""
-        rows = [{"corpus": "something_else", "available": True,
+        """A number from a 13-video sample must not read as the dataset."""
+        rows = [{"dataset": "something_else", "available": True,
                  "clips_listed": 13, "clips_loaded": 13, "failed": 0,
                  "median_frames": 46, "median_objects": 2,
                  "root": "notes/lit/samples/something_else_sample.json",
@@ -600,9 +600,9 @@ class TestFigure(Fixtures):
         xml.dom.minidom.parseString(svg)
 
     def test_an_unavailable_corpus_still_gets_a_row(self):
-        """The figure answers "which corpora are reachable", so the ones that
+        """The figure answers "which datasets are reachable", so the ones that
         are not have to appear."""
-        rows = [{"corpus": "videonet", "available": False, "clips_listed": 0,
+        rows = [{"dataset": "videonet", "available": False, "clips_listed": 0,
                  "clips_loaded": 0, "failed": 0, "median_frames": None,
                  "median_objects": None, "root": "data/video/videonet",
                  "note": ""}]

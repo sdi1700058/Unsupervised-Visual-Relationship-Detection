@@ -47,7 +47,7 @@ def survey_clip(path, num_objs, bins_x, bins_y, windows=WINDOWS, fill=False):
     last box forward through every unannotated gap. `screen_vidvrd.
     window_crossover` computes the same criterion absence-aware, so the two
     disagreed by construction and the thesis had two definitions of its own
-    selection rule. Corpus-wide a median VidVRD clip is 37% filled, so this was
+    selection rule. Dataset-wide a median VidVRD clip is 37% filled, so this was
     not a small effect.
 
     Pass `fill=True` only to reproduce a pre-correction number, never to

@@ -22,7 +22,7 @@ the paper text. Read on 2026-09-05 from:
 - https://github.com/xdshang/VidVRD-helper/blob/master/evaluation/common.py
 - https://github.com/xdshang/VidVRD-helper/blob/master/dataset/dataset.py
 
-The same toolkit scores VidVRD and VidOR, and both corpora ship the same
+The same toolkit scores VidVRD and VidOR, and both datasets ship the same
 annotation schema, so one implementation serves both.
 
 The protocol, exactly:
@@ -40,7 +40,7 @@ rather than scored zero.
 triplets, in score order, with localisation ignored.
 
 **Recall@50 and Recall@100** pool the top-K hits of every video into one
-ranked list and divide by the corpus-wide count of ground-truth instances.
+ranked list and divide by the dataset-wide count of ground-truth instances.
 They are NOT averaged per video, which is why they sit beside mAP rather than
 inside it.
 
@@ -66,7 +66,7 @@ What is scored, and what is not
 -------------------------------
 
 mAP scores *predicted* relations. **No export on disk carries model-predicted
-relations for either corpus**, so this module supplies three predictors that
+relations for either dataset**, so this module supplies three predictors that
 need no model and no GPU, and every one of them is given **ground-truth
 tubelets**. That places all of them in VrdONE's oracle-trajectory regime
 (`EVAL.md` §5.4), so the row to compare against is 43.15, never 31.33.
@@ -85,7 +85,7 @@ tubelets**. That places all of them in VrdONE's oracle-trajectory regime
                 minus the detector, because the tubelets are given.
 ==============  ==============================================================
 
-`probe` fits the same linear map M1 fits, on the same corpus split, so the two
+`probe` fits the same linear map M1 fits, on the same dataset split, so the two
 metrics describe one model. `RidgeAccumulator` builds the normal equations one
 clip at a time because stacking every VidOR row needs about two gigabytes;
 `test_m7_map.py` pins it against `predicate_probe.ridge_probe_multi`.
@@ -126,11 +126,11 @@ First result, 2026-09-05, on the 0 to 100 scale the published tables use
 **Read the floor before the probe.** A predictor that sees nothing scores
 30.33 on VidVRD, where the published ladder runs from 8.58 to 31.33. Handing
 a system ground-truth tubelets removes most of the localisation problem on
-these corpora, because most tracks and most relations last the whole clip.
+these datasets, because most tracks and most relations last the whole clip.
 **No row above belongs on the published ladder**, because every row there
 detects its own tubelets. Quote the GAP between conditions, never one value.
 
-The probe sits far below the floor on both corpora, which agrees with M1's
+The probe sits far below the floor on both datasets, which agrees with M1's
 measured lift of -0.003 on the same clips, the same split and the same
 3,990 training rows. A purely positional code does not express predicates
 such as `chase`, and two metrics now say so.
@@ -513,7 +513,7 @@ class TripletPrior(object):
     def top(self, subject, obj, k):
         """The k most frequent predicates for this category pair.
 
-        An unseen pair falls back to the corpus-wide predicate frequency,
+        An unseen pair falls back to the dataset-wide predicate frequency,
         because returning nothing would give the pair a free zero rather than
         the honest guess a frequency model would make.
         """
@@ -669,7 +669,7 @@ def _probe_features(latents, labels, max_slots):
 
 
 def _relabel(y, own_predicates, vocabulary):
-    """Widen a clip's label block to the corpus vocabulary.
+    """Widen a clip's label block to the dataset vocabulary.
 
     A clip that never shows `chase` must contribute genuine negatives for it,
     or the probe learns the vocabulary of whichever clips it happened to see.

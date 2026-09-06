@@ -5,7 +5,7 @@ Action Genome was set aside in an earlier pass on annotation density, quoting
 its paper: *"We do not annotate every single frame in a video"*, and for each
 action they *"uniformly sample 5 frames to annotate across the range"*. That is
 accurate about the paper and it was the wrong thing to decide on, because
-density is a property of a **clip**, not of a corpus. Some clips are annotated
+density is a property of a **clip**, not of a dataset. Some clips are annotated
 densely and the rest can be ignored.
 
 So this measures rather than assumes. What it reports, per clip:
@@ -17,7 +17,7 @@ So this measures rather than assumes. What it reports, per clip:
 
 A relation is non-trivial when it is not `[]`, not `['unsure']` and not
 `['not_contacting']`. Counting those as relations inflates the density of every
-frame in the corpus, because the annotation format records them explicitly
+frame in the dataset, because the annotation format records them explicitly
 rather than by omission.
 
     python3 tools/video/screen_actiongenome.py
@@ -119,7 +119,7 @@ def load_by_clip(path=None):
 
 
 def screen(by_clip, max_gap=6, min_run=8):
-    """Screen the corpus. Returns a summary and the qualifying clip ids."""
+    """Screen the dataset. Returns a summary and the qualifying clip ids."""
     per_clip = {}
     for clip, records_by_frame in by_clip.items():
         per_clip[clip] = screen_clip(sorted(records_by_frame),
@@ -133,7 +133,7 @@ def screen(by_clip, max_gap=6, min_run=8):
         return st.median(values) if values else None
 
     return {
-        "corpus": "actiongenome",
+        "dataset": "actiongenome",
         "max_gap": max_gap,
         "min_run": min_run,
         "clips": len(per_clip),
@@ -157,7 +157,7 @@ def per_object_tracks(objects_by_frame, person_by_frame, frames, num_objs=3):
     planner works on a sequence of states, not on wall-clock time — but it means
     **one step spans a variable amount of real time**, between 1 and `max_gap`
     frames. That is the same property `SPEC.md` V35 measures as temporal
-    compression, here introduced by the corpus rather than by a model, and it
+    compression, here introduced by the dataset rather than by a model, and it
     has to be stated wherever these numbers are quoted.
 
     Boxes stay in the video's own pixels because that is what the criterion
@@ -179,7 +179,7 @@ def per_object_tracks(objects_by_frame, person_by_frame, frames, num_objs=3):
 
 
 def render_svg(summary):
-    """A figure: how the usable corpus depends on the gap tolerance."""
+    """A figure: how the usable dataset depends on the gap tolerance."""
     w, h, pad = 640, 300, 56
     bars = summary.get("sweep") or []
     if not bars:
@@ -203,11 +203,11 @@ def render_svg(summary):
                      % (x, 210 - height, count))
         parts.append('<text x="%d" y="234" class="l">gap &#8804;%d</text>'
                      % (x, gap))
-    parts.append('<text x="%d" y="266" class="n">%d clips in the corpus. '
+    parts.append('<text x="%d" y="266" class="n">%d clips in the dataset. '
                  'VidVRD, for comparison, yields 88 screened clips.</text>'
                  % (pad, summary["clips"]))
     parts.append('<text x="%d" y="282" class="n">A gap is measured in source '
-                 'frames; the median gap across the corpus is %s.</text>'
+                 'frames; the median gap across the dataset is %s.</text>'
                  % (pad, summary["median_gap"]))
     parts.append("</svg>")
     return "\n".join(parts)

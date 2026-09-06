@@ -100,7 +100,7 @@ DEFAULT_SLOPE_FLOOR = 0.1
 # ratio measures noise rather than compression.
 SILENT_RHO = 0.30
 
-# Wider than this and the ratio is not a property of the code on this corpus.
+# Wider than this and the ratio is not a property of the code on this dataset.
 WIDE_IQR = 0.40
 
 
@@ -235,7 +235,7 @@ def merge_pairs(collected):
         total["n_clips"] += c["n_clips"]
         total["n_frames"] += c["n_frames"]
         # Distinct latents do not add across files: two exports of the same
-        # corpus share codes. The largest single export is the honest floor.
+        # dataset share codes. The largest single export is the honest floor.
         total["n_distinct"] = max(total["n_distinct"], c["n_distinct"])
     return total
 
@@ -395,7 +395,7 @@ def score_group(paths, max_gap=DEFAULT_MAX_GAP,
                 max_sources=DEFAULT_MAX_SOURCES,
                 slope_window=DEFAULT_SLOPE_WINDOW,
                 slope_floor=DEFAULT_SLOPE_FLOOR):
-    """Pool every export in a group and score the pool as one corpus."""
+    """Pool every export in a group and score the pool as one dataset."""
     collected = []
     for p in paths:
         z, ids = read_export(p)
@@ -440,7 +440,7 @@ def verdict(result):
     if iqr is not None and iqr >= WIDE_IQR:
         return ("SPREAD TOO WIDE to quote a median: the ratio runs %.2f to "
                 "%.2f across the quartiles, an interquartile range of %.2f. "
-                "On this corpus the ratio is not a property of the code. "
+                "On this dataset the ratio is not a property of the code. "
                 "Report the quartiles, never the median alone.%s"
                 % (result.get("ratio_q25", float("nan")),
                    result.get("ratio_q75", float("nan")), iqr, tail))
@@ -466,7 +466,7 @@ def _esc(text):
             .replace(">", "&gt;"))
 
 
-# Ten colours, because a run of oracle corpora plus every trained arm reaches
+# Ten colours, because a run of oracle datasets plus every trained arm reaches
 # eight rows and a wrapped palette put two different curves in the same red.
 PALETTE = ("#1f6feb", "#d1495b", "#2a9d8f", "#e9a03b", "#7b4bb7",
            "#5c6672", "#0b7285", "#b5179e", "#3f7d20", "#8d5524")

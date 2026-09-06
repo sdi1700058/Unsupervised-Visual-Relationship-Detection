@@ -3,12 +3,12 @@
 **Hypothesis, in one sentence:** a mask is a usable object boundary for this
 evaluation, because a mask metric with its own round-trip floor produces a
 number comparable with the box results, and a tight box read off a mask makes
-a mask corpus comparable with VidVRD, VidOR and Action Genome under every
+a mask dataset comparable with VidVRD, VidOR and Action Genome under every
 metric already written.
 
-**The general rule this serves.** How a corpus draws an object boundary is a
-property of the **corpus**, and the evaluation adapts to it. The reverse rule,
-where a corpus has to fit whatever evaluation happens to exist, is why usable
+**The general rule this serves.** How a dataset draws an object boundary is a
+property of the **dataset**, and the evaluation adapts to it. The reverse rule,
+where a dataset has to fit whatever evaluation happens to exist, is why usable
 candidates kept being set aside. PVSG is the case in point: 150,000 labelled
 frames over 400 videos with temporal scene graphs, passed over only because
 its objects are masks.
@@ -17,19 +17,19 @@ its objects are masks.
 
 ## Read this first: what is NOT measured here
 
-**PVSG is not downloaded. No mask corpus is on disk.** Nothing below is a
+**PVSG is not downloaded. No mask dataset is on disk.** Nothing below is a
 dataset result. Every number comes from one of two sources:
 
 1. **Synthetic masks with known answers.** A square shifted by `d` has an
    analytic IoU of `(s-d)/(s+d)`; the tests assert that value, not an
    observed one.
-2. **Boxes read as rectangular masks.** The box corpora on disk are run
+2. **Boxes read as rectangular masks.** The box datasets on disk are run
    through the mask code path. This is degenerate on purpose. It exercises the
    whole path end to end, and it gives the one correctness test available
    today: when a mask happens to be a rectangle, the mask metric must return
    what the box metric returns.
 
-The corpus-side number — what the mask code costs on a **real segmentation
+The dataset-side number — what the mask code costs on a **real segmentation
 shape** — awaits PVSG. See "What PVSG would need" at the end.
 
 ---
@@ -86,7 +86,7 @@ copied, so the comparison is against the real box metric.
 | **integer boxes: max gap 0** | The mask metric is the box metric on rectangles. Every mask number below can be placed beside a box number. **This is a pass or fail, not a scale**: any non-zero gap on integer boxes is a bug and everything after it is void. |
 | **integer boxes: max gap above 0** | The metric is measuring something else. Stop; no mask result means anything until it is found. |
 | **raw canvas boxes: max gap below 0.05** | The conversion costs less than the rasteriser's rounding. Expected, and it is a property of `boxes_to_masks`, not of the metric. |
-| **raw canvas boxes: max gap above 0.05** | The canvas is too coarse to hold the corpus boxes and a mask pipeline on this canvas would blur small objects. That would be a real finding about the 300x200 canvas rather than about masks. |
+| **raw canvas boxes: max gap above 0.05** | The canvas is too coarse to hold the dataset boxes and a mask pipeline on this canvas would blur small objects. That would be a real finding about the 300x200 canvas rather than about masks. |
 
 ### H8b — the floor. What does the mask representation cost before any planner?
 
@@ -103,8 +103,8 @@ mask costs **2400**, a factor of 12. The outcome is what those bits buy.
 | result | conclusion |
 |---|---|
 | **mask floor IoU at or above the box floor IoU** | The grid code holds an object at least as well as the coordinate code does. Masks are then affordable in accuracy and expensive in width, and the width is the thing to worry about for a `U x P` latent. The next question is a compression, not a metric. |
-| **mask floor IoU below the box floor IoU** | The grid code is the weaker representation at this resolution. A mask corpus would need a finer grid or a different code before its numbers could sit beside the box results, and the finer grid costs bits quadratically. |
-| **`vanished` above 0** | The code **deletes** objects smaller than half a cell. That is the failure `oracle._code_width` fixed on the box side, where an object in the top bin decoded as absent. Any corpus with small objects needs a finer grid before its floor means anything, and the count must be reported next to the floor rather than folded into it. |
+| **mask floor IoU below the box floor IoU** | The grid code is the weaker representation at this resolution. A mask dataset would need a finer grid or a different code before its numbers could sit beside the box results, and the finer grid costs bits quadratically. |
+| **`vanished` above 0** | The code **deletes** objects smaller than half a cell. That is the failure `oracle._code_width` fixed on the box side, where an object in the top bin decoded as absent. Any dataset with small objects needs a finer grid before its floor means anything, and the count must be reported next to the floor rather than folded into it. |
 | **contour F much lower than IoU** | The decoded outline is a staircase at the cell pitch. IoU is blind to that and the contour measure is not, which is the reason both are reported. |
 
 One asymmetry is stated rather than hidden. The box code decodes to the bin's
@@ -185,7 +185,7 @@ accuracy and expensive in width** — 12 times the bits per object (derived,
 and the next question is a compression rather than a metric.
 
 `vanished` is 0 in all three rows (measured), so nothing was deleted on this
-clip. That is not general: this clip's objects are large, and a corpus with
+clip. That is not general: this clip's objects are large, and a dataset with
 small objects has to be checked again before its floor means anything.
 
 **Not observed:** the pre-registered "contour F much lower than IoU" case. The
@@ -216,12 +216,12 @@ while contour F at `tol=2` calls both **1.000** (measured).
 
 ### What these numbers are not
 
-- **Not a dataset result.** No mask corpus is on disk. The masks here are
+- **Not a dataset result.** No mask dataset is on disk. The masks here are
   rectangles derived from boxes, which is the degenerate case, and a rectangle
   is friendlier to an axis-aligned grid code than a real segmentation shape
   will be. The mask floor above is therefore an **upper bound** on what the
   grid code will achieve on PVSG (inferred).
-- **Not a corpus statistic.** One clip, two objects, forty frames.
+- **Not a dataset statistic.** One clip, two objects, forty frames.
 - **Not a like-for-like code comparison.** The box row carries the trained
   decoder's deliberate left-edge half-bin bias and the grid row carries none,
   so it is "the floor of a code a model actually learns" against "the floor of
@@ -296,7 +296,7 @@ convention every loader here uses.
 It is not an alternative to the mask metric. It is the cheaper of two routes
 and it answers a different question:
 
-- **Convert to boxes** to compare a mask corpus with VidVRD, VidOR and Action
+- **Convert to boxes** to compare a mask dataset with VidVRD, VidOR and Action
   Genome under `bbox_mse`, `mse_ratio`, `floor_ratio` and the planner, with no
   new code at all. The cost is that the shape is thrown away.
 - **Score as masks** to ask whether the shape carried anything the box did
@@ -308,7 +308,7 @@ and it answers a different question:
 
 Everything below is missing, and none of it is code:
 
-1. **The corpus on disk.** PVSG is not downloaded. It is **not** hosted on
+1. **The dataset on disk.** PVSG is not downloaded. It is **not** hosted on
    Hugging Face; the release lives on `entuedu-my.sharepoint.com`, which is
    now in the sandbox allowlist, so the download is unblocked and simply has
    not been done. Its masks arrive per frame per object, so the loader has to
@@ -321,9 +321,9 @@ Everything below is missing, and none of it is code:
    readers. The rescale must come from `puzzle_labeled_objects` and not be
    copied (SPEC V5), and rescaling a mask means resampling it, which needs a
    choice of interpolation that this module does not make for you.
-3. **A grid resolution decided against the corpus.** `vanished` decides it:
+3. **A grid resolution decided against the dataset.** `vanished` decides it:
    if any real object is smaller than half a cell at 60 by 40, the floor is
    measuring a deletion rather than a blur.
 
 Until all three exist, the honest statement is the one the run prints: no
-number here comes from a real mask corpus.
+number here comes from a real mask dataset.

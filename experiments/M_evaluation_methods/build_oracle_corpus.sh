@@ -4,7 +4,7 @@
 #   bash experiments/M_evaluation_methods/build_oracle_corpus.sh
 #   N_CLIPS=40 bash experiments/M_evaluation_methods/build_oracle_corpus.sh
 #
-# Any corpus whose annotations read through tools/planner/oracle.py works, not
+# Any dataset whose annotations read through tools/planner/oracle.py works, not
 # only VidVRD. VidOR uses the identical format, so:
 #
 #   CLIPS_FILE=eval/vidor_winnable_w16.txt \

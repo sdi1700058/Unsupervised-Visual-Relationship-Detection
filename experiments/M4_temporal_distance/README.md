@@ -81,7 +81,7 @@ Checked **in this order**. The first row is a trap-catcher and comes first.
 | condition | conclusion |
 |---|---|
 | fewer than 2 distinct latents, or `spearman < 0.30` | **SILENT.** Latent distance carries no temporal information on this data, so the compression ratio below is not a measurement of compression — it is a measurement of noise, and must not be quoted as a ratio. |
-| `ratio_iqr >= 0.40` | **The median must not be quoted alone.** The ratio is not a property of the code on this corpus; it varies too much from pair to pair. Report the quartiles. |
+| `ratio_iqr >= 0.40` | **The median must not be quoted alone.** The ratio is not a property of the code on this dataset; it varies too much from pair to pair. Report the quartiles. |
 | `ratio_median >= 0.95` | **Time preserved.** One latent transition per frame of real time. |
 | `0.50 <= ratio_median < 0.95` | **Time compressed.** |
 | `ratio_median < 0.50` | **Time severely compressed.** More than half of every horizon is lost. |
@@ -98,15 +98,15 @@ and independently, on the same run:
 - **SUPPORTS V35** if, on VidVRD, the trained exports sit clearly below the
   oracle exports on `ratio_median`, and the oracle sits near 1.00.
 - **CONTRADICTS V35** if the trained exports reach `ratio_median >= 0.95` on
-  the same corpus V35 was measured on, or if the oracle compresses about as
+  the same dataset V35 was measured on, or if the oracle compresses about as
   much as the trained code does. Either would make the ratio a property of the
-  corpus rather than of the code, and V35 attributes it to the code.
+  dataset rather than of the code, and V35 attributes it to the code.
 - **NARROWS V35** if the VidOR oracle compresses while the VidVRD oracle does
   not. Compression would then be partly a property of how fast the filmed
   objects move against the bin grid, and V35's wording, which is already scoped
   to VidVRD, could not be widened beyond it.
 - **WIDENS V35** if both oracles preserve time and both are separated from the
-  trained code by the same margin. V35 currently rests on one corpus, which
+  trained code by the same margin. V35 currently rests on one dataset, which
   `DESIGN_WORKPLAN.md` section 4.4 caps at evidence strength 0.5.
 
 A result that does not fall in any of those is reported as not deciding
@@ -124,7 +124,7 @@ workstation on 2026-08-28.
 bash experiments/M4_temporal_distance/run_local.sh
 ```
 
-It builds the two oracle corpora if they are absent (about 4 minutes the first
+It builds the two oracle datasets if they are absent (about 4 minutes the first
 time, nothing on later runs), then scores them beside H14's trained arms.
 
 The metric alone, on exports that already exist:
@@ -141,7 +141,7 @@ A positional argument may be a single export, a directory of exports pooled
 into one group, or `label=path` to name the group in the table and the figure.
 
 **Expected runtime.** Under two minutes for the scoring, on top of the one-off
-corpus build.
+dataset build.
 
 **Outputs**, all under `eval/`, which is not in git:
 
@@ -154,7 +154,7 @@ corpus build.
 
 Nothing above this line was changed after the run. **Measured** 2026-09-05,
 `--max-gap 20`, on this workstation. Scoring took **9.7 seconds** with both
-oracle corpora already built, against the two minutes expected.
+oracle datasets already built, against the two minutes expected.
 
 Figure: `eval/M4/m4_temporal.svg`. Numbers: `eval/M4/m4_temporal.json`.
 
@@ -177,7 +177,7 @@ Figure: `eval/M4/m4_temporal.svg`. Numbers: `eval/M4/m4_temporal.json`.
   measure, so no ratio is reported for either.
 - **`U40 A2 P10` trips the spread rule.** Its interquartile range is 0.49,
   above the 0.40 bar, so its median of 0.30 must not be quoted alone. On this
-  corpus the ratio is not one property of the code: a quarter of pairs sit at
+  dataset the ratio is not one property of the code: a quarter of pairs sit at
   0.09 or below and a quarter at 0.58 or above.
 - **Everything else reads as pre-registered**: the two oracles and the V35 clip
   preserve or nearly preserve time, and both trained arms scored over all 88
@@ -215,7 +215,7 @@ and `observed_graph`, so this is a reproduction rather than a restatement.
 - **It adds the number V35 could not give.** V35 measured the P10 arm on one
   clip and got 0.86 at *k* = 7. Over the model's own 88 training clips the
   same arm gives **0.300**. The headline clip is about three times more
-  faithful than the corpus it was drawn from, which is what `SPEC.md` V36
+  faithful than the dataset it was drawn from, which is what `SPEC.md` V36
   already suspected from a different direction.
 - **It adds saturation, which V35 had no way to state.** `P5` stops gaining
   distance at a frame gap of **3**. Its median distance reaches 3 transitions
@@ -241,12 +241,12 @@ numbers are not comparable and this one has not been checked against anything.
 
 - **Two datasets, one of them with no trained model.** VidOR is scored at the
   oracle only. Training a model on VidOR needs the cluster.
-- **The frame gap is the array index** for the oracle corpora, which carry no
-  `frame_ids`. Both corpora were built with `--no-fill`, which drops
+- **The frame gap is the array index** for the oracle datasets, which carry no
+  `frame_ids`. Both datasets were built with `--no-fill`, which drops
   unannotated frames. Measured on the clips that compress most, annotation
   covers **100%, 99.5% and 100%** of frames, so index and frame number agree to
   within half a percent and the substitution changes nothing here. On a sparse
-  corpus, such as Action Genome, it would not be safe.
+  dataset, such as Action Genome, it would not be safe.
 - **Sources are sub-sampled**, at most about 120 to 240 per clip, so a long
   clip does not dominate the pool by length alone. The cap is approximate
   because the stride is an integer.

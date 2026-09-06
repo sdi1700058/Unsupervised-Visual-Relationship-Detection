@@ -40,10 +40,10 @@ class TestCompositionalSplit(unittest.TestCase):
     def test_held_out_combination_never_appears_in_training(self):
         from tools.planner.compositional import compositional_split
 
-        corpus = self._corpus()
-        tr, te, held = compositional_split(corpus, held_out_categories={"cat"})
+        dataset = self._corpus()
+        tr, te, held = compositional_split(dataset, held_out_categories={"cat"})
 
-        train_cats = {t[0] for i in tr for t in corpus[i]["triples"]}
+        train_cats = {t[0] for i in tr for t in dataset[i]["triples"]}
         self.assertNotIn("cat", train_cats)
         self.assertTrue(len(te) > 0)
 
@@ -56,10 +56,10 @@ class TestCompositionalSplit(unittest.TestCase):
         """
         from tools.planner.compositional import compositional_split
 
-        corpus = self._corpus()
-        tr, te, held = compositional_split(corpus, held_out_categories={"cat"})
+        dataset = self._corpus()
+        tr, te, held = compositional_split(dataset, held_out_categories={"cat"})
 
-        train_preds = {t[1] for i in tr for t in corpus[i]["triples"]}
+        train_preds = {t[1] for i in tr for t in dataset[i]["triples"]}
         for p in held["transferable_predicates"]:
             self.assertIn(p, train_preds)
 
@@ -69,8 +69,8 @@ class TestCompositionalSplit(unittest.TestCase):
     def test_a_predicate_unique_to_the_held_out_category_is_excluded(self):
         from tools.planner.compositional import compositional_split
 
-        corpus = self._corpus()
-        tr, te, held = compositional_split(corpus,
+        dataset = self._corpus()
+        tr, te, held = compositional_split(dataset,
                                            held_out_categories={"person"})
         # `ride` only ever occurs with person, so holding person out removes
         # the predicate entirely. It cannot test composition.
@@ -79,9 +79,9 @@ class TestCompositionalSplit(unittest.TestCase):
     def test_empty_split_is_refused_rather_than_returned(self):
         from tools.planner.compositional import compositional_split
 
-        corpus = self._corpus()
+        dataset = self._corpus()
         with self.assertRaises(ValueError):
-            compositional_split(corpus, held_out_categories={"dog", "cat",
+            compositional_split(dataset, held_out_categories={"dog", "cat",
                                                              "person", "horse"})
 
     def test_random_split_is_the_same_size(self):
@@ -89,9 +89,9 @@ class TestCompositionalSplit(unittest.TestCase):
         from tools.planner.compositional import (compositional_split,
                                                  matched_random_split)
 
-        corpus = self._corpus()
-        tr, te, _ = compositional_split(corpus, held_out_categories={"cat"})
-        rtr, rte = matched_random_split(len(corpus), len(te), seed=0)
+        dataset = self._corpus()
+        tr, te, _ = compositional_split(dataset, held_out_categories={"cat"})
+        rtr, rte = matched_random_split(len(dataset), len(te), seed=0)
         self.assertEqual(len(te), len(rte))
         self.assertEqual(len(tr), len(rtr))
         self.assertEqual(set(rtr) & set(rte), set())

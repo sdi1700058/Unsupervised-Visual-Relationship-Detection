@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """M8 — score a plan against masks rather than bounding boxes.
 
-How a corpus draws an object boundary is a property of the **corpus**, and the
-evaluation has to adapt to it. The reverse rule, where a corpus must fit
+How a dataset draws an object boundary is a property of the **dataset**, and the
+evaluation has to adapt to it. The reverse rule, where a dataset must fit
 whatever evaluation happens to exist already, is why usable datasets were set
 aside: PVSG carries 150,000 labelled frames over 400 videos with temporal
 scene graphs, and it was passed over only because its objects are masks.
@@ -14,7 +14,7 @@ alternatives:
    representation gets the same round-trip floor the box representation has,
    so a mask number is comparable with a box number.
 2. **A mask-to-box conversion.** A tight box from a mask is a few lines, and
-   with it a mask corpus is directly comparable with VidVRD, VidOR and Action
+   with it a mask dataset is directly comparable with VidVRD, VidOR and Action
    Genome under every metric already written.
 
 Two metrics, because one is not enough
@@ -97,13 +97,13 @@ DEFAULT_TOL = 2
 def masks_to_boxes(masks):
     """Tight boxes `(..., 4)` enclosing boolean masks `(..., H, W)`.
 
-    The box is half-open in the same sense the corpora use it, so `x2 - x1` is
+    The box is half-open in the same sense the datasets use it, so `x2 - x1` is
     the number of covered columns. An empty mask returns an all-zero box,
     which is how every loader in this project marks "no object here" — not a
     box at the origin.
 
-    This is the whole reason a mask corpus does not need a separate pipeline.
-    With it, PVSG or any other mask corpus is scored by `bbox_mse`,
+    This is the whole reason a mask dataset does not need a separate pipeline.
+    With it, PVSG or any other mask dataset is scored by `bbox_mse`,
     `bbox_iou`, `oracle.round_trip_error` and the planner exactly as VidVRD is.
     """
     masks = np.asarray(masks, dtype=bool)
@@ -138,12 +138,12 @@ def boxes_to_masks(boxes, height=CANVAS_H, width=CANVAS_W):
 
     The degenerate direction, and it exists on purpose. A box is a mask whose
     shape happens to be a rectangle, so this runs the mask code path over the
-    corpora already on disk and lets the mask metric be checked against the
+    datasets already on disk and lets the mask metric be checked against the
     box metric it has to agree with.
 
     A pixel is covered when its **centre** falls inside the half-open box, so
     an integer box round-trips through `masks_to_boxes` exactly. A box from a
-    real corpus lands between pixels after the canvas rescale, and there the
+    real dataset lands between pixels after the canvas rescale, and there the
     two representations differ by the area the rasteriser rounds;
     `agreement_with_boxes` measures that difference rather than assuming it
     away.
@@ -625,7 +625,7 @@ def agreement_with_boxes(pred_boxes, gt_boxes, height=CANVAS_H,
                          width=CANVAS_W):
     """Do the mask metric and the box metric agree on rectangles?
 
-    The correctness test that can be run today, with no mask corpus on disk. A
+    The correctness test that can be run today, with no mask dataset on disk. A
     box is a mask whose shape is a rectangle, so rasterising both sides and
     scoring them with `mask_iou` must reproduce what `bbox_iou` returns. If it
     does not, the new metric is measuring something else and no mask result
@@ -635,7 +635,7 @@ def agreement_with_boxes(pred_boxes, gt_boxes, height=CANVAS_H,
     the real box metric rather than against a second copy of it that could
     drift.
 
-    Exact agreement is expected only for integer boxes. A corpus box lands
+    Exact agreement is expected only for integer boxes. A dataset box lands
     between pixels after the canvas rescale, and a mask cannot hold half a
     pixel, so `max_abs_deviation` is the rasterisation error and it is
     reported rather than assumed small.
@@ -731,7 +731,7 @@ def write_figure(report, path, width=820):
                     "object-frames: %.2e  (source: %s)"
                     % (agree.get("n_pairs", 0), dev,
                        agree.get("source", "unknown")))
-    footer = ("No mask corpus is on disk. Every number here comes from "
+    footer = ("No mask dataset is on disk. Every number here comes from "
               "synthetic masks or from boxes rasterised as rectangles.")
     tail = [l for l in (headline, report.get("agreement_note"), footer) if l]
 
@@ -880,8 +880,8 @@ def box_code_floor(boxes, bins_x, bins_y, height, width, tol=DEFAULT_TOL):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Score against masks, and convert masks to boxes. "
-                    "Validates on synthetic masks and on box corpora read as "
-                    "rectangular masks, because no mask corpus is on disk.")
+                    "Validates on synthetic masks and on box datasets read as "
+                    "rectangular masks, because no mask dataset is on disk.")
     ap.add_argument("annotation", nargs="?", default=None,
                     help="a VidVRD annotation json. Omit it to run the "
                          "synthetic half only.")
@@ -912,7 +912,7 @@ def main(argv=None):
              report["blindness"]["bf_thick"]))
 
     if a.annotation is None:
-        report["subtitle"] = "synthetic masks only; no corpus was given"
+        report["subtitle"] = "synthetic masks only; no dataset was given"
         report["agreement"] = {"max_abs_deviation": None, "n_pairs": 0,
                                "source": "none"}
     else:
@@ -949,7 +949,7 @@ def main(argv=None):
         report["boxes_already_integer"] = already_integer
         if already_integer:
             report["agreement_note"] = (
-                "the raw canvas boxes of this corpus are already whole "
+                "the raw canvas boxes of this dataset are already whole "
                 "pixels, because the canvas scaler rounds, so the rasteriser "
                 "costs nothing here and this row repeats the one above. The "
                 "between-pixel case is exercised only by the test suite.")
@@ -1018,7 +1018,7 @@ def main(argv=None):
     write_figure(report, fig)
     print("\nwrote %s/m8_mask.json and m8_mask.svg" % a.out_dir)
     print("PVSG is not on disk, so no number here comes from a real mask "
-          "corpus. Read experiments/M8_mask_metric/README.md before deciding "
+          "dataset. Read experiments/M8_mask_metric/README.md before deciding "
           "what these mean.")
     return 0
 

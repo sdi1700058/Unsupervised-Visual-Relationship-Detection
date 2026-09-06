@@ -5,7 +5,7 @@ VidOR uses the **identical annotation format to VidVRD**, by the same author, so
 the criterion in `screen_vidvrd.window_crossover` applies unchanged and this
 module is a reader plus a loop rather than new science.
 
-What the corpus measures out at, on a 500-clip sample of the 7,000 training
+What the dataset measures out at, on a 500-clip sample of the 7,000 training
 files (2026-09-04):
 
 | | VidVRD | VidOR |
@@ -100,7 +100,7 @@ def summarise(rows, window):
     values = [r[0] for r in rows]
     winnable = [r for r in rows if r[0] < 1.0]
     return {
-        "corpus": "vidor", "window": window,
+        "dataset": "vidor", "window": window,
         "clips_screened": len(rows),
         "winnable": len(winnable),
         "winnable_fraction": (float(len(winnable)) / len(rows)) if rows else 0.0,
@@ -114,7 +114,7 @@ def render_svg(summary, rows, path):
     """The crossover distribution, and where the winnable line falls.
 
     Every piece of work needs something to look at. This screen wrote only JSON
-    until 2026-09-05, which made it the one measured corpus with no figure.
+    until 2026-09-05, which made it the one measured dataset with no figure.
 
     A histogram rather than a single bar, because the winnable *fraction* is one
     number over a distribution and the distribution is what a reader needs: the

@@ -1,25 +1,25 @@
 #!/usr/bin/env python3
-"""One box-only reader per corpus, behind one registry and one shape.
+"""One box-only reader per dataset, behind one registry and one shape.
 
 **The oracle needs boxes and nothing else.** That was measured on 2026-08-31,
 when eight Something-Else clips produced plan-validity numbers with no video
 downloaded at all. Frames are needed to *train* FOSAE; they are never needed to
-*run* the oracle. It is the single fact that makes a second and a third corpus
+*run* the oracle. It is the single fact that makes a second and a third dataset
 cost days instead of weeks, and this thesis rests too many headline numbers on
-one corpus.
+one dataset.
 
 What stood in the way was not the data, it was the code. `oracle.py` grew one
-bespoke reader per corpus, each with a slightly different return shape, and
-each new corpus added another flag to the command line and another branch
+bespoke reader per dataset, each with a slightly different return shape, and
+each new dataset added another flag to the command line and another branch
 behind it. This module removes that cost:
 
-- every corpus is a **registry entry**, so adding one is writing a function and
+- every dataset is a **registry entry**, so adding one is writing a function and
   calling `register`, not editing a chain of `if` statements;
 - every load returns the **same pair**, `(boxes, meta)`, with boxes shaped
   `(n_frames, num_objs, 4)` in canvas pixels and `meta` carrying `META_KEYS`;
 - the readers themselves are **not rewritten**. Where `oracle.py` already has a
   measured reader, the entry calls it. What is new is the common shape, the
-  common entry point and the per-corpus indexing that finds the clips.
+  common entry point and the per-dataset indexing that finds the clips.
 
     from tools.planner import box_loader
     for clip in box_loader.list_clips("actiongenome", limit=20):
@@ -62,14 +62,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 from tools.planner import oracle  # noqa: E402
 
-# The canvas every corpus is scaled onto, as (width, height). Taken from the
+# The canvas every dataset is scaled onto, as (width, height). Taken from the
 # oracle so there is one definition rather than a copy (SPEC V5).
 CANVAS = (oracle.CANVAS_W, oracle.CANVAS_H)
 
-# The keys `meta` always carries, whatever the corpus. A caller that reads only
-# these needs no knowledge of which corpus it has.
+# The keys `meta` always carries, whatever the dataset. A caller that reads only
+# these needs no knowledge of which dataset it has.
 #
-#   corpus       the registry name
+#   dataset       the registry name
 #   clip_id      the id `list_clips` returned, and `load_clip` accepts
 #   frames       states in the clip, which is len(boxes)
 #   objects      slots per state, which is num_objs
@@ -77,7 +77,7 @@ CANVAS = (oracle.CANVAS_W, oracle.CANVAS_H)
 #   absent       slot-frames left all-zero, meaning "not in this frame"
 #   source_size  the video's own (width, height), or None when unrecorded
 #   canvas       the (width, height) the boxes are scaled to
-META_KEYS = ("corpus", "clip_id", "frames", "objects", "slots", "absent",
+META_KEYS = ("dataset", "clip_id", "frames", "objects", "slots", "absent",
              "source_size", "canvas")
 
 OUT_DIR = os.path.join("eval", "datasets")
@@ -95,7 +95,7 @@ SOMETHING_ELSE_SIZE = (427, 240)
 def canvas_scaler():
     """`(scale, canvas_w, canvas_h)`, the one definition of canvas geometry.
 
-    Re-exported from the oracle so every corpus in this file scales the same
+    Re-exported from the oracle so every dataset in this file scales the same
     way and no module here copies the arithmetic.
     """
     return oracle.load_canvas_scaler()
@@ -107,7 +107,7 @@ def to_xyxy(box, mode):
     """A four-number box as `(x1, y1, x2, y2)`, whatever the source wrote.
 
     `mode` is `xyxy` for corner pairs and `xywh` for an origin plus a size.
-    An unknown mode raises: a corpus whose convention is not known must stop
+    An unknown mode raises: a dataset whose convention is not known must stop
     the load, because the two readings differ by a whole box and nothing
     downstream can tell them apart.
 
@@ -123,8 +123,8 @@ def to_xyxy(box, mode):
 
 # --- the registry ----------------------------------------------------------
 
-class Corpus(object):
-    """One annotated corpus the oracle can read from boxes alone.
+class Dataset(object):
+    """One annotated dataset the oracle can read from boxes alone.
 
     `list_clips(root, limit)` returns clip ids; `load_clip(root, clip_id,
     num_objs, **kwargs)` returns `(boxes, meta)`. Neither is called directly by
@@ -144,31 +144,31 @@ REGISTRY = {}
 _ORDER = []
 
 
-def register(corpus):
-    """Add a corpus. This is the whole cost of supporting a new one."""
-    if corpus.name not in REGISTRY:
-        _ORDER.append(corpus.name)
-    REGISTRY[corpus.name] = corpus
-    return corpus
+def register(dataset):
+    """Add a dataset. This is the whole cost of supporting a new one."""
+    if dataset.name not in REGISTRY:
+        _ORDER.append(dataset.name)
+    REGISTRY[dataset.name] = dataset
+    return dataset
 
 
-def corpora():
+def datasets():
     """Registered names, in registration order."""
     return list(_ORDER)
 
 
 def get(name):
     if name not in REGISTRY:
-        raise KeyError("unknown corpus %r; registered: %s"
-                       % (name, ", ".join(corpora())))
+        raise KeyError("unknown dataset %r; registered: %s"
+                       % (name, ", ".join(datasets())))
     return REGISTRY[name]
 
 
 def _finish(name, clip_id, boxes, meta):
-    """Force one reader's output into the shape every corpus shares.
+    """Force one reader's output into the shape every dataset shares.
 
     `absent` is recomputed here from the boxes rather than taken from the
-    reader, so the number means the same thing in every corpus and a survey can
+    reader, so the number means the same thing in every dataset and a survey can
     add them up. Each reader already counts absent slot-frames its own way, and
     the two agree: an absent slot is written as an all-zero box.
     """
@@ -178,7 +178,7 @@ def _finish(name, clip_id, boxes, meta):
                          % (name, clip_id, (boxes.shape,)))
     source = (meta or {}).get("source_size")
     out = {
-        "corpus": name,
+        "dataset": name,
         "clip_id": clip_id,
         "frames": int(boxes.shape[0]),
         "objects": int(boxes.shape[1]),
@@ -191,10 +191,10 @@ def _finish(name, clip_id, boxes, meta):
 
 
 def list_clips(name, root=None, limit=None):
-    """Clip ids for a corpus, in a stable order.
+    """Clip ids for a dataset, in a stable order.
 
     A root that does not exist gives an empty list rather than an error: the
-    survey has to run on a machine that holds none of the corpora, and that is
+    survey has to run on a machine that holds none of the datasets, and that is
     most machines.
     """
     entry = get(name)
@@ -202,7 +202,7 @@ def list_clips(name, root=None, limit=None):
 
 
 def load_clip(name, clip_id, num_objs=3, root=None, **kwargs):
-    """`(boxes, meta)` for one clip of one corpus. Boxes are canvas pixels."""
+    """`(boxes, meta)` for one clip of one dataset. Boxes are canvas pixels."""
     entry = get(name)
     boxes, meta = entry.load_clip(root or entry.root, clip_id, num_objs,
                                   **kwargs)
@@ -245,12 +245,12 @@ def _load_json_clip(root, clip_id, num_objs=3, fill=True):
     return oracle.boxes_from_vidvrd(path, num_objs=num_objs, fill=fill)
 
 
-register(Corpus(
+register(Dataset(
     "vidvrd", os.path.join("data", "video", "vidvrd", "annotations"),
     _json_clips, _load_json_clip,
     note="one JSON per clip; slots are the tids of the largest tracks"))
 
-register(Corpus(
+register(Dataset(
     "vidor", os.path.join("data", "video", "vidor", "annotations"),
     _json_clips, _load_json_clip,
     note="identical schema to VidVRD, in per-video folders"))
@@ -261,7 +261,7 @@ register(Corpus(
 # One parsed annotation file at a time. The release is four files of several
 # hundred megabytes, so holding them all would cost more memory than the rest
 # of the pipeline; holding none would re-parse a file per clip, which is what
-# made a batch over the corpus slow.
+# made a batch over the dataset slow.
 _SE_CACHE = {"path": None, "data": None}
 
 
@@ -322,13 +322,13 @@ def _se_load(root, clip_id, num_objs=3, width=None, height=None):
 # VideoNet has no released annotation. `tools/synth_bbox.py` writes the VidVRD
 # schema for it from MediaPipe hands and Grounded-DINO, so the same reader
 # serves it — which is the whole reason that tool writes that schema.
-register(Corpus(
+register(Dataset(
     "videonet", os.path.join("data", "video", "videonet", "annotations"),
     _json_clips, _load_json_clip,
     note="AUTO-ANNOTATED by tools/synth_bbox.py, not ground truth"))
 
 
-register(Corpus(
+register(Dataset(
     "something_else", os.path.join("data", "video", "something_else", "raw"),
     _se_clips, _se_load,
     note="per-frame boxes for 180,049 videos; no frames needed for the oracle"))
@@ -337,7 +337,7 @@ register(Corpus(
 # --- Action Genome ---------------------------------------------------------
 
 # The two pickles cost a few hundred megabytes and a minute to parse, so a
-# batch over the corpus must parse them once. Keyed on the root.
+# batch over the dataset must parse them once. Keyed on the root.
 _AG_CACHE = {}
 
 
@@ -345,7 +345,7 @@ def _ag_group(raw):
     """`{clip: {frame_number: value}}` from keys shaped `clip/000089.png`.
 
     `tools/video/screen_actiongenome.load_by_clip` does the same regrouping for
-    the object file alone. It stays there because the screen reads the corpus
+    the object file alone. It stays there because the screen reads the dataset
     for a different purpose; both files need it here.
     """
     by_clip = {}
@@ -423,7 +423,7 @@ def _ag_load(root, clip_id, num_objs=3, max_gap=6):
         objects[clip_id], person[clip_id], num_objs=num_objs, max_gap=max_gap)
 
 
-register(Corpus(
+register(Dataset(
     "actiongenome", os.path.join("data", "video", "actiongenome",
                                  "annotations"),
     _ag_clips, _ag_load,
@@ -445,7 +445,7 @@ def _median(values):
 def distinct_states(boxes, bins_x=None, bins_y=None):
     """How many **different** latents a clip produces once quantised.
 
-    A corpus can hand over long clips full of objects and still give a planner
+    A dataset can hand over long clips full of objects and still give a planner
     nothing: if the boxes move less than one bin, every frame encodes to the
     same latent, there is no transition to mine and no plan to find. On
     2026-09-05 four exports under `eval/exports` were found holding exactly one
@@ -465,13 +465,13 @@ def distinct_states(boxes, bins_x=None, bins_y=None):
 
 
 def survey(name, root=None, limit=200, num_objs=8, min_frames=8):
-    """Count what one corpus yields: clips loadable, frames and objects.
+    """Count what one dataset yields: clips loadable, frames and objects.
 
     Reads the **first** `limit` clips in id order rather than a random sample,
     so the numbers are reproducible from the command line alone.
 
     `median_objects` counts the slots a clip actually fills, up to `num_objs`.
-    It is the number that says whether a corpus has anything to relate: a clip
+    It is the number that says whether a dataset has anything to relate: a clip
     with one object cannot carry a relation.
 
     `long_clips` counts the clips reaching `min_frames` states. Loading a clip
@@ -502,7 +502,7 @@ def survey(name, root=None, limit=200, num_objs=8, min_frames=8):
         objects.append(int(occupied.sum()))
         distinct.append(distinct_states(boxes))
     return {
-        "corpus": name,
+        "dataset": name,
         "root": root,
         "available": bool(ids),
         "clips_listed": len(ids),
@@ -520,12 +520,12 @@ def survey(name, root=None, limit=200, num_objs=8, min_frames=8):
 
 
 def parse_roots(values, names):
-    """`--root` arguments as `{corpus: path}`.
+    """`--root` arguments as `{dataset: path}`.
 
-    Each value is `name=path`, so one command can survey a corpus that sits
+    Each value is `name=path`, so one command can survey a dataset that sits
     somewhere other than its registered root — a sample file, or a scratch
-    copy — alongside the corpora that sit where they belong. A bare path is
-    accepted when exactly one corpus is being surveyed, because that is the
+    copy — alongside the datasets that sit where they belong. A bare path is
+    accepted when exactly one dataset is being surveyed, because that is the
     common case and the pair would only repeat the name.
     """
     roots = {}
@@ -534,12 +534,12 @@ def parse_roots(values, names):
             name, path = value.split("=", 1)
             if name not in REGISTRY:
                 raise SystemExit("--root names %r, which is not registered: %s"
-                                 % (name, ", ".join(corpora())))
+                                 % (name, ", ".join(datasets())))
             roots[name] = path
         elif len(names) == 1:
             roots[names[0]] = value
         else:
-            raise SystemExit("--root %s needs a corpus: write name=path"
+            raise SystemExit("--root %s needs a dataset: write name=path"
                              % (value,))
     return roots
 
@@ -564,7 +564,7 @@ def _columns(min_frames):
     anywhere near the mistake.
     """
     return (
-        (20, "corpus", "corpus"),
+        (20, "dataset", "dataset"),
         (140, "clips listed", "clips_listed"),
         (232, "clips loaded", "clips_loaded"),
         (330, "clips >= %d frames" % min_frames, "long_clips"),
@@ -575,11 +575,11 @@ def _columns(min_frames):
 
 
 def render_svg(rows, limit=None):
-    """A table: per corpus, the clips loadable and what one clip holds.
+    """A table: per dataset, the clips loadable and what one clip holds.
 
     A table rather than a chart because the numbers are not comparable to each
     other and a reader wants to look one of them up, not compare bar heights.
-    Corpora that are absent keep a row: "which corpora are reachable without a
+    Datasets that are absent keep a row: "which datasets are reachable without a
     download" is the question, so an empty answer is an answer.
 
     `states/clip` is the count of **distinct** latents a clip produces once the
@@ -592,7 +592,7 @@ def render_svg(rows, limit=None):
     top = 96
     row_h = 26
     moved = [r for r in rows
-             if r["available"] and r["root"] != get(r["corpus"]).root]
+             if r["available"] and r["root"] != get(r["dataset"]).root]
     min_frames = ([r.get("min_frames") for r in rows if r.get("min_frames")]
                   or [8])[0]
     num_objs = ([r.get("num_objs") for r in rows if r.get("num_objs")]
@@ -600,7 +600,7 @@ def render_svg(rows, limit=None):
     columns = _columns(min_frames)
 
     # The notes go under the table rather than in a column: truncated to a
-    # column width they were unreadable, and each one records why a corpus
+    # column width they were unreadable, and each one records why a dataset
     # behaves as it does.
     footnotes = [
         "frames/clip, objects/clip and states/clip are medians over the clips "
@@ -613,9 +613,9 @@ def render_svg(rows, limit=None):
     for row in rows:
         if not row["available"]:
             footnotes.append("%s -- not on this machine: %s"
-                             % (row["corpus"], row["root"]))
+                             % (row["dataset"], row["root"]))
             continue
-        note = "%s -- %s" % (row["corpus"], row["note"])
+        note = "%s -- %s" % (row["dataset"], row["note"])
         dead = row.get("dead_clips")
         if dead:
             note += " (%d of %d clips carry one state only)" % (
@@ -623,7 +623,7 @@ def render_svg(rows, limit=None):
         footnotes.append(note)
     for row in moved:
         footnotes.append("%s was read from %s, not from its usual root."
-                         % (row["corpus"], row["root"]))
+                         % (row["dataset"], row["root"]))
     height = top + row_h * (len(rows) + 1) + 20 + 14 * len(footnotes)
 
     left = columns[0][0]
@@ -635,10 +635,10 @@ def render_svg(rows, limit=None):
         '.v{font-size:12px}.n{font-size:10px;fill:#666}'
         '.off{font-size:12px;fill:#999}</style>',
         '<rect width="%d" height="%d" fill="white"/>' % (width, height),
-        _cell(left, 30, "Corpora reachable from annotations alone", "t"),
+        _cell(left, 30, "Datasets reachable from annotations alone", "t"),
         _cell(left, 50, "The oracle reads boxes. Frames are needed only to "
                         "train, never to run it.", "n"),
-        _cell(left, 66, "First %s clips per corpus in id order, not a random "
+        _cell(left, 66, "First %s clips per dataset in id order, not a random "
                         "sample." % (limit if limit else "N"), "n"),
     ]
     for x, header, _ in columns:
@@ -651,8 +651,8 @@ def render_svg(rows, limit=None):
         available = row["available"]
         css = "v" if available else "off"
         for x, _, key in columns:
-            if key == "corpus":
-                value = row["corpus"]
+            if key == "dataset":
+                value = row["dataset"]
             elif not available:
                 value = "-"
             else:
@@ -669,20 +669,20 @@ def render_svg(rows, limit=None):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="Survey which annotated corpora the oracle can read on "
+        description="Survey which annotated datasets the oracle can read on "
                     "this machine, with no video downloaded.")
-    ap.add_argument("--corpus", default="all",
-                    help="one registered corpus, or all. Registered: "
-                         + ", ".join(corpora()))
+    ap.add_argument("--dataset", default="all",
+                    help="one registered dataset, or all. Registered: "
+                         + ", ".join(datasets()))
     ap.add_argument("--root", action="append", default=None,
-                    help="read a corpus from somewhere else, as name=path. "
-                         "Repeatable. A bare path is allowed when --corpus "
-                         "names one corpus.")
+                    help="read a dataset from somewhere else, as name=path. "
+                         "Repeatable. A bare path is allowed when --dataset "
+                         "names one dataset.")
     ap.add_argument("--limit", type=int, default=200,
-                    help="clips to read per corpus, in id order")
+                    help="clips to read per dataset, in id order")
     ap.add_argument("--num-objs", type=int, default=8,
                     help="slots per state while surveying. Larger than the "
-                         "oracle's 3, so objects/clip measures the corpus "
+                         "oracle's 3, so objects/clip measures the dataset "
                          "rather than the export setting.")
     ap.add_argument("--min-frames", type=int, default=8,
                     help="states a clip needs to count as long enough to plan "
@@ -690,7 +690,7 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=OUT_DIR)
     args = ap.parse_args(argv)
 
-    names = corpora() if args.corpus == "all" else [args.corpus]
+    names = datasets() if args.dataset == "all" else [args.dataset]
     roots = parse_roots(args.root, names)
 
     rows = []
@@ -700,7 +700,7 @@ def main(argv=None):
         rows.append(row)
         print("%-15s listed %-6s loaded %-6s long %-6s frames %-7s objects "
               "%-5s states %-7s dead %-5s %s"
-              % (row["corpus"], row["clips_listed"], row["clips_loaded"],
+              % (row["dataset"], row["clips_listed"], row["clips_loaded"],
                  row["long_clips"], row["median_frames"],
                  row["median_objects"], row["median_distinct"],
                  row["dead_clips"],
@@ -712,7 +712,7 @@ def main(argv=None):
     out_json = os.path.join(args.out_dir, "box_loader_reach.json")
     with open(out_json, "w") as handle:
         json.dump({"limit": args.limit, "num_objs": args.num_objs,
-                   "min_frames": args.min_frames, "corpora": rows},
+                   "min_frames": args.min_frames, "datasets": rows},
                   handle, indent=2)
     out_svg = os.path.join(args.out_dir, "box_loader_reach.svg")
     with open(out_svg, "w") as handle:

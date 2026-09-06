@@ -1,6 +1,6 @@
 # labeled-fosae — User Guide
 
-A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video. Three corpora are measured: VidVRD, VidOR, and Action Genome. More candidates have a verified download route. `bash sh/dataset.sh list` prints the stage that each corpus reached.
+A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video. Three datasets are measured: VidVRD, VidOR, and Action Genome. More candidates have a verified download route. `bash sh/dataset.sh list` prints the stage that each dataset reached.
 
 The document is a runbook. It tells you how to install the code, how to bake data, how to train the model, and how to look at the results. The document does not explain the theory. For the theory, read `notes/docs/THEORY.md`.
 
@@ -16,7 +16,7 @@ The FOSAE paper is at [arXiv:1902.08093](https://arxiv.org/abs/1902.08093). Read
 ## 2. What This Fork Adds
 
 - **New video domains.** Two bake loaders: `latplan/puzzles/puzzle_vidvrd.py` and `latplan/domains/video/actiongenome.py`. `sh/download_videonet.sh` downloads VideoNet, but the VideoNet loader is not written yet.
-- **One interface for every corpus.** `bash sh/dataset.sh <name> <stage>` runs the five stages: `download`, `prepare`, `screen`, `oracle`, and `verify`. `bash sh/dataset.sh list` prints the stage that each corpus reached. A stage that exits with code 3 has a verified route and no code behind it.
+- **One interface for every dataset.** `bash sh/dataset.sh <name> <stage>` runs the five stages: `download`, `prepare`, `screen`, `oracle`, and `verify`. `bash sh/dataset.sh list` prints the stage that each dataset reached. A stage that exits with code 3 has a verified route and no code behind it.
 - **Ground-truth box readers for the planner.** `tools/planner/oracle.py` reads boxes from the VidVRD annotation format, which VidOR also uses, and from Action Genome and Something-Else. The oracle reads boxes only, so it runs without any video file.
 - **Per-video overfit pipeline.** `setup-dataset.py video_vidvrd <cat> --video-id <VID>` bakes a single-video training set. The training pipeline reads it through the `NPZ_PATH` env var.
 - **Env-var knobs for hyperparameters.** `LR`, `PREENC_LAYERS`, `PREENC_DIM`, `MAX_TEMPERATURE`, `ZEROSUPPRESS`, `DROPOUT`, `NOISE`, `NO_EARLYSTOP`, `EPOCH`, `TRANSITION_MODE`, `BATCH`, `FPS`.
@@ -60,12 +60,12 @@ python3 -c "from tensorflow.python.client import device_lib; print([d.name for d
 
 The bake step is one Python command per data setup. The bake writes an `.npz` file into `data/npz/`.
 
-### 4.0 Get a corpus
+### 4.0 Get a dataset
 
-`sh/dataset.sh` is the one interface for a corpus. It downloads, unpacks, screens, and builds the ground-truth exports.
+`sh/dataset.sh` is the one interface for a dataset. It downloads, unpacks, screens, and builds the ground-truth exports.
 
 ```bash
-bash sh/dataset.sh list                            # which stage each corpus reached
+bash sh/dataset.sh list                            # which stage each dataset reached
 bash sh/dataset.sh vidvrd download                 # fetch the archives
 bash sh/dataset.sh vidor all                       # download, prepare, screen, oracle, verify
 bash sh/dataset.sh actiongenome verify             # say what is present and what is missing
@@ -249,7 +249,7 @@ python3 tools/planner/make_report.py eval/planner/<model>
 Three commands say whether the repository still holds together.
 
 ```bash
-.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 646 tests
+.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 657 tests
 python3 tools/check_docs.py                                          # the documents
 python3 tools/workplan.py check                                      # the plan
 ```
@@ -264,8 +264,8 @@ Run the test suite under `.venv-local/bin/python`. Under a different interpreter
 - `notes/docs/AUDIT.md` — code alignment with the paper and the upstream repository. Read this before any change to `strips.py` or the loaders.
 - `notes/docs/SPEC.md` — task grid, invariants, and gate list.
 - `notes/docs/STATUS.md` — weekly progress and the phase timeline.
-- `notes/docs/DATASETS.md` — the corpora in use, with the reason for each one.
-- `notes/docs/DATASETS_CONSIDERED.md` — every corpus that came up, and why each one won or lost.
+- `notes/docs/DATASETS.md` — the datasets in use, with the reason for each one.
+- `notes/docs/DATASETS_CONSIDERED.md` — every dataset that came up, and why each one won or lost.
 - `notes/docs/EVAL.md` — the evaluation methods and metrics that this work uses.
 - `notes/docs/EVAL_CONSIDERED.md` — every metric and protocol from the literature, adopted or not.
 - `notes/docs/RELATED_WORK.md` — the paper summaries and the shortlist.
@@ -287,5 +287,5 @@ If you cite this work, cite the source paper and the LatPlan predecessor.
 
 ## 11. Change log for this file
 
-- 2026-09-05: Review against the repository. Added section 4.0 for `sh/dataset.sh` and section 8 for the checks. Named VidOR and Action Genome as measured corpora. Corrected the VideoNet claim, because the loader is not written. Added the augmentation and directory flags to section 4.2. Added the measured counter-evidence for `PREENC_LAYERS`. Renumbered the last three sections.
+- 2026-09-05: Review against the repository. Added section 4.0 for `sh/dataset.sh` and section 8 for the checks. Named VidOR and Action Genome as measured datasets. Corrected the VideoNet claim, because the loader is not written. Added the augmentation and directory flags to section 4.2. Added the measured counter-evidence for `PREENC_LAYERS`. Renumbered the last three sections.
 - 2026-08-02: STE verification pass against the real `STE.md` rules. All prose sentences pass the 25-word descriptive limit (Rule 6.3). Every command block stays verbatim, because the scope section of `STE.md` exempts code. Fixed L46 `which loads` to `That file loads` per GR-1. Removed the duplicate `Related Files` section, because `Where to Find More` already lists every file.

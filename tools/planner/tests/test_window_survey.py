@@ -3,7 +3,7 @@
 
 `EVAL.md` 4.2's criterion is computed in two places: `screen_vidvrd.
 window_crossover`, which selects clips, and `window_survey.survey_clip`, which
-sweeps window sizes across the corpus. The 2026-08-30 review found they
+sweeps window sizes across the dataset. The 2026-08-30 review found they
 disagreed by construction -- the survey ran with `fill=True`, so it measured
 the criterion on frames the loader had invented, while the screen was
 absence-aware.

@@ -29,15 +29,15 @@ count_npz() {
     ls -1 "$1"/*.npz 2>/dev/null | wc -l
 }
 
-# The two oracle corpora are the ceiling: latents built straight from
+# The two oracle datasets are the ceiling: latents built straight from
 # ground-truth boxes, no model in the loop. They are built once and reused.
 if [[ "$(count_npz "${VIDVRD_DIR}")" -lt "${MIN_CLIPS}" ]]; then
-    echo "building the VidVRD oracle corpus (once, a few minutes)"
+    echo "building the VidVRD oracle dataset (once, a few minutes)"
     OUT_DIR="${VIDVRD_DIR}" N_CLIPS=25 \
         bash experiments/M_evaluation_methods/build_oracle_corpus.sh
 fi
 if [[ "$(count_npz "${VIDOR_DIR}")" -lt "${MIN_CLIPS}" ]]; then
-    echo "building the VidOR oracle corpus (once, a few minutes)"
+    echo "building the VidOR oracle dataset (once, a few minutes)"
     CLIPS_FILE=eval/vidor_winnable_w16.txt \
     ANN_DIR=data/video/vidor/annotations/training \
     OUT_DIR="${VIDOR_DIR}" N_CLIPS=25 \

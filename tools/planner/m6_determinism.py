@@ -28,7 +28,7 @@ definition, so the number describes the action model the planner reads::
 **The metric has one obvious way to lie, and it is guarded here rather than in
 the reader.** If every transition has its own effect, then every operator's
 precondition holds only in the state that produced it, no operator can ever be
-contradicted, and the pooled rate is exactly 1.0 - for a corpus that memorised
+contradicted, and the pooled rate is exactly 1.0 - for a dataset that memorised
 itself and generalises to nothing. So the headline rate counts only operators
 whose precondition holds in more than one state, the naive rate that includes
 the rest is reported beside it under its own name, and `verdict` checks effect
@@ -58,7 +58,7 @@ import numpy as np
 TOLERANCE = 0
 
 # Transitions per distinct effect. Below this the operator set is a lookup
-# table of the corpus and the rate says nothing about lawfulness.
+# table of the dataset and the rate says nothing about lawfulness.
 MIN_REUSE = 2.0
 
 # Share of operators whose precondition holds in more than one state. Only
@@ -74,7 +74,7 @@ NON_DETERMINISTIC = 0.50
 
 
 # ---------------------------------------------------------------------------
-# Reading a corpus
+# Reading a dataset
 # ---------------------------------------------------------------------------
 
 def clips_from_frame_ids(frame_ids):
@@ -92,7 +92,7 @@ def clips_from_frame_ids(frame_ids):
 
 
 def load_pool(paths):
-    """Concatenate several exports into one corpus, keeping the clips apart.
+    """Concatenate several exports into one dataset, keeping the clips apart.
 
     Returns `(latents, clips)`. Every clip name is prefixed with the file it
     came from, so the join between two files can never read as a transition
@@ -125,9 +125,9 @@ def load_pool(paths):
 def parse_row(argument):
     """One command-line row: `path` or `LABEL=path[,path...]`.
 
-    The pooled form exists because a corpus-level number has to pool the clips
-    of a corpus. An oracle export holds one clip, so VidOR would otherwise
-    arrive as a table of single-clip rows and no number for the corpus.
+    The pooled form exists because a dataset-level number has to pool the clips
+    of a dataset. An oracle export holds one clip, so VidOR would otherwise
+    arrive as a table of single-clip rows and no number for the dataset.
     """
     if "=" in argument:
         label, rest = argument.split("=", 1)
@@ -241,7 +241,7 @@ def precondition_agreement(pre, members, add, dele):
     96% of operators fire once, the mean read 0.999 whatever the groups did.
 
     The row also carries `corpus_agreement`, the same fraction over every
-    source state in the corpus. A sparse code drives both numbers up together,
+    source state in the dataset. A sparse code drives both numbers up together,
     and the distance between them is the part that belongs to the grouping.
     """
     pre = np.asarray(pre, dtype=np.int8)
@@ -285,9 +285,9 @@ def concentration(supports):
 
 
 def synthetic_cube_corpus(n_ops=6, n_payload=26, n_clips=20, steps=18, seed=0):
-    """A corpus that has the Cube-Space property, as a positive control.
+    """A dataset that has the Cube-Space property, as a positive control.
 
-    The shuffled control shows what this measurement gives a corpus with no
+    The shuffled control shows what this measurement gives a dataset with no
     transition structure. It does not show that the measurement can return a
     high rate at all, and a metric that is negative on everything is worth
     nothing. This builds the other end.
@@ -320,7 +320,7 @@ def permute_successors(suc, seed=0):
     """The control: keep every successor, break which state it followed.
 
     The state distribution survives and the transition structure does not, so
-    whatever the control scores is what this measurement gives a corpus that
+    whatever the control scores is what this measurement gives a dataset that
     learned nothing. On the naive rate the control usually scores near 1.0,
     which is the degenerate reading made visible rather than argued about.
     """
@@ -334,12 +334,12 @@ def permute_successors(suc, seed=0):
 # ---------------------------------------------------------------------------
 
 def measure(pre, suc, tolerance=TOLERANCE, max_effects=0):
-    """Determinism of the mined operators over one corpus.
+    """Determinism of the mined operators over one dataset.
 
     For each operator, every transition whose source satisfies the operator's
     precondition is a test of it: the operator predicts `(s or add) and not
-    delete`, and the corpus recorded something. `agree` counts the tests the
-    corpus passes.
+    delete`, and the dataset recorded something. `agree` counts the tests the
+    dataset passes.
 
     **The headline `determinism` counts only testable operators**, those whose
     precondition holds in more than one source state. An operator whose
@@ -352,7 +352,7 @@ def measure(pre, suc, tolerance=TOLERANCE, max_effects=0):
     suc = np.asarray(suc, dtype=np.int8)
     n_transitions = len(pre)
     if not n_transitions:
-        raise SystemExit("the corpus holds no transition inside a clip")
+        raise SystemExit("the dataset holds no transition inside a clip")
 
     flips = pre != suc
     n_noop = int((~flips.any(axis=1)).sum())
@@ -457,7 +457,7 @@ def measure(pre, suc, tolerance=TOLERANCE, max_effects=0):
                                         if multi_weight else None),
         "mean_extra_constant_bits": ((multi_extra / multi_weight)
                                      if multi_weight else None),
-        # The same fraction over every source state in the corpus. A sparse
+        # The same fraction over every source state in the dataset. A sparse
         # code drives this up on its own, so only the distance between the two
         # belongs to the grouping.
         "corpus_agreement": float((pre == pre[0]).all(axis=0).sum())
@@ -499,9 +499,9 @@ def analyse(latents, clips=None, tolerance=TOLERANCE, seed=0, label=None,
 def verdict(row):
     """The reading. The two vacuity checks come first, on purpose.
 
-    Grading the rate first would report the worst possible corpus - one that
+    Grading the rate first would report the worst possible dataset - one that
     memorised every transition - as the best possible result, because that
-    corpus scores 1.0. The order of these branches is the guard.
+    dataset scores 1.0. The order of these branches is the guard.
     """
     reuse = row.get("reuse")
     share = row.get("testable_share")
@@ -523,14 +523,14 @@ def verdict(row):
                    ", every bit zero" if row.get("all_zero") else ""))
 
     if reuse is None:
-        return ("NO TRANSITION carries an effect. Every pair in this corpus "
+        return ("NO TRANSITION carries an effect. Every pair in this dataset "
                 "repeats its own state, so there is no action model to test.")
 
     if reuse < MIN_REUSE:
         return ("DEGENERATE: %.2f transitions per distinct effect, under the "
                 "%.1f this measurement needs. Nearly every transition is its "
                 "own operator, so the action model is a lookup table of the "
-                "corpus. The naive rate of %s is what that lookup table scores "
+                "dataset. The naive rate of %s is what that lookup table scores "
                 "and it is not evidence of anything."
                 % (reuse, MIN_REUSE,
                    "n/a" if naive is None else "%.3f" % naive))
@@ -598,7 +598,7 @@ def write_svg(rows, path, title="M6 - effect determinism"):
     """Three panels per row: the rate, the reuse, and the testable share.
 
     The rate alone would be read as a score, and on this metric a perfect score
-    is what a corpus that memorised itself produces. The other two panels are
+    is what a dataset that memorised itself produces. The other two panels are
     on the same line so that reading cannot happen.
     """
     left, row_h = 236.0, 66.0
@@ -697,7 +697,7 @@ def write_svg(rows, path, title="M6 - effect determinism"):
 
     foot = top + row_h * max(len(rows), 1) + 22
     notes = [
-        "A perfect rate is what a corpus that memorised every transition "
+        "A perfect rate is what a dataset that memorised every transition "
         "produces, so the rate is read only when reuse clears the dashed "
         "line at %.1f and the testable share clears %.2f."
         % (MIN_REUSE, MIN_TESTABLE_SHARE),
@@ -773,7 +773,7 @@ def _print_row(row):
           "constant bits beyond the mined precondition)"
           % (num("mean_precondition_agreement"), row["n_multi_effects"],
              num("mean_extra_constant_bits", "%.1f")))
-    print("  the same over the corpus  %s" % num("corpus_agreement"))
+    print("  the same over the dataset  %s" % num("corpus_agreement"))
     print("")
     print("  %s" % row["verdict"])
 
@@ -784,7 +784,7 @@ def main(argv=None):
                     "successor wherever its precondition holds.")
     ap.add_argument("rows", nargs="+",
                     help="an export npz, or LABEL=path,path to pool several "
-                         "exports into one corpus row")
+                         "exports into one dataset row")
     ap.add_argument("--tolerance", type=int, default=TOLERANCE,
                     help="Hamming bits between the predicted successor and "
                          "the recorded one. 0 is the STRIPS reading")
@@ -798,7 +798,7 @@ def main(argv=None):
     ap.add_argument("--out-dir", default=None,
                     help="where to write m6_determinism.json and .svg")
     ap.add_argument("--positive-control", action="store_true",
-                    help="prepend a synthetic corpus built to have the "
+                    help="prepend a synthetic dataset built to have the "
                          "Cube-Space property. It shows that this measurement "
                          "can return a high rate, which the shuffled control "
                          "cannot show")

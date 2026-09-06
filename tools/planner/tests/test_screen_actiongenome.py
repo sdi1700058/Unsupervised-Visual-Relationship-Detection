@@ -5,14 +5,14 @@ Two things here are easy to get wrong and both were got wrong once.
 
 **A run is not a clip.** Counting maximal runs gives a larger number than
 counting clips that contain at least one usable run, because one clip can
-contribute several. The first hand count of this corpus reported 741 runs and
+contribute several. The first hand count of this dataset reported 741 runs and
 the tool reports 553 clips. The clip count is the honest one, because a clip is
 what gets baked.
 
 **"No relation" is written down explicitly.** The annotation format records
 `['unsure']` and `['not_contacting']` rather than omitting the field, so
 counting every populated field as a relation inflates the density of every frame
-in the corpus.
+in the dataset.
 """
 
 import os
@@ -116,7 +116,7 @@ class TestScreen(unittest.TestCase):
 class TestFigure(unittest.TestCase):
 
     def test_the_sweep_is_rendered_rather_than_one_number(self):
-        """One number invites reading the corpus size as intrinsic."""
+        """One number invites reading the dataset size as intrinsic."""
         svg = ag.render_svg({"min_run": 8, "clips": 9601, "median_gap": 16,
                              "sweep": [(2, 34), (6, 553), (12, 2126)]})
         self.assertIn("553", svg)

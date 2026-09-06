@@ -163,7 +163,7 @@ if __name__ == "__main__":
 
 
 class TestClaimStrengthCombinesCorpora(unittest.TestCase):
-    """A second corpus must raise a claim, or the red card is not enforced.
+    """A second dataset must raise a claim, or the red card is not enforced.
 
     The first implementation scored a claim by its single strongest
     observation, so evidence from a second dataset changed nothing and the

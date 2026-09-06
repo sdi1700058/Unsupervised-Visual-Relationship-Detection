@@ -28,7 +28,7 @@ encode something from models that collapsed, which is a stronger statement and
 a cheaper test than running a planner to find out.
 
 **The plateau value is measured here, never hard-coded.** 0.5245 is what this
-corpus and this decoder produced. A different dataset has a different constant
+dataset and this decoder produced. A different dataset has a different constant
 solution, and writing this one into the source would silently mislabel it.
 
     python3 tools/planner/liveness.py --exports eval/exports

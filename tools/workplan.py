@@ -49,7 +49,7 @@ TIER_WEIGHT = {"measured": 1.0, "derived": 0.7, "inferred": 0.3, "guess": 0.1}
 SAMPLE_SATURATION = 30
 
 # One dataset is capped at a half. This is the red card as arithmetic: no amount
-# of work on a single corpus can carry a claim past 0.5 on its own.
+# of work on a single dataset can carry a claim past 0.5 on its own.
 INDEPENDENCE = {0: 0.0, 1: 0.5, 2: 0.8}
 INDEPENDENCE_MAX = 1.0
 
@@ -82,11 +82,11 @@ def w_n(n):
 
 
 def independence(datasets):
-    """How much a claim's corpus coverage is worth.
+    """How much a claim's dataset coverage is worth.
 
     Counts **distinct** datasets. A dataset is a published data collection with
     a name and an author or organisation; categories and splits within one
-    corpus count once.
+    dataset count once.
     """
     return INDEPENDENCE.get(len(set(datasets or [])), INDEPENDENCE_MAX)
 
@@ -117,7 +117,7 @@ def _by_dataset(observations):
     """The strongest observation per dataset.
 
     Taking the maximum **within** a dataset is what stops five runs on one
-    corpus from looking like five independent findings.
+    dataset from looking like five independent findings.
     """
     best = {}
     for o in observations:
@@ -197,15 +197,15 @@ CLAIM_END = "<!-- /claim -->"
 # possible". So every run is listed on its own line with its own sample and its
 # own result, and the consequence the tier permits comes last and separately.
 # An earlier version printed only the strongest observation, which hid the
-# other corpus entirely while still counting it towards the strength.
+# other dataset entirely while still counting it towards the strength.
 TIER_CONSEQUENCE = {
     "scoped": "That is what those runs produced. Nothing follows from it "
               "beyond them.",
     "existential": "So it is possible on that data. Nothing is claimed about "
                    "other data, other clips, or the method in general.",
-    "comparative": "So the difference holds across the corpora tested, and not "
+    "comparative": "So the difference holds across the datasets tested, and not "
                    "necessarily beyond them.",
-    "universal": "The evidence spans enough corpora to state this generally.",
+    "universal": "The evidence spans enough datasets to state this generally.",
 }
 
 # This project's own vocabulary, glossed wherever a claim uses it. Ordinary
@@ -275,16 +275,16 @@ def claim_evidence(claim, plan):
 
 
 def claim_strength(claim, plan):
-    """A claim's evidence strength, combined **across** corpora.
+    """A claim's evidence strength, combined **across** datasets.
 
     Not the strongest single observation. Scoring a claim by its best
     observation left the independence multiplier inescapable: a second dataset
-    changed nothing, so the arithmetic expression of "one corpus is not enough"
+    changed nothing, so the arithmetic expression of "one dataset is not enough"
     could never be satisfied by doing the obvious thing. Registering VidOR
     beside VidVRD and watching C1 still read `datasets=1` is how that surfaced.
 
     `support` takes the maximum within a dataset and combines across datasets,
-    so repeating a run on one corpus still buys nothing.
+    so repeating a run on one dataset still buys nothing.
     """
     obs = claim_evidence(claim, plan)
     return support(obs) if obs else 0.0
@@ -308,19 +308,23 @@ def claim_sentence(claim, plan):
         return ("**%s: evidence inconclusive** (strength %.2f, below the %.2f "
                 "floor). Current hypothesis, not a finding: %s."
                 % (claim.get("id"), e, TIER_BAR[-1][1], claim.get("asserts")))
-    datasets = sorted(set(d for o in obs for d in (o.get("datasets") or [])))
+    # The distinct datasets across every observation. This drives the count in
+    # the closing sentence, so it must not be rebound inside the loop below:
+    # the per-observation names are a display string, and taking its length
+    # would report characters as datasets.
+    distinct = sorted(set(d for o in obs for d in (o.get("datasets") or [])))
     lines = ["**%s.**" % TIER_LABEL[tier], ""]
     for o in sorted(obs, key=lambda x: experiment_of(x)):
-        corpora = ", ".join(o.get("datasets") or ["an unnamed corpus"])
+        named = ", ".join(o.get("datasets") or ["an unnamed dataset"])
         lines.append("- In **%s**, on %s clips of %s: %s."
-                     % (experiment_of(o), o.get("n"), corpora,
+                     % (experiment_of(o), o.get("n"), named,
                         (o.get("what") or "").rstrip(".")))
         if o.get("caveat"):
             lines.append("  *%s*" % o["caveat"])
     lines += ["",
               "%s Evidence strength **%.2f** across **%d dataset%s**."
-              % (TIER_CONSEQUENCE[tier], e, len(datasets),
-                 "" if len(datasets) == 1 else "s")]
+              % (TIER_CONSEQUENCE[tier], e, len(distinct),
+                 "" if len(distinct) == 1 else "s")]
     terms = glossed("\n".join(lines))
     if terms:
         lines += ["", "*Terms used here:* " + "; ".join(
@@ -752,21 +756,21 @@ def datasets_trained(plan=None, root="."):
 
 
 def corpora_usable(plan=None, root="."):
-    """Corpora whose boxes load and which have been screened.
+    """Datasets whose boxes load and which have been screened.
 
-    That pair is the point at which the oracle can score a corpus, and the
+    That pair is the point at which the oracle can score a dataset, and the
     oracle needs boxes rather than frames, so it is reachable without the
-    cluster. A corpus that has only been downloaded does not count: an archive
+    cluster. A dataset that has only been downloaded does not count: an archive
     on disk has never once been the hard part.
     """
     plan = load() if plan is None else plan
     out = []
-    for corpus in plan.get("corpora", []):
-        evidence = corpus.get("evidence") or []
+    for dataset in plan.get("corpora", []):
+        evidence = dataset.get("evidence") or []
         if evidence and all(os.path.exists(os.path.join(root, e))
                             for e in evidence):
-            trained = " trained" if corpus.get("trained") else ""
-            out.append("%s%s" % (corpus["name"], trained))
+            trained = " trained" if dataset.get("trained") else ""
+            out.append("%s%s" % (dataset["name"], trained))
     return sorted(out)
 
 

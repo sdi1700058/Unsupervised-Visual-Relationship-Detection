@@ -38,14 +38,14 @@ Three controls, without which the numbers mean nothing
 
 - **prior** — predict each predicate's base rate. VidVRD predicates are very
   imbalanced, so a probe that learns nothing still beats chance.
-- **shuffled** — the identical probe on latents permuted across the corpus.
+- **shuffled** — the identical probe on latents permuted across the dataset.
   This keeps the label prior AND the object-pair identity and removes only the
   representation.
 - **control task** — Hewitt & Liang 2019 (`RELATED_WORK.md` N2): random labels
   fixed per latent *type*, which *"can only be learned by the probe itself"*.
   **selectivity** = probe minus control task, and it answers the objection the
   other two cannot: *is the probe simply expressive enough to fit anything?*
-  Measured 0.039 on the oracle corpus, giving selectivity +0.078 — the ridge
+  Measured 0.039 on the oracle dataset, giving selectivity +0.078 — the ridge
   probe has almost no memorisation capacity, so its failure to beat the prior
   is a fact about the representation and not about a badly-chosen probe.
 
@@ -249,7 +249,7 @@ def ridge_probe_multi(X_train, Y_train, X_test, alpha=1.0):
 
     `X.T @ X` does not depend on the target, so fitting 130 predicates
     separately solves the same system 130 times. Only `X.T @ Y` changes.
-    Identical results, and it is the difference between the corpus probe
+    Identical results, and it is the difference between the dataset probe
     finishing in seconds and not finishing at all.
     """
     X = np.asarray(X_train, dtype=np.float64)
@@ -270,7 +270,7 @@ def knn_neighbours(X_train, X_test, k=5):
 
     Split out from `knn_probe` because the neighbours depend only on the
     features, never on the label. Recomputing them per predicate made the
-    corpus probe run for over ten minutes on twenty clips; with 130 predicates
+    dataset probe run for over ten minutes on twenty clips; with 130 predicates
     that is 130 identical distance matrices.
 
     Distance is Euclidean, which on binary codes is monotone in Hamming
@@ -438,7 +438,7 @@ def probe_corpus(clips, k=5, test_frac=0.3, seed=0):
     label that never changed.
 
     Holding out whole **clips** removes that failure and is also the protocol
-    the video-relation literature uses (mAP over a corpus, `RELATED_WORK.md`
+    the video-relation literature uses (mAP over a dataset, `RELATED_WORK.md`
     section B), which makes the number comparable rather than bespoke.
 
     `clips` is a sequence of `(latents, Labels)` pairs.
@@ -490,7 +490,7 @@ def probe_corpus(clips, k=5, test_frac=0.3, seed=0):
         raise SystemExit("need at least two clips to hold one out")
 
     # The control keeps the label prior and the pair identity, and permutes
-    # only the latent columns -- across the whole corpus, so a clip's own
+    # only the latent columns -- across the whole dataset, so a clip's own
     # latents cannot survive in place.
     n_z = X.shape[1] - (max_slots * (max_slots - 1))
     X_shuf = X.copy()
@@ -560,9 +560,9 @@ def probe_corpus(clips, k=5, test_frac=0.3, seed=0):
 def verdict(summary):
     """One sentence, against the HARDER of the two controls.
 
-    The shuffled control alone is too easy, and the first corpus run showed
+    The shuffled control alone is too easy, and the first dataset run showed
     why: scrambled latents scored 0.076 while simply predicting each
-    predicate's base rate scored 0.119. Latents permuted across the corpus are
+    predicate's base rate scored 0.119. Latents permuted across the dataset are
     worse than no latent at all, because they are active noise. Beating them
     is not evidence of anything.
 

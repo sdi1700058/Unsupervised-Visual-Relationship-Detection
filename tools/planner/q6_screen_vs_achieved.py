@@ -43,7 +43,7 @@ the file it came from.
 of them drawn from the winnable end of the screen, so the crossover range is
 restricted by construction. A restricted range attenuates a rank correlation
 toward zero, and 25 clips is a small sample. So a weak correlation here is
-consistent with a screen that works over the whole corpus but cannot resolve
+consistent with a screen that works over the whole dataset but cannot resolve
 differences inside its own top 10%. The number is reported with its `n` and a
 permutation p-value, and no verdict is attached.
 
@@ -302,7 +302,7 @@ def analyse(paired, empty, unscreened, runs, window=WINDOW):
     return {
         "question": "Q6: does the VidOR winnability screen predict the "
                     "mse_ratio the planner achieves?",
-        "corpus": "vidor",
+        "dataset": "vidor",
         "screen_window": window,
         "filters": {
             "reachability": "true, case-insensitive",

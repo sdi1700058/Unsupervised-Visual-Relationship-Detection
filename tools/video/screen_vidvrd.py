@@ -15,7 +15,7 @@ Measured across all 800 training clips on 2026-08-28:
     clips needing no fill       281 of 800  (35%)
     clips more than half filled 302 of 800  (38%)
 
-So a third of the corpus is fully annotated and needs no filling at all. That
+So a third of the dataset is fully annotated and needs no filling at all. That
 subset is what this tool exists to find.
 
     python3 tools/video/screen_vidvrd.py
@@ -81,7 +81,7 @@ def predicate_tier(predicate):
     motion against a moving reference, so it counts as coupled even though
     `walk` alone would not.
 
-    `other` is the fall-through and is **dead on this corpus** -- 0 of 25,917
+    `other` is the fall-through and is **dead on this dataset** -- 0 of 25,917
     relation instances reach it, which is the evidence that `PREDICATE_TIERS`
     covers VidVRD's vocabulary. It is kept so a new dataset does not get
     silently mis-tiered, and a non-zero `other` count is a signal to extend

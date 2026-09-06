@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Tests for M6, effect determinism.
 
-The metric has one obvious way to lie: a corpus in which every transition has
+The metric has one obvious way to lie: a dataset in which every transition has
 its own effect scores a perfect 1.0 while it has learned nothing that
 generalises. Most of these tests exist to hold that guard in place, because a
 metric that reports 1.0 for the worst case is worse than no metric.
@@ -31,7 +31,7 @@ def _states(rows):
 def _clip_pairs(pairs):
     """Latents and clip names from a list of (source, successor) bit lists.
 
-    Each pair becomes its own two-frame clip, so the corpus holds exactly the
+    Each pair becomes its own two-frame clip, so the dataset holds exactly the
     transitions written down and no accidental ones between them.
     """
     rows, clips = [], []
@@ -43,18 +43,18 @@ def _clip_pairs(pairs):
     return _states(rows), clips
 
 
-# A corpus in which one operator fires from three different states and always
+# A dataset in which one operator fires from three different states and always
 # does the same thing. This is what lawful looks like.
 LAWFUL = [([0, 0, 0, 0], [1, 0, 0, 0]),
           ([0, 1, 0, 0], [1, 1, 0, 0]),
           ([0, 0, 1, 0], [1, 0, 1, 0])]
 
 # The same, plus one state where the operator's precondition holds and the
-# corpus does something else entirely.
+# dataset does something else entirely.
 CONTRADICTED = LAWFUL + [([0, 0, 0, 1], [0, 0, 0, 0])]
 
 # Every transition has its own effect and every precondition holds in exactly
-# one state. The naive rate is 1.0 and the corpus has learned nothing.
+# one state. The naive rate is 1.0 and the dataset has learned nothing.
 DEGENERATE = [([1, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]),
               ([0, 1, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]),
               ([0, 0, 1, 0, 0, 0], [0, 0, 0, 0, 0, 0]),
@@ -172,7 +172,7 @@ class TestDeterminism(unittest.TestCase):
         self.assertLess(r["determinism"], r["determinism_naive"])
 
     def test_a_no_op_contradicts_an_operator_whose_precondition_holds(self):
-        """The operator says bits must move; the corpus shows they did not."""
+        """The operator says bits must move; the dataset shows they did not."""
         r = self._row([([0, 0], [1, 0]),
                        ([0, 1], [0, 1]),
                        ([0, 0], [1, 0])])
@@ -254,7 +254,7 @@ class TestTheDegenerateReading(unittest.TestCase):
         self.assertNotIn("degenerate", verdict(r).lower())
 
     def test_the_verdict_checks_reuse_before_it_grades_the_rate(self):
-        """Grading first would report the worst corpus as the best one."""
+        """Grading first would report the worst dataset as the best one."""
         from tools.planner.m6_determinism import verdict, MIN_REUSE
 
         r = self._row(DEGENERATE)
@@ -274,7 +274,7 @@ class TestTheDegenerateReading(unittest.TestCase):
 class TestACollapsedExport(unittest.TestCase):
     """An export whose encoder collapsed has no transition to measure.
 
-    It would otherwise arrive as the emptiest possible corpus and leave every
+    It would otherwise arrive as the emptiest possible dataset and leave every
     rate at 0/0. Four exports on disk are in this state, and the collapse
     tracks the latent shape rather than its size: 200 bits is dead at U20 P10
     and alive at U40 P5.
@@ -345,7 +345,7 @@ class TestACollapsedExport(unittest.TestCase):
 
 
 class TestThePositiveControl(unittest.TestCase):
-    """A metric that is negative on every corpus is worth nothing."""
+    """A metric that is negative on every dataset is worth nothing."""
 
     def test_a_constant_effect_corpus_scores_one(self):
         from tools.planner.m6_determinism import analyse, synthetic_cube_corpus
@@ -584,7 +584,7 @@ class TestCommandLine(unittest.TestCase):
         from tools.planner.m6_determinism import main
 
         z, clips = _clip_pairs(CONTRADICTED)
-        path = os.path.join(self.tmp, "corpus.npz")
+        path = os.path.join(self.tmp, "dataset.npz")
         np.savez_compressed(path, latents=z,
                             frame_ids=np.asarray(
                                 ["%s/%06d" % (c, i)

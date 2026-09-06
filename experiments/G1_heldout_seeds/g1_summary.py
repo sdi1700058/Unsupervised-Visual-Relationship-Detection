@@ -260,7 +260,7 @@ def reading(seen, test):
                        "needs three seeds before it is reported again."
                        % (100 * noise, 100 * abs(drop)))
 
-    # Selection bias, whenever an arm reached only part of its corpus.
+    # Selection bias, whenever an arm reached only part of its dataset.
     for arm in ("seen18", "test18"):
         data = seen if arm == "seen18" else test
         if data["rate"][0] < SELECTION_FLOOR:

@@ -759,7 +759,7 @@ def render_svg(cells):
                  'shaded corner are where that shows.</text>'
                  % (ax - 46, height - 26))
     parts.append('<text x="%d" y="%d" class="n">One dataset only. Treat any '
-                 'ordering here as a hypothesis until a second corpus '
+                 'ordering here as a hypothesis until a second dataset '
                  'reproduces it.</text>' % (ax - 46, height - 10))
     parts.append('</svg>')
     return "\n".join(parts)

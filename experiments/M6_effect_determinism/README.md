@@ -7,7 +7,7 @@ written before any number existed.**
 
 A FOSAE latent transition is not writable as a STRIPS operator, because the
 same mined effect, applied in the other states where its precondition holds,
-does not produce the successor the corpus recorded.
+does not produce the successor the dataset recorded.
 
 ## Why this question and not another one
 
@@ -54,7 +54,7 @@ For a transition from `s` to `s'`:
 Then, for each operator `e`:
 
 * `support(e)` is how many transitions produced it;
-* `applicable(e)` is how many transitions in the whole corpus start from a
+* `applicable(e)` is how many transitions in the whole dataset start from a
   state where the precondition of `e` holds. Every member of the group is one
   of these, so `applicable(e)` is at least `support(e)`;
 * `agree(e)` counts those applicable transitions whose recorded successor is
@@ -63,12 +63,12 @@ Then, for each operator `e`:
 
 **A transition that changes nothing counts in the denominator and not in the
 operator set.** A no-op is a real contradiction of an operator whose
-precondition holds there: the operator says bits must move and the corpus shows
+precondition holds there: the operator says bits must move and the dataset shows
 they did not. Dropping no-ops from the scan would hide that, so the count of
 no-ops is reported next to the result.
 
 An operator is **testable** when `applicable(e)` is greater than one: its
-precondition holds in more than one state of the corpus, so those states could
+precondition holds in more than one state of the dataset, so those states could
 have disagreed with each other. An operator whose precondition holds in exactly
 one state is satisfied only where it fired and was never given the chance to
 disagree.
@@ -89,11 +89,11 @@ stated in the sentence that quotes the number.
 
 ## The degenerate reading, and how it is ruled out
 
-**This metric has one obvious way to lie.** If every transition in the corpus
+**This metric has one obvious way to lie.** If every transition in the dataset
 has its own unique effect, then every operator's precondition is satisfied only
 in the one state that produced it, `applicable(e)` equals `support(e)`
 everywhere, and the pooled rate is exactly 1.0. A perfect score would then mean
-the model learned a lookup table of the corpus and nothing that generalises.
+the model learned a lookup table of the dataset and nothing that generalises.
 That is the opposite of the reading a perfect score invites.
 
 Five guards, all reported next to the headline and all checked **before** it:
@@ -119,18 +119,18 @@ Five guards, all reported next to the headline and all checked **before** it:
    singletons and an export with ten operators used everywhere can report the
    same pooled rate, and these numbers separate them.
 4. **A shuffled control.** The successors are permuted at random across the
-   corpus with a fixed seed, which keeps the state distribution and destroys
+   dataset with a fixed seed, which keeps the state distribution and destroys
    the pairing. The control runs through the same measurement. If the measured
    headline does not beat the control's headline, the number describes the
    geometry of the state set and not anything the model learned. When the
    control has no testable operator at all, it cannot be compared; the code
    says so in the verdict rather than passing or failing the row in silence.
 
-5. **A positive control.** A synthetic corpus built to have the Cube-Space
+5. **A positive control.** A synthetic dataset built to have the Cube-Space
    property: a one-hot mode over six operators, a payload block that differs
    from clip to clip and never moves, and one operator per mode step. Each
    operator's effect is a constant two-bit vector and every state whose mode
-   matches takes it. A metric that comes back negative on every corpus is worth
+   matches takes it. A metric that comes back negative on every dataset is worth
    nothing, and the shuffled control cannot show that this one can return a
    high rate. This control was added after the first run, for the reason given
    at the end.
@@ -164,9 +164,9 @@ half for a smoke run.
 
 ### The rows
 
-Seven, over two corpora and two kinds of latent.
+Seven, over two datasets and two kinds of latent.
 
-| row | latent | corpus |
+| row | latent | dataset |
 |---|---|---|
 | `FOSAE U40 P5` | trained, 200 bits | VidVRD, the 88 screened clips |
 | `FOSAE U40 P10` | trained, 400 bits | the same 88 |
@@ -190,7 +190,7 @@ value is known from the code's construction. If M6 does not rank the binary
 oracle above the one-hot oracle on effect reuse, M6 is measuring something
 other than what it claims, and the FOSAE rows say nothing.
 
-The oracle rows also carry the second corpus. A trained FOSAE export exists for
+The oracle rows also carry the second dataset. A trained FOSAE export exists for
 VidVRD alone, so VidOR enters through the oracle, where no training is needed.
 
 ### Expected runtime
@@ -223,7 +223,7 @@ story.
 
 | result | reading | what follows |
 |---|---|---|
-| **reuse below 2.0** | Nearly every transition is its own operator. The pooled rate is near 1.0 for a reason that has nothing to do with lawfulness | Report the reuse, not the rate. The action model memorised the corpus, which is itself a finding about the latent code, and the determinism question stays open |
+| **reuse below 2.0** | Nearly every transition is its own operator. The pooled rate is near 1.0 for a reason that has nothing to do with lawfulness | Report the reuse, not the rate. The action model memorised the dataset, which is itself a finding about the latent code, and the determinism question stays open |
 | **testable share below 0.10** | Almost no operator can be contradicted anywhere | The same. Report the share and withhold the rate |
 
 ### The result, if the measurement is not vacuous
@@ -246,8 +246,8 @@ story.
 
 ## Two limitations, stated before the run
 
-**The trained rows come from one corpus.** VidVRD trained the only FOSAE
-exports on disk. VidOR enters through the oracle, so the second corpus tests
+**The trained rows come from one dataset.** VidVRD trained the only FOSAE
+exports on disk. VidOR enters through the oracle, so the second dataset tests
 the metric and the representation, and not the model.
 
 **A mined operator's precondition is the weakest one, and that is a choice.**
