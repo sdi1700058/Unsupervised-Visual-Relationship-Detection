@@ -198,11 +198,20 @@ def main(argv=None):
                  plot_error_by_window(rows, out_dir)):
         print(f"wrote {path}")
 
-    solved = [r for r in rows if is_true(r["reachability"])]
-    beat = [r for r in solved if is_true(r["beats_baseline"])]
-    print(f"\n{len(solved)}/{len(rows)} windows solved")
+    # Counted per WINDOW, not per row. A row is one window scored by one
+    # method, so with three methods running, counting rows triples every
+    # figure and calls the result "windows" -- the mistake
+    # `tools/planner/e1_summary.py` was written to stop making.
+    windows = {(r.get("export"), r.get("init"), r.get("goal")) for r in rows}
+    solved = {(r.get("export"), r.get("init"), r.get("goal")) for r in rows
+              if is_true(r["reachability"])}
+    beat = {(r.get("export"), r.get("init"), r.get("goal")) for r in rows
+            if is_true(r["reachability"]) and is_true(r["beats_baseline"])}
+    print(f"\n{len(solved)}/{len(windows)} windows solved, over "
+          f"{len(rows)} rows ({len(set(r['method'] for r in rows))} method(s))")
     if solved:
-        print(f"{len(beat)}/{len(solved)} of those beat the straight line")
+        print(f"{len(beat)}/{len(solved)} of those beat the straight line "
+              f"under at least one method")
     return 0
 
 

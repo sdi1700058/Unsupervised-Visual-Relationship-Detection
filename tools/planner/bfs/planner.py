@@ -219,9 +219,16 @@ def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
         how = "; unbounded search"
     print(f"{len(deltas)} distinct deltas from {len(pre)} transitions" + how)
 
+    # `stats` is what carries the OUTCOMES distinction out of the search.
+    # Without it every failure reaches the summary as a bare `False`, and a
+    # clock running out is then read as "the action schema does not connect
+    # the two frames at all", which is a claim about the representation.
+    stats = {}
     found, trace, wall = search(z_init, z_goal, deltas, time_budget_s,
-                                exact_length=exact, max_length=cap)
-    return found, trace, wall, {"n_deltas": int(len(deltas))}
+                                exact_length=exact, max_length=cap,
+                                stats=stats)
+    return found, trace, wall, {"n_deltas": int(len(deltas)),
+                                "outcome": stats.get("outcome")}
 
 
 def run(export_path, init_idx, goal_idx, out_dir, **kwargs):

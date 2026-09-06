@@ -694,7 +694,10 @@ def main(argv=None):
                        ("shuffled_mAP", "shuffled control"),
                        ("prior_mAP", "label prior     "),
                        ("control_task_mAP", "control task    ")):
-        v = summary[key]
+        # `.get`, because `probe_export` runs no control task: a single clip
+        # has one latent type per frame and the task would be unlearnable by
+        # construction. The single-clip path used to raise KeyError here.
+        v = summary.get(key)
         print("  %s %s" % (label, "n/a" if v is None else "%.3f" % v))
     print("")
     v = verdict(summary)

@@ -315,8 +315,15 @@ def analyse(paired, empty, unscreened, runs, window=WINDOW):
         "n": len(paired),
         "clips_with_no_surviving_window": [r["clip"] for r in empty],
         "clips_missing_from_screen": unscreened,
-        "sign_convention": "positive means the screen ranks correctly: a "
-                           "higher crossover goes with a worse mse_ratio",
+        "sign_convention": "applies to spearman_crossover_vs_median_mse_ratio "
+                           "and to spearman_crossover_vs_median_floor_ratio: "
+                           "positive means the screen ranks correctly, because "
+                           "a higher crossover should go with a worse "
+                           "mse_ratio",
+        "sign_convention_win_rate": "spearman_crossover_vs_win_rate INVERTS: "
+                                    "a lower crossover should win more often, "
+                                    "so a screen that works reads negative "
+                                    "there",
         "spearman_crossover_vs_median_mse_ratio": spearman(xs, ys),
         "permutation_p_two_sided": permutation_p(xs, ys),
         "permutation_trials": 20000,

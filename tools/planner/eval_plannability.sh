@@ -134,7 +134,11 @@ PY
             METRICS="${OUT_DIR}/metrics.json"
             if [[ ${RC} -ne 0 || ! -f "${METRICS}" ]]; then
                 echo "  ${STEM} ${METHOD} ${INIT}->${GOAL}  skipped (rc=${RC})"
-                echo "${STEM},${METHOD},${INIT},${GOAL},false,0,,,,,,,,,,,,,," >> "${SUMMARY_CSV}"
+                # 22 fields, matching the header exactly. A short row leaves
+                # the trailing columns absent rather than empty, which a
+                # DictReader returns as None and every reader then has to
+                # special-case.
+                echo "${STEM},${METHOD},${INIT},${GOAL},false,0,,,,,,,,,,,,,,,," >> "${SUMMARY_CSV}"
                 continue
             fi
 

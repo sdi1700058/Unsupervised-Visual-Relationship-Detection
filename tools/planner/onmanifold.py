@@ -57,8 +57,9 @@ if _ROOT not in sys.path:
 def observed_graph(latents):
     """Nodes = distinct observed latents. Edges = observed transitions.
 
-    Returns `(index, adjacency)` where `index` maps a latent's bytes to a node
-    id and `adjacency[i]` is the set of nodes reachable in one observed step.
+    Returns `(index, adjacency, nodes)` where `index` maps a latent's bytes to
+    a node id, `adjacency[i]` is the set of nodes reachable in one observed
+    step, and `nodes[i]` is that node's latent back as bytes.
 
     A self-loop is dropped: consecutive frames encoding to the same latent are
     a no-op, and keeping them would let a plan pad its length for free.

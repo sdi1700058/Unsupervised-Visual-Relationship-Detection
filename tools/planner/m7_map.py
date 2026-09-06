@@ -1113,9 +1113,10 @@ def main(argv=None):
         if not exports:
             raise SystemExit("the probe predictor needs --exports")
         # The probe scores only the clips it holds out, so the annotation set
-        # is narrowed to those rather than the whole split.
-        clips = _probe_clips(_expand(args.annotations), exports,
-                             args.max_objects)
+        # is narrowed to those rather than the whole split. `paths` rather
+        # than a second expansion, so --limit means the same thing here as it
+        # does for every other predictor.
+        clips = _probe_clips(paths, exports, args.max_objects)
         predictions, diagnostics = probe_predictions(
             clips, segment=args.segment, top_k=args.top_k,
             max_per_video=args.max_per_video, test_frac=args.test_frac,
@@ -1158,16 +1159,20 @@ def main(argv=None):
 
     print("M7  %s  (%s, %s)" % (result["tag"], args.predictor,
                                 args.dataset or "unnamed"))
+    # Before the numbers, not after them. The module docstring's rule is
+    # "`perfect` below 1.000: the harness is broken, report nothing else", and
+    # a warning printed under a full table is read as a footnote to it.
+    broken = (args.predictor == "perfect"
+              and abs(result["mean_ap"] - 1.0) > 1e-9)
+    if broken:
+        print("\nWARNING: the ground truth scored against itself is %.6f, "
+              "not 1.0. The harness is wrong and no other M7 number stands."
+              % result["mean_ap"])
     _report(result)
     if diagnostics:
         print("")
         for key in sorted(diagnostics):
             print("  %-22s %s" % (key, diagnostics[key]))
-
-    if args.predictor == "perfect" and abs(result["mean_ap"] - 1.0) > 1e-9:
-        print("\nWARNING: the ground truth scored against itself is %.6f, "
-              "not 1.0. The harness is wrong and no other M7 number stands."
-              % result["mean_ap"])
 
     if args.out_dir:
         target = _write(result, args.out_dir, result["tag"])
