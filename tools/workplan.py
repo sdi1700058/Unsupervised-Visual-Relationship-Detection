@@ -355,9 +355,14 @@ def render_claims(plan):
     return written
 
 
-def check_claims(plan):
-    """Documents whose stated wording has drifted from what is licensed."""
+def check_claims(plan, notices=None):
+    """Documents whose stated wording has drifted from what is licensed.
+
+    Returns the problems. Anything appended to `notices` is a decision waiting
+    on the author rather than a defect, and it must not fail the gate.
+    """
     problems = []
+    notices = [] if notices is None else notices
     for claim in plan.get("claims", []):
         cid = claim.get("id", "?")
         appears = claim.get("appears_in") or []
@@ -368,7 +373,12 @@ def check_claims(plan):
             grantable = (min([asked, licensed], key=TIER_ORDER.index)
                          if asked in TIER_ORDER else licensed)
             if grantable != "scoped":
-                problems.append(
+                # A notice, not a problem. The claim is already written at the
+                # safe tier, so nothing is wrong; the author simply has a
+                # decision waiting. Failing the gate on this would turn the
+                # gate red every time the evidence got STRONGER, which
+                # punishes exactly the behaviour it exists to encourage.
+                notices.append(
                     "%s awaits your sign-off: at strength %.2f the evidence "
                     "licenses '%s', and it stays written as scoped until you "
                     "grant it" % (cid, e, grantable))
@@ -1092,7 +1102,10 @@ def main(argv=None):
         return 0
 
     if a.command == "check":
-        problems = check(plan) + check_claims(plan)
+        notices = []
+        problems = check(plan) + check_claims(plan, notices)
+        for notice in notices:
+            print("  waiting on you: %s" % notice)
         if not problems:
             print("plan is consistent: %d units, %d assumptions, %d claims"
                   % (len(plan.get("units", [])), len(plan.get("assumptions", [])),
