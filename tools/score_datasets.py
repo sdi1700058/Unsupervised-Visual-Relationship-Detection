@@ -34,6 +34,7 @@ import os
 import sys
 
 CANDIDATES = "notes/lit/dataset_candidates.json"
+METHODS = "notes/lit/method_candidates.json"
 OUT_DIR = "eval/datasets"
 
 # The author's weights, set on 2026-09-04 and unchanged since. Structure is
@@ -56,6 +57,32 @@ WEIGHTS = {
     "usage": 0.06,
     "density": 0.15,
     "volume": 0.10,
+}
+
+# Evaluation methods are ingredients too, and until 2026-09-05 they were never
+# compared at all. The criteria differ from a dataset's because the question
+# differs: a method is worth keeping if it can tell things apart, if the people
+# who use it are doing something like this task, if it has run on enough
+# datasets to be more than a hypothesis, and if its number can sit beside
+# published work.
+#
+# `discriminates` carries the most weight for a blunt reason: a measurement
+# that scores everything alike answers nothing, however respectable it is.
+METHOD_WEIGHTS = {
+    "discriminates": 0.30,
+    "purpose": 0.25,
+    "breadth": 0.20,
+    "comparability": 0.15,
+    "usage": 0.10,
+}
+
+METHOD_CRITERION_MEANING = {
+    "discriminates": "does it separate conditions that ought to differ, "
+                     "against its own control",
+    "purpose": "how close is the task its other users are doing to this one",
+    "breadth": "how many of this project's datasets it has run on",
+    "comparability": "can the number it produces sit beside published work",
+    "usage": "how many independent papers use it at all",
 }
 
 CRITERION_MEANING = {
@@ -134,12 +161,16 @@ def _esc(text):
             .replace(">", "&gt;"))
 
 
-def render_svg(ranked):
-    """One stacked bar per dataset, split into the weighted criteria."""
-    order = ["structure", "relations", "purpose", "usage", "density",
-             "volume"]
+def render_svg(ranked, weights=None):
+    """One stacked bar per candidate, split into the weighted criteria."""
+    weights = WEIGHTS if weights is None else weights
+    order = [k for k in ("structure", "relations", "discriminates", "purpose",
+                         "breadth", "comparability", "usage", "density",
+                         "volume") if k in weights]
     colours = {"structure": "#2b6cb0", "relations": "#2f855a",
                "purpose": "#b7791f", "usage": "#975a16", "density": "#805ad5",
+               "discriminates": "#2b6cb0", "breadth": "#2f855a",
+               "comparability": "#805ad5",
                "volume": "#c05621"}
     rows = [r for r in ranked]
     width = 760
@@ -152,9 +183,9 @@ def render_svg(ranked):
              'font-weight:bold}.l{font-size:11px}.n{font-size:10px;fill:#555}'
              '</style>',
              '<rect width="%d" height="%d" fill="white"/>' % (width, height),
-             '<text x="14" y="24" class="t">Dataset candidates, on the '
+             '<text x="14" y="24" class="t">Candidates, on the '
              'author\'s weights</text>']
-    legend = "  ".join("%s %.2f" % (k, WEIGHTS[k]) for k in order)
+    legend = "  ".join("%s %.2f" % (k, weights[k]) for k in order)
     parts.append('<text x="14" y="42" class="n">%s. Availability is not a '
                  'criterion.</text>' % _esc(legend))
     if not rows:
@@ -177,7 +208,7 @@ def render_svg(ranked):
             value = row.get(name)
             if value is None:
                 continue
-            piece = span * WEIGHTS[name] * float(value)
+            piece = span * weights[name] * float(value)
             parts.append('<rect x="%.1f" y="%d" width="%.1f" height="14" '
                          'fill="%s"/>' % (x, y, max(0.0, piece),
                                           colours[name]))
@@ -199,14 +230,18 @@ def load_candidates(path=CANDIDATES):
 
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--candidates", default=CANDIDATES)
+    ap.add_argument("--candidates", default=None)
+    ap.add_argument("--methods", action="store_true",
+                    help="score the evaluation methods instead of the datasets")
     ap.add_argument("--out-dir", default=OUT_DIR)
     ap.add_argument("--plan", default="notes/WORKPLAN.json")
     ap.add_argument("--check-order", action="store_true",
                     help="only report selections made out of score order")
     a = ap.parse_args(argv)
 
-    candidates = load_candidates(a.candidates)
+    weights = METHOD_WEIGHTS if a.methods else WEIGHTS
+    default = METHODS if a.methods else CANDIDATES
+    candidates = load_candidates(a.candidates or default)
     if candidates is None:
         print("no candidates at %s." % a.candidates)
         print("  Every dataset must be scored before any is chosen. Until "
@@ -214,7 +249,7 @@ def main(argv=None):
               "happens to be on disk, which is the failure this guards.")
         return 2
 
-    ranked = rank(candidates)
+    ranked = rank(candidates, weights)
     scored = [r for r in ranked if r["score"] is not None]
 
     plan = {}
@@ -236,17 +271,18 @@ def main(argv=None):
                 continue
             print("  %2d. %-22s %.3f   %s"
                   % (i, row["name"], row["score"],
-                     " ".join("%s=%.2f" % (k[:4], row[k])
-                              for k in WEIGHTS if row.get(k) is not None)))
+                     " ".join("%s=%.2f" % (k[:5], row[k])
+                              for k in weights if row.get(k) is not None)))
         if not os.path.isdir(a.out_dir):
             os.makedirs(a.out_dir)
-        with open(os.path.join(a.out_dir, "scores.json"), "w") as handle:
-            json.dump({"weights": WEIGHTS, "ranked": ranked}, handle, indent=2)
-        figure = os.path.join(a.out_dir, "scores.svg")
+        stem = "method_scores" if a.methods else "scores"
+        with open(os.path.join(a.out_dir, stem + ".json"), "w") as handle:
+            json.dump({"weights": weights, "ranked": ranked}, handle, indent=2)
+        figure = os.path.join(a.out_dir, stem + ".svg")
         with open(figure, "w") as handle:
-            handle.write(render_svg(ranked))
-        print("\nwrote %s/scores.json and %s"
-              % (a.out_dir, figure))
+            handle.write(render_svg(ranked, weights))
+        print("\nwrote %s and %s"
+              % (os.path.join(a.out_dir, stem + ".json"), figure))
 
     if problems:
         print("\n%d selection(s) out of score order:\n" % len(problems))

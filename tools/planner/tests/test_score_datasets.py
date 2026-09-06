@@ -156,3 +156,38 @@ class TestMain(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMethodWeights(unittest.TestCase):
+    """Evaluation methods are ingredients too, and were never compared."""
+
+    def test_the_method_weights_sum_to_one(self):
+        self.assertAlmostEqual(sum(score_datasets.METHOD_WEIGHTS.values()), 1.0)
+
+    def test_discriminating_outweighs_everything(self):
+        """A measurement that scores everything alike answers nothing,
+        however respectable it is."""
+        for name, weight in score_datasets.METHOD_WEIGHTS.items():
+            if name == "discriminates":
+                continue
+            self.assertGreater(score_datasets.METHOD_WEIGHTS["discriminates"],
+                               weight)
+
+    def test_purpose_outweighs_usage_for_methods_too(self):
+        self.assertGreater(score_datasets.METHOD_WEIGHTS["purpose"],
+                           score_datasets.METHOD_WEIGHTS["usage"])
+
+    def test_a_method_missing_a_criterion_is_unscored(self):
+        """A method with no result yet must not be ranked as though it had
+        one. Absent is a statement about our knowledge."""
+        partial = {"name": "untested", "purpose": 0.8, "usage": 0.5}
+        self.assertIsNone(score_datasets.score(
+            partial, score_datasets.METHOD_WEIGHTS))
+
+    def test_the_figure_draws_method_criteria(self):
+        method = dict((k, 0.5) for k in score_datasets.METHOD_WEIGHTS)
+        method["name"] = "m"
+        ranked = score_datasets.rank([method], score_datasets.METHOD_WEIGHTS)
+        svg = score_datasets.render_svg(ranked, score_datasets.METHOD_WEIGHTS)
+        xml.dom.minidom.parseString(svg)
+        self.assertIn("discriminates", svg)

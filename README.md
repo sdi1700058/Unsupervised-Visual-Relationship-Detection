@@ -249,7 +249,7 @@ python3 tools/planner/make_report.py eval/planner/<model>
 Three commands say whether the repository still holds together.
 
 ```bash
-.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 714 tests
+.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 719 tests
 python3 tools/check_docs.py                                          # the documents
 python3 tools/workplan.py check                                      # the plan
 ```
