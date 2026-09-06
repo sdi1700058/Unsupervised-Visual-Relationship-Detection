@@ -486,6 +486,13 @@ LADDER = ["not_started", "designed", "built", "measured", "illustrated",
 
 LEGACY_STATES = {"in_progress": "designed"}
 
+# The states `verify` checks when no unit is named. `accepted` is included
+# deliberately: it is the state whose claims are most load-bearing, and until
+# 2026-09-06 it was the one state never re-checked, so evidence behind an
+# accepted result could disappear unnoticed. States before `measured` owe
+# nothing yet.
+VERIFY_STATES = ("measured", "illustrated", "evidence_produced", "accepted")
+
 
 def save(plan, path=None):
     """Write the plan back. The only writer in this module."""
@@ -614,8 +621,13 @@ def verify_unit(plan, unit_id, root="."):
         "detail": "%d of %d evidence file(s) on disk"
                   % (len(present), len(evidence))})
 
+    # Only a measurement owes a figure. "Every result needs something to look
+    # at" is a rule about results; a unit that wrote a document or built a tool
+    # has no picture to produce and demanding one failed eight units for
+    # lacking something they were never going to have.
+    owes_figure = unit.get("produces") == "measurement"
     figures = [e for e in present if e.endswith(".svg") or e.endswith(".png")]
-    figure_ok = bool(figures)
+    figure_ok = bool(figures) or not owes_figure
     detail = "%d figure(s)" % len(figures)
     for figure in figures:
         # A png is a figure and is not XML, so only svg is parsed.
@@ -1051,8 +1063,7 @@ def main(argv=None):
         # something. Those are the ones whose numbers reach a document.
         targets = [a.unit] if a.unit else [
             u["id"] for u in plan.get("units", [])
-            if u.get("state") in ("measured", "illustrated",
-                                  "evidence_produced")]
+            if u.get("state") in VERIFY_STATES]
         if not targets:
             print("no unit claims to have produced anything yet")
             return 0

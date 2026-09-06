@@ -112,9 +112,50 @@ class TestVerify(unittest.TestCase):
         failed = [c["name"] for c in out["checks"] if not c["ok"]]
         self.assertIn("test", failed)
 
+
+    def test_only_a_measurement_owes_a_figure(self):
+        """"Every result needs something to look at" is about results.
+
+        Found 2026-09-06: the figure was demanded of every unit, so the eight
+        that wrote documents or built tooling all failed for lacking a picture
+        they were never going to have.
+        """
+        self.write("notes/docs/THING.md", "# a document")
+        plan = {"units": [{"id": "U-doc", "title": "wrote a document",
+                           "state": "accepted", "produces": "document",
+                           "evidence": ["notes/docs/THING.md"],
+                           "touches": []}],
+                "milestones": [], "claims": [], "combinations": []}
+        out = workplan.verify_unit(plan, "U-doc", root=self.root)
+        self.assertTrue(out["ok"], out["checks"])
+
+    def test_a_measurement_still_owes_a_figure(self):
+        self.write("eval/r.json", "{}")
+        plan = self.plan_with(["eval/r.json"])
+        out = workplan.verify_unit(plan, "U-one", root=self.root)
+        self.assertFalse(out["ok"])
+
     def test_an_unknown_unit_raises(self):
         plan = self.plan_with([])
         self.assertRaises(ValueError, workplan.verify_unit, plan, "U-nope")
+
+
+
+class TestAcceptedIsVerifiedToo(unittest.TestCase):
+    """An accepted unit is the one whose claims are most load-bearing.
+
+    Found 2026-09-06: `verify` with no --unit targeted measured, illustrated
+    and evidence_produced only. Nine accepted units were never re-checked, so
+    if the evidence behind an accepted result disappeared nothing would notice.
+    """
+
+    def test_accepted_is_among_the_states_verified_by_default(self):
+        self.assertIn("accepted", workplan.VERIFY_STATES)
+
+    def test_the_unfinished_states_are_not_verified(self):
+        """A unit that has not claimed a result owes nothing yet."""
+        self.assertNotIn("not_started", workplan.VERIFY_STATES)
+        self.assertNotIn("designed", workplan.VERIFY_STATES)
 
 
 if __name__ == "__main__":
