@@ -143,26 +143,26 @@ def summarise(cells):
 # `{out}` the output directory. A template naming a placeholder the dataset
 # cannot fill produces no command, and the reason is reported.
 RUNNERS = {
-    "M4 temporal distance":
+    "temporal-distance":
         "{py} tools/planner/m4_temporal.py {name}-{source}={export} "
         "--out-dir {out}",
     # Pooled, not one row per clip. m6 takes LABEL=a,b,c to treat several
     # exports as one dataset; passing a directory reads nothing and passing
     # each file separately would measure 25 datasets of one clip each.
-    "M6 effect determinism":
+    "determinism":
         "{py} tools/planner/m6_determinism.py "
         "\"{name}-{source}=$(ls {export}/*.npz | paste -sd,)\" "
         "--out-dir {out}",
-    "M7 triplet mAP":
+    "triplet-mAP":
         "{py} tools/planner/m7_map.py --annotations {ann} --export {export} "
         "--out-dir {out}",
-    "M1 probing":
+    "probing":
         "{py} tools/planner/predicate_probe.py --annotation {ann} "
         "--out-dir {out}",
-    "M2 compositional":
+    "compositional":
         "{py} tools/planner/compositional.py --export {export} "
         "--out-dir {out}",
-    "M3 plan validity":
+    "plan-validity":
         "{py} tools/planner/plan_validity.py {export}/*.npz --out-dir {out}",
     "interpolation":
         "bash tools/planner/eval_plannability.sh {export} --window 16",
