@@ -501,6 +501,67 @@ def ladder_fraction(unit):
     return float(index) / (len(LADDER) - 1)
 
 
+# Skills that fire for a unit, by what the unit produces. Derived rather than
+# hand-written per unit: a hundred hand-maintained lists would rot the way the
+# cross-references rotted three times.
+#
+# The list is printed by `next`, which is read when a unit begins. A trigger
+# table already existed in the standing instructions and was still under-used,
+# because that document is read once at the start of a session and not again
+# forty tool calls later. The moment of the decision is the only place a
+# reminder has been observed to work.
+SKILLS_BY_PRODUCES = {
+    "code": ["superpowers:test-driven-development",
+             "superpowers:requesting-code-review",
+             "superpowers:receiving-code-review"],
+    "measurement": ["superpowers:verification-before-completion"],
+    "figure": ["dataviz"],
+    "document": ["superpowers:writing-plans"],
+    "design": ["superpowers:brainstorming"],
+    "bug": ["superpowers:systematic-debugging"],
+}
+
+# Every skill a unit may name. A name absent here was invented, and inventing a
+# skill name is the same class of error as inventing a url: it looks right and
+# it does nothing.
+KNOWN_SKILLS = set([
+    "superpowers:brainstorming",
+    "superpowers:test-driven-development",
+    "superpowers:verification-before-completion",
+    "superpowers:systematic-debugging",
+    "superpowers:requesting-code-review",
+    "superpowers:receiving-code-review",
+    "superpowers:writing-plans",
+    "superpowers:executing-plans",
+    "superpowers:dispatching-parallel-agents",
+    "superpowers:subagent-driven-development",
+    "superpowers:using-git-worktrees",
+    "superpowers:finishing-a-development-branch",
+    "dataviz", "simplify", "security-review",
+    "ck:check", "ck:spec", "ck:backprop", "ck:build",
+    "caveman:caveman-commit", "caveman:caveman-review",
+])
+
+
+def skills_for(unit):
+    """The skills a unit should use, from its own list or from `produces`."""
+    explicit = unit.get("skills")
+    if explicit:
+        return list(explicit)
+    return list(SKILLS_BY_PRODUCES.get(unit.get("produces"), []))
+
+
+def unknown_skills(plan=None):
+    """`(unit_id, skill)` for every named skill that does not exist."""
+    plan = load() if plan is None else plan
+    out = []
+    for unit in plan.get("units", []):
+        for skill in unit.get("skills") or []:
+            if skill not in KNOWN_SKILLS:
+                out.append((unit.get("id"), skill))
+    return out
+
+
 def verify_unit(plan, unit_id, root="."):
     """Check a unit against the three artefacts it owes.
 
@@ -606,6 +667,11 @@ def check(plan):
         if src and not os.path.exists(src):
             problems.append("observation %s cites %s, which is not on disk"
                             % (o.get("id", "?"), src))
+    # A skill name that does not exist looks right and does nothing, which is
+    # the same failure as a url that was never opened.
+    for unit_id, skill in unknown_skills(plan):
+        problems.append("%s names a skill that does not exist: %s"
+                        % (unit_id, skill))
     return problems
 
 
@@ -1053,6 +1119,10 @@ def main(argv=None):
         print("  why:  %s" % unit.get("why", ""))
         print("  next: %s" % unit.get("next_action", ""))
         print("  done when: %s" % unit.get("done_when", ""))
+        # Printed here on purpose. This is the moment the unit is chosen, and
+        # a reminder anywhere earlier has been observed not to land.
+        for skill in skills_for(unit):
+            print("  skill:     %s" % skill)
         return 0
 
     if a.command == "render":
