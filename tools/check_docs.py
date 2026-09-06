@@ -59,6 +59,17 @@ ALLOWED_ABSENT = {
         "planned tool, DESIGN_WORKPLAN.md section 5, built in phase P0",
     "tools/video/screen_actiongenome.py":
         "planned screen, named in the worked example in DESIGN_WORKPLAN.md",
+
+    # Deleted on purpose, not missing. Every entry above is a path that does
+    # not exist YET; these two are paths that deliberately no longer exist, and
+    # the documents naming them are the record of why. Removing the mention
+    # would erase the decision along with the file.
+    "tools/video/verify_vidvrd.py":
+        "deleted 2026-09-07 (Q10): dead and broken -- its root resolved to a "
+        "directory that never existed and nothing referenced it",
+    "viz/split_test_grid.py":
+        "deleted 2026-09-07 (Q18): no caller anywhere, and its import path "
+        "was broken so it could not print its own help",
 }
 
 # A template naming a filename shape rather than a file. `reports/YYYY-MM-DD.md`

@@ -178,3 +178,50 @@ class TestRender(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOneWindowPerExport(unittest.TestCase):
+    """Two clips can share a window index without being the same window.
+
+    `_window_of` keyed on `(init, goal)` alone. While an arm was one export
+    that was harmless, because the pair is unique inside one export. It stops
+    being harmless the moment an arm is sliced per clip -- which is what E1
+    needs, because concatenating eleven clips into one export puts ten joins
+    inside the sliding window and measures the cut rather than the motion.
+
+    With the old key, window 0-8 of clip A and window 0-8 of clip B collapse
+    into one window and one of them is silently discarded. So the key had to
+    grow the export column before the slicing could be fixed at all.
+    """
+
+    def _row(self, export, init, goal, ratio):
+        return {"export": export, "init": str(init), "goal": str(goal),
+                "mse_ratio": str(ratio), "reachability": "True",
+                "beats_baseline": "True", "bbox_mse": str(10.0 * ratio),
+                "baseline_mse": "10.0", "bbox_iou": "0.5",
+                "baseline_iou": "0.4", "method": "bfs",
+                "moving_gt_steps": "8"}
+
+    def test_the_same_window_in_two_exports_counts_twice(self):
+        rows = [self._row("clipA.npz", 0, 8, 0.5),
+                self._row("clipB.npz", 0, 8, 0.9)]
+        self.assertEqual(e1_summary.summarise_rows(rows)["windows"], 2)
+
+    def test_two_planners_on_one_window_still_count_once(self):
+        """The rule the module was written to enforce, still holding."""
+        a = self._row("clipA.npz", 0, 8, 0.5)
+        b = self._row("clipA.npz", 0, 8, 0.9)
+        a["method"], b["method"] = "bfs", "pddl"
+        self.assertEqual(e1_summary.summarise_rows([a, b])["windows"], 1)
+
+    def test_the_better_of_the_two_planners_is_the_one_credited(self):
+        a = self._row("clipA.npz", 0, 8, 0.5)
+        b = self._row("clipA.npz", 0, 8, 0.9)
+        got = e1_summary.summarise_rows([a, b])
+        self.assertAlmostEqual(got["ratio"], 0.5, places=6)
+
+    def test_a_csv_with_no_export_column_still_works(self):
+        """Older summary files predate the column and must still read."""
+        rows = [{"init": "0", "goal": "8", "mse_ratio": "0.5",
+                 "reachability": "True", "beats_baseline": "True"}]
+        self.assertEqual(e1_summary.summarise_rows(rows)["windows"], 1)

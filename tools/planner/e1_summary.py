@@ -53,8 +53,23 @@ def read(name, root="eval/planner"):
 
 
 def _window_of(row):
-    """The window a row scores. Two methods on one window are one window."""
-    return (row.get("init"), row.get("goal"))
+    """The window a row scores. Two methods on one window are one window.
+
+    **The export is part of the identity.** This keyed on `(init, goal)`
+    alone, which is unique inside one export and stops being unique the moment
+    an arm is sliced per clip: window 0-8 of clip A and window 0-8 of clip B
+    collapsed into one and one of them was silently dropped.
+
+    That mattered because E1 concatenates eleven clips into a single export and
+    slides the window blind along the frame axis, so ten joins fall inside
+    windows and what gets measured is the cut rather than the motion. G1 avoids
+    it with `slice_export` and G4 filters on `frame_ids`; E1 could do neither
+    while this key could not tell two clips apart.
+
+    Summary files written before the column existed have no `export` key, and
+    `.get` returning None keeps them readable.
+    """
+    return (row.get("export"), row.get("init"), row.get("goal"))
 
 
 def _best(rows):
