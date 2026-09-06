@@ -108,7 +108,16 @@ else
     printf '\n=== headlines\n    skipped: tools/check_headlines.py is not here\n'
 fi
 if [[ -d eval/exports ]]; then
-    run "export liveness" "${PY}" tools/planner/liveness.py --exports eval/exports
+    # --strict since 2026-09-07, by the author's decision (Q14). Without it
+    # this printed "4 of 21 dead" and then "ok", which is a check that cannot
+    # fail sitting unlabelled among checks that can.
+    #
+    # It WILL be red while any export holds one distinct code for every frame.
+    # That is the correct reading: those four models learned nothing, and the
+    # entropy floor in tools/planner/collapse_floor.py explains why. Clearing
+    # it means retraining them or removing them, not loosening this.
+    run "export liveness" "${PY}" tools/planner/liveness.py \
+                              --exports eval/exports --strict
 else
     printf '\n=== export liveness\n    skipped: no eval/exports on this machine\n'
 fi
