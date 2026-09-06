@@ -7,7 +7,7 @@
 # filled. This sweep moves those, then repeats the model knobs on top of
 # the patch size where position dominates the loss.
 #
-#   mkdir -p logs && sbatch sh/sweep2.sh
+#   mkdir -p logs && sbatch sh/deprecated/sweep2.sh
 #   squeue -u $USER
 #
 # The mkdir matters: Slurm opens logs/sweep2.%j.out before this script

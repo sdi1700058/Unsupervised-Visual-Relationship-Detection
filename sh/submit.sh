@@ -203,13 +203,30 @@ if [[ "${AUTO_RESOURCES:-1}" == "1" && "${DOMAIN}" == "vidvrd" ]]; then
                 EPOCH="${EPOCH}" JOB_NAME="${JOB_NAME}" \
                 BATCH="${BATCH/None/1000}" \
                 FORMAT=env bash "${PROJECT_DIR}/sh/estimate_resources.sh" 2>/dev/null)"; then
-        eval "_${_EST}"
-        : "${MEM:=${_MEM:-}}"
-        : "${TIME:=${_TIME:-}}"
-        : "${GPUS:=${_GPUS:-}}"
-        : "${CPUS:=${_CPUS:-}}"
-        : "${CONSTRAINT:=${_CONSTRAINT:-}}"
-        echo "[submit] auto-estimate: states=${_EST_NUM_STATES:-?} trans=${_EST_NUM_TRANS:-?}"
+        # What the caller asked for always beats an estimate, so capture it
+        # BEFORE evaluating the estimate.
+        #
+        # This used to read `eval "_${_EST}"`, which prefixes only the FIRST
+        # assignment in the emitted text. estimate_resources.sh emits
+        #   MEM=..; TIME=..; GPUS=..; CPUS=..;
+        # on ONE line, so only _MEM was ever created: TIME, GPUS, CPUS and
+        # CONSTRAINT were assigned straight into this shell and overwrote the
+        # caller's request, while the `: "${TIME:=...}"` below then saw TIME
+        # already set and left the estimate in place. A caller asking for
+        # TIME=8:00:00 silently got the estimator's 12:00:00, and a wrong TIME
+        # on Sherlock costs a night.
+        _WANT_MEM="${MEM:-}";   _WANT_TIME="${TIME:-}"; _WANT_GPUS="${GPUS:-}"
+        _WANT_CPUS="${CPUS:-}"; _WANT_CONSTRAINT="${CONSTRAINT:-}"
+        eval "${_EST}"
+        MEM="${_WANT_MEM:-${MEM:-}}"
+        TIME="${_WANT_TIME:-${TIME:-}}"
+        GPUS="${_WANT_GPUS:-${GPUS:-}}"
+        CPUS="${_WANT_CPUS:-${CPUS:-}}"
+        CONSTRAINT="${_WANT_CONSTRAINT:-${CONSTRAINT:-}}"
+        # EST_MODE/EST_ROWS are what the estimator actually emits. The names
+        # printed here before (_EST_NUM_STATES, _EST_NUM_TRANS) are emitted by
+        # nothing, so this line read "states=? trans=?" on every single run.
+        echo "[submit] auto-estimate: mode=${EST_MODE:-?} rows=${EST_ROWS:-?}"
     fi
 fi
 

@@ -5,8 +5,12 @@
 # which categories are worth using, bakes the npz files, and submits the GPU
 # training jobs itself. Nothing else needs a human.
 #
-#   sbatch sh/overnight_sweep.sh
+#   mkdir -p logs && sbatch sh/deprecated/overnight_sweep.sh
 #   squeue -u $USER
+#
+# The mkdir matters: Slurm opens logs/sweep-prep.%j.out before this script
+# runs, and logs/ is gitignored, so on a fresh clone the job dies with no
+# output file to explain why.
 #
 # Skips the download when the frames are already there, so it is safe to
 # resubmit after a failure.

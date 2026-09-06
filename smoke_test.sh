@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # smoke_test.sh — Verify FOSAE install: package import, config, path utils.
 # Usage: bash smoke_test.sh
-# For a full training check: python strips.py learn puzzle mnist 3 3 100
+# For a full training check: python3 strips.py learn puzzle FirstOrderAE mnist 3 3 100
+#
+# The AECLASS comes FIRST. strips.py::main dispatches positionally into
+# puzzle(aeclass, type, width, height, ...), so dropping it shifts every
+# argument left and the run dies on `import latplan.puzzles.puzzle_3`.
+# sh/submit.sh:89 composes the same command the same way.
 
 set -eo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -3,7 +3,8 @@
 #
 #   bash experiments/E1_structure/score_local.sh
 #
-# Needs the two exports pulled from Sherlock. Writes eval/planner/E1_summary.md.
+# Needs the two exports pulled from Sherlock. Writes eval/planner/E1_summary.md
+# and eval/planner/E1_summary.svg, both via tools/planner/e1_summary.py.
 
 set -eo pipefail
 
@@ -61,86 +62,21 @@ for pair in "structured:${A}" "unstructured:${B}"; do
     echo
 done
 
-"${PY}" - <<'PYEOF'
-import csv, os, statistics as st
-
-def read(name):
-    path = "eval/planner/E1-%s/summary.csv" % name
-    if not os.path.exists(path):
-        return None
-    rows = list(csv.DictReader(open(path)))
-    ok = [r for r in rows if r["reachability"] == "True"]
-    live = [r for r in ok
-            # float(), matching make_report's parse of the same column. The
-            # writer emits "7" today, so int() works, and would raise the day
-            # it emits "7.0".
-            if r.get("moving_gt_steps") and float(r["moving_gt_steps"]) >= 6
-            and r.get("bbox_mse")]
-    return {
-        "windows": len(rows), "solved": len(ok), "scored": len(live),
-        "mse": st.median([float(r["bbox_mse"]) for r in live]) if live else None,
-        "base": st.median([float(r["baseline_mse"]) for r in live]) if live else None,
-        "iou": st.median([float(r["bbox_iou"]) for r in live if r["bbox_iou"]])
-               if live else None,
-        "beats": sum(1 for r in live if r["beats_baseline"] == "True"),
-    }
-
-a, b = read("structured"), read("unstructured")
-lines = ["# E1 — structure versus no structure", ""]
-if not a or not b:
-    lines.append("One or both arms produced no summary. Nothing to compare.")
-else:
-    lines += [
-        "| | structured | unstructured |",
-        "|---|---|---|",
-        "| windows solved | %d/%d | %d/%d |" % (a["solved"], a["windows"],
-                                                b["solved"], b["windows"]),
-        "| windows with real motion | %d | %d |" % (a["scored"], b["scored"]),
-        "| **planner bbox error** | %s | %s |" % (
-            "n/a" if a["mse"] is None else "**%.2f**" % a["mse"],
-            "n/a" if b["mse"] is None else "**%.2f**" % b["mse"]),
-        "| linear baseline | %s | %s |" % (
-            "n/a" if a["base"] is None else "%.2f" % a["base"],
-            "n/a" if b["base"] is None else "%.2f" % b["base"]),
-        "| trajectory IoU | %s | %s |" % (
-            "n/a" if a["iou"] is None else "%.3f" % a["iou"],
-            "n/a" if b["iou"] is None else "%.3f" % b["iou"]),
-        "| beats the straight line | %d | %d |" % (a["beats"], b["beats"]),
-        "",
-    ]
-    # `is not None`, not truthiness. A planner error of exactly 0.0 is a
-    # legitimate perfect score, and treating it as missing sent a real result
-    # into the "no scorable windows" branch. Same failure class as SPEC V29.
-    if a["mse"] is not None and b["mse"] is not None:
-        ratio = b["mse"] / a["mse"]
-        lines.append("Unstructured error is **%.2fx** the structured error." % ratio)
-        lines.append("")
-        # The pre-registered reading. Arm A carries 38% more transitions, so a
-        # win below that margin cannot be attributed to structure.
-        if ratio >= 1.38:
-            lines.append("**Reading: structure predicts plannability.** The "
-                         "margin clears the 38% volume confound. Criterion 0 "
-                         "is operative; reorganise the dataset search around "
-                         "it.")
-        elif ratio > 1.0:
-            lines.append("**Reading: inconclusive.** Structured wins, but by "
-                         "less than the 38% transition-count advantage it "
-                         "starts with, so the win cannot be attributed to "
-                         "structure.")
-        else:
-            lines.append("**Reading: structure does not predict plannability "
-                         "here.** Criterion 0 is not disproven, but it should "
-                         "stop being the organising principle until it is "
-                         "tested at the full 88-clip scale.")
-    else:
-        lines.append("**Reading: no scorable windows in at least one arm.** "
-                     "Most likely both models failed to train at ~1,000 "
-                     "transitions, which says nothing about Criterion 0. "
-                     "Rerun at the full 88-clip, 8,522-transition scale.")
-
-out = "eval/planner/E1_summary.md"
-os.makedirs("eval/planner", exist_ok=True)
-open(out, "w").write("\n".join(lines) + "\n")
-print("\n".join(lines))
-print("\nwrote %s" % out)
-PYEOF
+# The comparison lives in tools/planner/e1_summary.py, not in a heredoc here.
+#
+# It used to be inline, and that inline version reported the OPPOSITE of what
+# the data said. It counted CSV rows rather than windows, so two planners on
+# one window read as two windows and it called 80 windows 160. It then compared
+# the two arms' raw `bbox_mse` medians as though they described comparable
+# samples, when unstructured had reached only 4 of 58 windows — its easiest 7%,
+# measured against the whole of the other arm.
+#
+# The module fixes both: it keys windows by (init, goal) and credits each
+# window with the better of the two planners, it compares `mse_ratio` and never
+# raw error across arms, and it reports solve rate first with a selection-bias
+# caveat whenever an arm reached under half its windows. It also carries the
+# same pre-registered 1.38x volume confound as VOLUME_CONFOUND.
+#
+# G1 and G4 already import it. E1 is the experiment it was extracted from and
+# was the last caller still running the version it replaced.
+"${PY}" tools/planner/e1_summary.py

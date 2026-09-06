@@ -257,11 +257,22 @@ main() {
         warn "unknown dataset '${ds}'"; do_list; return 2
     fi
     if [[ "${stage}" == "all" ]]; then
+        # `all` used to return 0 unconditionally, so a dataset whose every
+        # stage failed still exited 0 -- against this file's own promise that
+        # a stage which has not produced what it claims exits non-zero.
+        local rc=0 s code
         for s in download prepare screen oracle verify; do
             say "=== ${s} ==="
-            "${ds}_${s}" || say "${s} did not complete (exit $?)"
+            "${ds}_${s}" || {
+                code=$?
+                say "${s} did not complete (exit ${code})"
+                # 3 is the documented "route verified, stage not built yet".
+                # That is a statement about the dataset, not a failure of this
+                # run, so it must not turn `all` red.
+                (( code == 3 )) || rc=1
+            }
         done
-        return 0
+        return "${rc}"
     fi
     if ! declare -F "${ds}_${stage}" >/dev/null; then
         die "no stage '${stage}' for '${ds}'; use download|prepare|screen|oracle|verify|all"

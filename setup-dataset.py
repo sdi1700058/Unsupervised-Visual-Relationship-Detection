@@ -289,8 +289,16 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
 def video_ag(category=None, video_id=None, fps="native",
              max_videos=None, out_name=None, max_objects=10,
              fill_annotations=False, patch_size=None,
-             annotations_dir=None, frames_dir=None):
-    """Bake an ActionGenome overfit npz for one video / category subset."""
+             annotations_dir=None, frames_dir=None,
+             augment=None, augment_copies=1):
+    """Bake an ActionGenome overfit npz for one video / category subset.
+
+    augment / augment_copies : the two flags `_parse_video_args` defines for
+        both subcommands. They used to be absent here while main() passed them
+        unconditionally, so every `video_ag` invocation died with
+        `TypeError: video_ag() got an unexpected keyword argument 'augment'`
+        before it reached the loader.
+    """
     if category is None:
         raise SystemExit("video_ag: --category is required (e.g. chair, table, food)")
     from latplan.domains.video import actiongenome as _ag
@@ -299,7 +307,8 @@ def video_ag(category=None, video_id=None, fps="native",
     return _bake_video_npz(_ag, "actiongenome", category, video_id, fps,
                            max_videos, out_name, max_objects,
                            fill_annotations=False, patch_size=patch_size,
-                           annotations_dir=annotations_dir, frames_dir=frames_dir)
+                           annotations_dir=annotations_dir, frames_dir=frames_dir,
+                           augment=augment, augment_copies=augment_copies)
 
 
 def _parse_category(category):

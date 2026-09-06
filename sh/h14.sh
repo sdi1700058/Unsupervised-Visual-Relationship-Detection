@@ -147,7 +147,15 @@ else
     # while STEM still says "winnable88". Fail loudly instead.
     LOADED="$(grep -oE '[0-9]+ videos? loaded' "${BAKE_LOG}" | tail -1 \
               | grep -oE '^[0-9]+' || true)"
-    if [[ -n "${LOADED}" && "${LOADED}" != "${NCLIPS}" ]]; then
+    if [[ -z "${LOADED}" ]]; then
+        # The guard is only as good as the log line it greps for. If that line
+        # is absent the count is UNVERIFIED, and staying quiet here would hand
+        # back exactly the silent shrinkage the check exists to catch.
+        echo "WARNING: no 'N videos loaded' line in ${BAKE_LOG}, so the clip" >&2
+        echo "         count in ${STEM} is UNVERIFIED. If the bake skipped" >&2
+        echo "         clips with missing frames, this experiment is smaller" >&2
+        echo "         than its name claims. Read the log before trusting it." >&2
+    elif [[ "${LOADED}" != "${NCLIPS}" ]]; then
         echo "FATAL: baked ${LOADED} clips, expected ${NCLIPS}." >&2
         echo "       Frames are missing on this machine. See ${BAKE_LOG}." >&2
         exit 3

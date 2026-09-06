@@ -44,7 +44,7 @@ NPZ="data/npz/video/vidvrd/overfit"
 
 BASE_VID="ILSVRC2015_train_00005005"
 CLIP="dog-${BASE_VID}-${FPS}fps-mo3-fill"
-NBAKED=0; NJOBS=0; NFAILED=0
+NBAKED=0; NJOBS=0; NFAILED=0; NSKIPPED=0
 
 source sh/sweep_lib.sh
 
@@ -343,9 +343,11 @@ submit "vehicles" "vehicles-${FPS}fps-mo5-fill-p8" "${BIG[@]}" EPOCH=2000
 bake "allcat-${FPS}fps-mo5-fill-p8" all --max-objects 5 --patch-size 8 --fill-annotations
 submit "all 800 videos" "allcat-${FPS}fps-mo5-fill-p8" "${HUGE[@]}" EPOCH=1000
 
+# Sections H and I submit whole-category arms that this sweep never bakes --
+# it relies on sweep2 having baked them. When it has not, those arms are
+# skipped, so the count of skips is the honest part of this total.
+sweep_totals
 echo
 echo "=========================================="
-echo "${NBAKED} baked, ${NJOBS} submitted, ${NFAILED} failed"
-echo
 echo "  python3 tools/diagnose_collapse.py --limit 60"
 echo "=========================================="

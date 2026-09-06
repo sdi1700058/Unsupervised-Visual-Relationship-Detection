@@ -126,9 +126,22 @@ done
 
 # ── 5. score, with the only metric that can ─────────────────────────────────
 step "5  M3, the only method that works without annotation"
+
+# Step 4 went to the trouble of finding an interpreter that can actually load
+# the scientific stack; step 5 used a bare `python3` regardless. On the cluster
+# the system interpreter has no numpy, so the step that produces the result
+# died on an import while the four steps before it had just succeeded.
+shopt -s nullglob
+NPZS=("${EXPORTS}"/*.npz)
+shopt -u nullglob
+if (( ${#NPZS[@]} == 0 )); then
+    echo "no exports in ${EXPORTS}: every oracle export failed, nothing to score" >&2
+    exit 5
+fi
+
 mkdir -p eval/validity/videonet
 ( ulimit -v "${MEM_KB}"
-  python3 tools/planner/plan_validity.py "${EXPORTS}"/*.npz \
+  "${PY}" tools/planner/plan_validity.py "${NPZS[@]}" \
       --out-dir eval/validity/videonet )
 
 cat <<'NOTE'

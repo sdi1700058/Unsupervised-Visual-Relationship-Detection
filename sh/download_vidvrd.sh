@@ -37,8 +37,24 @@ else
     FRAMES_DIR="${DATA_DIR}/frames_${FPS}fps"
 fi
 
-ANNOTATIONS_ONLY="${1:-}"
-FORCE="${2:-}"
+# Both flags are documented as optional and independent, so match them by name
+# rather than by position. Read positionally, `--force` alone landed in $1 and
+# was tested only against "--annotations-only": it matched neither check, so
+# the run neither stopped after the annotations nor re-downloaded anything,
+# and the flag did exactly nothing without saying so.
+ANNOTATIONS_ONLY=""
+FORCE=""
+for arg in "$@"; do
+    case "${arg}" in
+        --annotations-only) ANNOTATIONS_ONLY="--annotations-only" ;;
+        --force)            FORCE="--force" ;;
+        *)
+            echo "ERROR: unknown argument '${arg}'" >&2
+            echo "usage: bash sh/download_vidvrd.sh [--annotations-only] [--force]" >&2
+            exit 2
+            ;;
+    esac
+done
 
 mkdir -p "${RAW_DIR}" "${ANN_DIR}" "${FRAMES_DIR}"
 

@@ -35,6 +35,17 @@ if [[ -z "${THESIS}" ]]; then
     fi
 fi
 
+# Run from the thesis repository, not from wherever this script happens to
+# live. Every check below invokes its tool as a RELATIVE path (tools/*.py) and
+# reads relative inputs (eval/exports), so they all resolve against the current
+# directory rather than against THESIS. While the two are the same directory
+# that is invisible; once the working infrastructure is split out it is not.
+# The two conditional checks are the dangerous half: `[[ -f
+# tools/check_headlines.py ]]` and `[[ -d eval/exports ]]` would simply be
+# false in the other repository, and a check that quietly does not run reads
+# exactly like a check that passed.
+cd "${THESIS}"
+
 PY="${THESIS}/.venv-local/bin/python"
 if [[ ! -x "${PY}" ]]; then
     echo "WARNING: ${PY} is missing, falling back to python3."

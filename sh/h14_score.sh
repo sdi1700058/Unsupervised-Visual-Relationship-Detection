@@ -47,6 +47,9 @@ echo "=========================================="
 # one, but it correlates with planner error in the WRONG direction across
 # resolutions, so it cannot order the arms (SPEC V26). Near-zero here means
 # the code carries no position and planning it is a waste of an afternoon.
+# eval/ is gitignored, so on a fresh clone eval/planner does not exist and the
+# --csv write is the first thing that would touch it.
+mkdir -p eval/planner
 python3 tools/planner/latent_geometry.py "${EXPORTS[@]}" \
     --csv eval/planner/h14_geometry.csv
 

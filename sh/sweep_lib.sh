@@ -15,12 +15,17 @@
 #     SWEEP_DEFAULTS=(EPOCH=2000 LR=0.001 PREENC_LAYERS=2 PREENC_DIM=1000)
 #     submit "arm A" "${CLIP}" 32G 4:00:00 U=40 P=20
 #
-# The counters NBAKED, NJOBS and NFAILED are updated in place, so a sweep can
-# print a total at the end.
+# The counters NBAKED, NJOBS, NSKIPPED and NFAILED are updated in place, so a
+# sweep can print a total at the end.
 
 NBAKED="${NBAKED:-0}"
 NJOBS="${NJOBS:-0}"
 NFAILED="${NFAILED:-0}"
+# An arm whose npz is absent is skipped, not failed. It still has to be
+# counted: a sweep that submits several arms it never bakes -- relying on an
+# earlier sweep to have baked them -- otherwise ends on "failed 0" while
+# having queued nothing for those arms at all.
+NSKIPPED="${NSKIPPED:-0}"
 
 # Every job id `submit` gets back, so a sweep can chain a follow-up step onto
 # all of its arms with --dependency instead of needing a second visit.
@@ -70,6 +75,7 @@ submit () {
     local f="${NPZ}/${stem}.npz"
     if [[ ! -f "${f}" ]]; then
         echo "SKIP  ${tag}  (no ${stem}.npz)"
+        NSKIPPED=$((NSKIPPED + 1))
         return 0
     fi
     echo "--- ${tag}"
@@ -102,5 +108,10 @@ submit () {
 
 sweep_totals () {
     echo
-    echo "baked ${NBAKED}, submitted ${NJOBS}, failed ${NFAILED}"
+    echo "baked ${NBAKED}, submitted ${NJOBS}, skipped ${NSKIPPED}, failed ${NFAILED}"
+    if (( NSKIPPED > 0 )); then
+        echo "  ${NSKIPPED} arm(s) had no npz and were never queued."
+        echo "  Bake them, or run the sweep that does, then re-run this one:"
+        echo "  submitting is cheap because an npz already on disk is reused."
+    fi
 }
