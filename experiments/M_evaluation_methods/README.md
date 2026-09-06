@@ -7,7 +7,7 @@ control that can make it report **silence** rather than a result.
 Run them:
 
 ```bash
-bash experiments/M_evaluation_methods/build_oracle_corpus.sh   # once
+bash experiments/M_evaluation_methods/build_oracle_dataset.sh   # once
 bash experiments/M_evaluation_methods/run_local.sh             # the ceiling
 bash experiments/M_evaluation_methods/run_local.sh eval/exports/*H14*.npz
 ```

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Build the oracle exports M1/M2/M3 are calibrated against.
 #
-#   bash experiments/M_evaluation_methods/build_oracle_corpus.sh
-#   N_CLIPS=40 bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+#   bash experiments/M_evaluation_methods/build_oracle_dataset.sh
+#   N_CLIPS=40 bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 #
 # Any dataset whose annotations read through tools/planner/oracle.py works, not
 # only VidVRD. VidOR uses the identical format, so:
@@ -10,7 +10,7 @@
 #   CLIPS_FILE=eval/vidor_winnable_w16.txt \
 #   ANN_DIR=data/video/vidor/annotations/training \
 #   OUT_DIR=eval/probe/vidor N_CLIPS=25 \
-#     bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+#     bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 #
 # These are the CEILING: latents built straight from ground-truth boxes, with
 # no model. Whatever a trained model scores, it scores against these.

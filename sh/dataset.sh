@@ -96,7 +96,7 @@ vidor_oracle() {
     CLIPS_FILE="${EVAL}/vidor_winnable_w16.txt" \
     ANN_DIR="${DATA}/vidor/annotations/training" \
     OUT_DIR="${EVAL}/probe/vidor" N_CLIPS="${N_CLIPS:-25}" \
-        bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+        bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 }
 vidor_verify() {
     local n_ann n_npz
@@ -152,7 +152,7 @@ vidvrd_screen() {
         --min-frames 45 --list "${EVAL}/vidvrd_winnable_clips.txt"
 }
 vidvrd_oracle() {
-    bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+    bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 }
 vidvrd_verify() {
     local n
@@ -187,7 +187,7 @@ something_else_oracle()  {
     say "8 clips were scored from annotations alone on 2026-08-31"
     CLIPS_FILE="${EVAL}/something_else_clips.txt" \
     ANN_DIR="${DATA}/something_else/raw" OUT_DIR="${EVAL}/probe/se_batch" \
-        bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+        bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 }
 something_else_verify()  {
     ls "${DATA}/something_else/raw" 2>/dev/null | head -4

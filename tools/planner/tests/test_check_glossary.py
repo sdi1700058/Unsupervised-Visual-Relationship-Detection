@@ -159,12 +159,105 @@ class TestUndefined(unittest.TestCase):
             check_glossary.undefined_terms([doc], {"dataset": "x"}), [])
 
 
+class TestNames(unittest.TestCase):
+    """A banned word in a file name is a use of the word.
+
+    The check read documents and nothing else, so
+    `build_oracle_corpus.sh` sat in the tree for months while the gate that
+    exists to catch that word reported a clean run on every one of them.
+    """
+
+    def test_the_document_rule_cannot_see_a_banned_word_in_a_name(self):
+        """Why the hole existed, stated as an assertion rather than a story.
+
+        `undefined_terms` matches on `\\b`, and an underscore is a word
+        character, so there is no boundary before `corpus` in
+        `build_oracle_corpus`. The name check must not reuse that rule.
+        """
+        import re
+        self.assertIsNone(re.search(r"\bcorpus\b", "build_oracle_corpus.sh"))
+
+    def test_a_banned_word_in_a_file_name_is_reported(self):
+        hits = check_glossary.banned_names(
+            ["experiments/M_evaluation_methods/build_oracle_corpus.sh"],
+            {"dataset": "x"})
+        self.assertEqual(len(hits), 1)
+        self.assertEqual(hits[0]["term"], "corpus")
+        self.assertEqual(hits[0]["use_instead"], "dataset")
+
+    def test_a_directory_name_counts_as_much_as_a_file_name(self):
+        hits = check_glossary.banned_names(["eval/corpus/clip.npz"],
+                                           {"dataset": "x"})
+        self.assertEqual([h["term"] for h in hits], ["corpus"])
+
+    def test_one_bad_directory_is_reported_once_not_once_per_file(self):
+        hits = check_glossary.banned_names(
+            ["eval/corpus/a.npz", "eval/corpus/b.npz", "eval/corpus/c.npz"],
+            {"dataset": "x"})
+        self.assertEqual(len(hits), 1)
+
+    def test_a_name_inside_a_longer_word_is_not_a_hit(self):
+        """`incorporate` contains `corpora`, so a substring test would fire."""
+        self.assertEqual(
+            check_glossary.banned_names(["tools/incorporate_boxes.py"],
+                                        {"dataset": "x"}), [])
+
+    def test_a_clean_name_passes(self):
+        self.assertEqual(
+            check_glossary.banned_names(
+                ["experiments/M_evaluation_methods/build_oracle_dataset.sh"],
+                {"dataset": "x"}), [])
+
+    def test_a_readmitted_word_is_allowed_in_a_name_too(self):
+        """The glossary is how a decision to readmit a word is recorded."""
+        self.assertEqual(
+            check_glossary.banned_names(["eval/corpus/clip.npz"],
+                                        {"corpus": "readmitted, and defined"}),
+            [])
+
+
 class TestMain(unittest.TestCase):
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.glossary = os.path.join(self.dir, "GLOSSARY.md")
+        with open(self.glossary, "w") as handle:
+            handle.write("# Glossary\n\n| term | definition |\n|---|---|\n")
+            handle.write("| **dataset** | a published collection |\n")
+        self.tracked = check_glossary.tracked_names
+        self.docs = check_glossary.live_docs
+
+    def tearDown(self):
+        check_glossary.tracked_names = self.tracked
+        check_glossary.live_docs = self.docs
+        shutil.rmtree(self.dir, ignore_errors=True)
 
     def test_a_missing_glossary_fails_rather_than_passing_vacuously(self):
         """A check that cannot find its input must not report success."""
         code = check_glossary.main(["--glossary", "no/such/file.md"])
         self.assertEqual(code, 1)
+
+    def test_no_tracked_name_fails_rather_than_passing_vacuously(self):
+        """The second half of the check has an input too, and it can be empty.
+
+        `git ls-files` returns nothing when git is absent or the tree is not a
+        checkout. Reporting a clean run there is the same vacuous pass this
+        module was already burned by once.
+        """
+        check_glossary.tracked_names = lambda: []
+        check_glossary.live_docs = lambda: []
+        self.assertEqual(check_glossary.main(["--glossary", self.glossary]), 1)
+
+    def test_a_planted_file_name_fails_the_run(self):
+        """The planted violation, at the level the gate actually runs."""
+        check_glossary.tracked_names = lambda: ["eval/oracle_corpus/a.npz"]
+        check_glossary.live_docs = lambda: []
+        self.assertEqual(check_glossary.main(["--glossary", self.glossary]), 1)
+
+    def test_clean_names_and_clean_documents_pass(self):
+        check_glossary.tracked_names = lambda: ["eval/oracle_dataset/a.npz"]
+        check_glossary.live_docs = lambda: []
+        self.assertEqual(check_glossary.main(["--glossary", self.glossary]), 0)
 
 
 if __name__ == "__main__":

@@ -34,14 +34,14 @@ count_npz() {
 if [[ "$(count_npz "${VIDVRD_DIR}")" -lt "${MIN_CLIPS}" ]]; then
     echo "building the VidVRD oracle dataset (once, a few minutes)"
     OUT_DIR="${VIDVRD_DIR}" N_CLIPS=25 \
-        bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+        bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 fi
 if [[ "$(count_npz "${VIDOR_DIR}")" -lt "${MIN_CLIPS}" ]]; then
     echo "building the VidOR oracle dataset (once, a few minutes)"
     CLIPS_FILE=eval/vidor_winnable_w16.txt \
     ANN_DIR=data/video/vidor/annotations/training \
     OUT_DIR="${VIDOR_DIR}" N_CLIPS=25 \
-        bash experiments/M_evaluation_methods/build_oracle_corpus.sh
+        bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 fi
 
 # Oracles first, so the figure reads ceiling-then-model.

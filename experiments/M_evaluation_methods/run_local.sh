@@ -34,7 +34,7 @@ fi
 
 if (( ${#EXPORTS[@]} == 0 )); then
     echo "No exports. Build the oracle dataset first:" >&2
-    echo "  bash experiments/M_evaluation_methods/build_oracle_corpus.sh" >&2
+    echo "  bash experiments/M_evaluation_methods/build_oracle_dataset.sh" >&2
     exit 2
 fi
 
@@ -51,7 +51,7 @@ done
 # their messages blame the number of clips; the other way to get a low count
 # is a stem that does not name a file in ANN_DIR at all -- which is what
 # happens to VidOR exports, whose ids carry a subdirectory that
-# build_oracle_corpus.sh flattens to a dash. Same skip, different cause.
+# build_oracle_dataset.sh flattens to a dash. Same skip, different cause.
 echo "matched ${#ANNS[@]} annotation(s) under ${ANN_DIR} to ${#EXPORTS[@]} export(s)"
 
 echo
