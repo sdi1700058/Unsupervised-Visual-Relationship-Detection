@@ -48,13 +48,31 @@ MAX_IMAGES="${MAX_IMAGES:-None}"
 # When NPZ_PATH points at a baked overfit npz, read fps from its meta so the
 # OUT_DIR tag reflects the actual data rather than the env-var default.
 if [[ -n "${NPZ_PATH:-}" && -f "${NPZ_PATH}" && -z "${FPS:-}" ]]; then
-    FPS="$(python3 -c "
+    # Pick an interpreter that has numpy. The cluster's system python3 does
+    # not, and the old `2>/dev/null || echo 3` turned that into FPS=3 without
+    # a word, so a 30fps npz got a 3fps OUT_DIR and a 3fps hash. Sweeps pass
+    # FPS explicitly and never saw it; anyone calling submit.sh directly did.
+    # allow_pickle is needed for the object-dtype `meta` field and reads only
+    # npz files this repository baked; NPZ_PATH is never an outside artefact.
+    _NPY="python3"
+    for _cand in .venv-local/bin/python3 .venv-local/bin/python venv/bin/python3 python3; do
+        if command -v "${_cand}" &>/dev/null && "${_cand}" -c 'import numpy' 2>/dev/null; then
+            _NPY="${_cand}"; break
+        fi
+    done
+    if ! FPS="$("${_NPY}" -c "
 import numpy as np, json, sys
 d = np.load('${NPZ_PATH}', allow_pickle=True)
 m = d['meta'].item()
 m = json.loads(m.decode('utf-8') if isinstance(m, bytes) else m)
 print(m.get('fps', 3))
-" 2>/dev/null || echo 3)"
+")"; then
+        echo "[submit] cannot read fps from ${NPZ_PATH} using ${_NPY}." >&2
+        echo "[submit] Set FPS explicitly. Guessing it would mislabel OUT_DIR" >&2
+        echo "[submit] and the run hash, which is how a 30fps run was filed" >&2
+        echo "[submit] as 3fps." >&2
+        exit 2
+    fi
 fi
 FPS="${FPS:-3}"
 CATEGORY="${CATEGORY:-bicycle}"

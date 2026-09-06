@@ -82,7 +82,13 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     # SPEC §V7-V9: per-category npz cache. Skipped when max_videos or
     # video_id_filter are set (both would otherwise contaminate the shared
     # per-category cache).
-    cache_path = npz_cache_path("video", "actiongenome", category_filter, fps) \
+    # num_objs and patch_size belong in the key because both change the shape
+    # of what is stored. Without them a bake at patch 8 reads back the patch-32
+    # arrays an earlier bake wrote, with no shape error, because the model
+    # takes the patch dim from the data. `cache.py` states this; puzzle_vidvrd
+    # already did it; this loader did not until 2026-09-06.
+    cache_path = npz_cache_path("video", "actiongenome", category_filter, fps,
+                                num_objs=num_objs, patch_size=_patch_size) \
         if (max_videos is None and video_id_filter is None) else None
     if cache_path is not None:
         hit = load_cached(cache_path)

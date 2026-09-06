@@ -1,6 +1,6 @@
 # labeled-fosae — User Guide
 
-A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video. Three datasets are measured: VidVRD, VidOR, and Action Genome. More candidates have a verified download route. `bash sh/dataset.sh list` prints the stage that each dataset reached.
+A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video. Three datasets carry an evaluation score: VidVRD, VidOR, and Something-Else. Action Genome is downloaded and screened, and it has no export yet, so a screen is all it carries. More candidates have a verified download route. `bash sh/dataset.sh list` prints the stage that each dataset reached, and `python3 tools/grid.py --source oracle` prints which dataset has been measured by which evaluation method.
 
 The document is a runbook. It tells you how to install the code, how to bake data, how to train the model, and how to look at the results. The document does not explain the theory. For the theory, read `notes/docs/THEORY.md`.
 
@@ -249,7 +249,7 @@ python3 tools/planner/make_report.py eval/planner/<model>
 Three commands say whether the repository still holds together.
 
 ```bash
-.venv-local/bin/python -m unittest discover -s tools/planner/tests   # 772 tests
+.venv-local/bin/python -m unittest discover -s tools/planner/tests   # the whole suite
 python3 tools/check_docs.py                                          # the documents
 python3 tools/workplan.py check                                      # the plan
 ```
