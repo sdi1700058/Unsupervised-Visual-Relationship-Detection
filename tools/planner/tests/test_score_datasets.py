@@ -25,7 +25,7 @@ from tools import score_datasets
 
 def candidate(name, **kw):
     base = {"name": name, "structure": 0.5, "relations": 0.5,
-            "literature": 0.5, "density": 0.5, "volume": 0.5}
+            "purpose": 0.5, "usage": 0.5, "density": 0.5, "volume": 0.5}
     base.update(kw)
     return base
 
@@ -35,9 +35,16 @@ class TestWeights(unittest.TestCase):
     def test_the_weights_are_the_authors(self):
         self.assertEqual(score_datasets.WEIGHTS["structure"], 0.30)
         self.assertEqual(score_datasets.WEIGHTS["relations"], 0.25)
-        self.assertEqual(score_datasets.WEIGHTS["literature"], 0.20)
+        self.assertEqual(score_datasets.WEIGHTS["purpose"], 0.14)
+        self.assertEqual(score_datasets.WEIGHTS["usage"], 0.06)
         self.assertEqual(score_datasets.WEIGHTS["density"], 0.15)
         self.assertEqual(score_datasets.WEIGHTS["volume"], 0.10)
+
+    def test_purpose_outweighs_usage(self):
+        """The author's instruction of 2026-09-05. How close the other work is
+        to this task matters more than how much of it there is."""
+        self.assertGreater(score_datasets.WEIGHTS["purpose"],
+                           score_datasets.WEIGHTS["usage"])
 
     def test_availability_is_not_a_criterion(self):
         """Struck by the author. Its absence is the point of the module."""

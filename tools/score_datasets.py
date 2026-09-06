@@ -45,7 +45,15 @@ OUT_DIR = "eval/datasets"
 WEIGHTS = {
     "structure": 0.30,
     "relations": 0.25,
-    "literature": 0.20,
+    # The old `literature` criterion, 0.20, split on the author's instruction
+    # of 2026-09-05. It meant "do the papers nearest this task use it", which
+    # conflated two different questions: how CLOSE the users are to this task,
+    # and how MANY of them there are. A dataset used by six papers doing
+    # something unrelated is not the same evidence as a dataset used by two
+    # doing exactly this. Purpose carries the larger share, as the author
+    # specified. The other three weights are unchanged.
+    "purpose": 0.14,
+    "usage": 0.06,
     "density": 0.15,
     "volume": 0.10,
 }
@@ -53,7 +61,8 @@ WEIGHTS = {
 CRITERION_MEANING = {
     "structure": "does the subject obey rules that permeate its world",
     "relations": "is the full relational ground truth available",
-    "literature": "do the papers nearest this task use it",
+    "purpose": "how close is the task those papers are doing to this one",
+    "usage": "how many independent papers use it at all",
     "density": "how densely is it annotated, per frame and per clip",
     "volume": "how many samples does it hold",
 }
@@ -127,9 +136,10 @@ def _esc(text):
 
 def render_svg(ranked):
     """One stacked bar per dataset, split into the weighted criteria."""
-    order = ["structure", "relations", "literature", "density", "volume"]
+    order = ["structure", "relations", "purpose", "usage", "density",
+             "volume"]
     colours = {"structure": "#2b6cb0", "relations": "#2f855a",
-               "literature": "#b7791f", "density": "#805ad5",
+               "purpose": "#b7791f", "usage": "#975a16", "density": "#805ad5",
                "volume": "#c05621"}
     rows = [r for r in ranked]
     width = 760
