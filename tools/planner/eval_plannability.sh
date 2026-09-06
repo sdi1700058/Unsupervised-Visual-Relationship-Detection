@@ -170,4 +170,23 @@ done
 ROWS=$(( $(wc -l < "${SUMMARY_CSV}") - 1 ))
 echo
 echo "wrote ${ROWS} rows to ${SUMMARY_CSV}"
+
+# A header and nothing else is not a result. This exited 0 with an empty CSV,
+# and every reader downstream then had to guess what that meant: g1_summary.py
+# read zero rows as "the arm solved no window" and reported it as a measured
+# negative finding with a named cause. An empty run was being published as a
+# result. The readers are being hardened one by one; this is the cause.
+if (( ROWS == 0 )); then
+    echo
+    echo "FAILED: no window was scored, so ${SUMMARY_CSV} holds only a header." >&2
+    echo "        This is not a negative result. Nothing ran." >&2
+    echo "        Usual causes:" >&2
+    echo "          * the export is shorter than --window" >&2
+    echo "          * a stale slice from an earlier --window is being reused" >&2
+    echo "            (re-slice with RESLICE=1)" >&2
+    echo "          * the latent is dead, so every window collapses to one code" >&2
+    echo "            (check: python3 tools/planner/liveness.py --exports <dir>)" >&2
+    exit 4
+fi
+
 echo "plot with: python3 tools/planner/viz_plannability.py ${SUMMARY_DIR}"

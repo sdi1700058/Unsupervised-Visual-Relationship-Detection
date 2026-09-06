@@ -171,27 +171,52 @@ def plan_validity(trace_boxes, model, width=None, height=None, slack=1.0):
         # own rate and not folded silently into the total.
         flicker = present[:-1] != present[1:]
 
-    n_steps = max(1, (n_frames - 1) * n_objs)
-    n_cells = max(1, n_frames * n_objs)
-
     bad_step = teleport | flicker
     bad_cell = malformed | off
-    # A step is admissible when neither its own step checks nor the cell
-    # checks at either end of it fire.
+
+    # **Only steps and cells that hold an object are scored.** The bake pads
+    # every frame out to `--max-objects` with all-zero slots, and an absent
+    # slot cannot teleport, cannot flicker, is never malformed and is never
+    # off-canvas -- so it passed every check and was counted as an admissible
+    # step. Three slots holding one object gave `validity >= 0.667` before the
+    # planner did anything.
+    #
+    # The scrambled control received the same lift, so `discrimination` was
+    # never wrong. What was wrong is `validity` read on its own, which is what
+    # the 0.95 ADMISSIBLE threshold in `verdict` compares against.
+    #
+    # A step counts when the object is present at EITHER end: appearing and
+    # disappearing are things worth judging. A slot absent at both ends is
+    # padding and is not a step at all.
+    if n_frames >= 2:
+        scoreable = present[:-1] | present[1:]
+    else:
+        scoreable = np.zeros((0, n_objs), dtype=bool)
+    n_steps = int(scoreable.sum())
+    n_cells = int(present.sum())
+
     if n_frames >= 2:
         step_ok = ~(bad_step | bad_cell[:-1] | bad_cell[1:])
-        validity = float(step_ok.sum()) / float(step_ok.size)
+        validity = (float(step_ok[scoreable].sum()) / n_steps
+                    if n_steps else None)
     else:
-        validity = float((~bad_cell).sum()) / float(n_cells)
+        validity = (float((~bad_cell)[present].sum()) / n_cells
+                    if n_cells else None)
+
+    def _rate(mask, total):
+        """None rather than 0.0 when nothing was scored (house rule, V30)."""
+        return float(mask.sum()) / total if total else None
 
     return {
         "validity": validity,
-        "teleport_rate": float(teleport.sum()) / n_steps,
-        "flicker_rate": float(flicker.sum()) / n_steps,
-        "malformed_rate": float(malformed.sum()) / n_cells,
-        "offcanvas_rate": float(off.sum()) / n_cells,
+        "teleport_rate": _rate(teleport & scoreable, n_steps),
+        "flicker_rate": _rate(flicker & scoreable, n_steps),
+        "malformed_rate": _rate(malformed, n_cells),
+        "offcanvas_rate": _rate(off, n_cells),
         "n_frames": int(n_frames),
         "n_objects": int(n_objs),
+        "n_steps_scored": n_steps,
+        "n_cells_scored": n_cells,
         "bound_used": model.get("max_step"),
     }
 
@@ -204,10 +229,16 @@ def discrimination(real_trace, scrambled_trace, model, **kw):
     """
     r = plan_validity(real_trace, model, **kw)
     s = plan_validity(scrambled_trace, model, **kw)
+    # Either side can be None now that padding slots are excluded: a trace
+    # with no object present anywhere has nothing to score. A separation of
+    # 0.0 would read as "the measure cannot tell them apart", which is a
+    # different and much stronger statement than "there was nothing to look
+    # at". Keep them apart.
+    both = r["validity"] is not None and s["validity"] is not None
     return {
         "real": r["validity"],
         "scrambled": s["validity"],
-        "separation": r["validity"] - s["validity"],
+        "separation": (r["validity"] - s["validity"]) if both else None,
     }
 
 
@@ -245,6 +276,10 @@ def verdict(result):
     if result["bound_used"] is None:
         return ("SILENT: nothing moved in the training frames, so no "
                 "displacement bound could be learned.")
+    if v is None or sep is None:
+        return ("SILENT: no object is present in this trace, so there is no "
+                "step to judge. Every slot is padding. This is not a score "
+                "of zero and it is not a score of one.")
     if sep < 0.05:
         return ("SILENT: a scrambled trajectory scores %.3f against the real "
                 "%.3f, a separation of %.3f. On this data the measure cannot "

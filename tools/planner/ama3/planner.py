@@ -184,6 +184,19 @@ def replay_plan(z_init, effects, indices):
 
 
 def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None, **_):
+    # The two endpoints encode the same latent, so the empty plan is genuinely
+    # the shortest plan -- and it is not a planned window. `bfs.search` carries
+    # this guard and records what its absence cost: 108 of 385 recorded rows
+    # read `reachability=True` with `plan_length=0`, and one run reported
+    # "6 of 12 solved" where the true count of planned windows was zero.
+    # Returning before the domain is written also keeps this checkable without
+    # an external planner installed.
+    import numpy as _np
+    if _np.array_equal(_np.asarray(z_init).reshape(-1).astype(int),
+                       _np.asarray(z_goal).reshape(-1).astype(int)):
+        return True, _np.stack([_np.asarray(z_init).reshape(-1)]), 0.0, {
+            "outcome": "endpoints_identical", "n_operators": 0}
+
     import numpy as np
 
     from tools.planner.ama3.upstream_bridge import ensure_upstream_on_path

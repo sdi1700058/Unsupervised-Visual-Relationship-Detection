@@ -16,6 +16,8 @@ import numpy as np
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 
+from tools.planner import plan_validity  # noqa: E402
+
 
 def _walk(n=60, step=4.0, size=20.0, seed=0, start=20.0):
     """A single object drifting smoothly, shape (n, 1, 4)."""
@@ -264,3 +266,118 @@ class TestBoundCalibration(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestPaddingIsNotAnAdmissibleStep(unittest.TestCase):
+    """An empty slot cannot fail, so counting it inflates the score.
+
+    `validity` divided by `(n_frames - 1) * n_objs`, which includes the
+    all-zero padding slots the bake writes to fill `--max-objects`. A padding
+    slot is absent at both ends of every step, so it never teleports, never
+    flickers, is never malformed and is never off-canvas. It was therefore
+    counted as an admissible step, every time.
+
+    Three slots holding one real object gave `validity >= 0.667` before the
+    planner did anything at all. The scrambled control receives the same lift,
+    so `separation` was never affected -- but the ADMISSIBLE threshold of 0.95
+    is an absolute reading of `validity`, and 0.972 is quoted in the supervisor
+    report.
+    """
+
+    def _one_object(self, n_frames, n_slots, step=2.0):
+        """One object moving gently; the remaining slots are padding."""
+        b = np.zeros((n_frames, n_slots, 4))
+        for t in range(n_frames):
+            x = 10.0 + step * t
+            b[t, 0] = [x, 10.0, x + 5.0, 15.0]
+        return b
+
+    def test_padding_slots_do_not_raise_the_score(self):
+        """The bug, stated as the number it produced."""
+        model = {"max_step": 50.0}
+        tight = plan_validity.plan_validity(self._one_object(5, 1), model)
+        padded = plan_validity.plan_validity(self._one_object(5, 3), model)
+        self.assertAlmostEqual(padded["validity"], tight["validity"], places=9)
+
+    def test_a_padded_trace_cannot_beat_an_unpadded_one(self):
+        """More empty slots must never look like a better plan."""
+        model = {"max_step": 50.0}
+        scores = [plan_validity.plan_validity(self._one_object(5, n),
+                                         model)["validity"]
+                  for n in (1, 2, 5, 10)]
+        self.assertEqual(len(set(round(s, 9) for s in scores)), 1)
+
+    def test_one_bad_step_is_not_diluted_by_padding(self):
+        """The consequence: padding hid real failures in proportion to itself."""
+        model = {"max_step": 5.0}
+        b = self._one_object(3, 4)
+        b[2, 0] = [500.0, 10.0, 505.0, 15.0]        # a teleport
+        got = plan_validity.plan_validity(b, model)
+        self.assertAlmostEqual(got["validity"], 0.5, places=9)
+
+    def test_the_denominator_is_reported(self):
+        """So a reader can see what the fraction was taken over."""
+        got = plan_validity.plan_validity(self._one_object(5, 4),
+                                     {"max_step": 50.0})
+        self.assertEqual(got["n_steps_scored"], 4)
+        self.assertEqual(got["n_objects"], 4)
+
+    def test_the_rates_use_the_same_denominator(self):
+        model = {"max_step": 5.0}
+        b = self._one_object(3, 4)
+        b[2, 0] = [500.0, 10.0, 505.0, 15.0]
+        got = plan_validity.plan_validity(b, model)
+        self.assertAlmostEqual(got["teleport_rate"], 0.5, places=9)
+
+    def test_an_all_padding_trace_scores_none_rather_than_one(self):
+        """Nothing to judge is not the same as everything being right."""
+        got = plan_validity.plan_validity(np.zeros((5, 3, 4)), {"max_step": 50.0})
+        self.assertIsNone(got["validity"])
+
+    def test_an_object_appearing_midway_still_counts(self):
+        """A slot present at one end of a step is a real step."""
+        b = np.zeros((3, 2, 4))
+        b[1, 0] = [10.0, 10.0, 15.0, 15.0]
+        b[2, 0] = [12.0, 10.0, 17.0, 15.0]
+        got = plan_validity.plan_validity(b, {"max_step": 50.0})
+        self.assertEqual(got["n_steps_scored"], 2)
+
+
+class TestNothingScoredIsReportedAsSuch(unittest.TestCase):
+    """`validity` can now be None, and everything downstream must survive it.
+
+    Before padding was excluded, `validity` was always a float, because an
+    all-padding trace scored 1.0. Now a trace with nothing to judge returns
+    None, and `verdict` and `discrimination` have to say so rather than raise
+    or invent a comparison.
+    """
+
+    EMPTY = staticmethod(lambda: np.zeros((5, 3, 4)))
+
+    def test_discrimination_reports_no_separation_rather_than_raising(self):
+        d = plan_validity.discrimination(self.EMPTY(), self.EMPTY(),
+                                         {"max_step": 50.0})
+        self.assertIsNone(d["separation"])
+
+    def test_verdict_on_an_unscoreable_trace_is_silent(self):
+        result = plan_validity.plan_validity(self.EMPTY(), {"max_step": 50.0})
+        result["discrimination"] = plan_validity.discrimination(
+            self.EMPTY(), self.EMPTY(), {"max_step": 50.0})
+        text = plan_validity.verdict(result)
+        self.assertTrue(text.startswith("SILENT"))
+
+    def test_verdict_names_why_it_is_silent(self):
+        result = plan_validity.plan_validity(self.EMPTY(), {"max_step": 50.0})
+        result["discrimination"] = plan_validity.discrimination(
+            self.EMPTY(), self.EMPTY(), {"max_step": 50.0})
+        self.assertIn("no object", plan_validity.verdict(result).lower())
+
+    def test_a_real_trace_still_gets_a_real_verdict(self):
+        """The guard must not swallow the ordinary case."""
+        b = _walk(n=120, step=3.0, seed=21)
+        m = plan_validity.motion_model(b[:80])
+        result = plan_validity.plan_validity(b[80:], m)
+        rng = np.random.RandomState(0)
+        result["discrimination"] = plan_validity.discrimination(
+            b[80:], b[80:][rng.permutation(40)], m)
+        self.assertFalse(plan_validity.verdict(result).startswith("SILENT"))
