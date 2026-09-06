@@ -167,9 +167,15 @@ def main(argv=None):
     ap.add_argument("--all", action="store_true",
                     help="scan the whole repository, not only the cluster path")
     ap.add_argument("paths", nargs="*", help="override the paths to scan")
+    # The repository to scan. This check moved out of the thesis repository on
+    # 2026-09-05, so it can no longer assume the code sits beside it.
+    ap.add_argument("--root", default=".",
+                    help="the repository holding the code to scan")
     args = ap.parse_args(argv)
 
     targets = args.paths or (["."] if args.all else list(CLUSTER_PATHS))
+    targets = [os.path.join(args.root, t) if not os.path.isabs(t) else t
+               for t in targets]
     targets = [t for t in targets if os.path.exists(t)]
 
     total, scanned = 0, 0

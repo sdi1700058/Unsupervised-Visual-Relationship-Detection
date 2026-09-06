@@ -14,9 +14,28 @@
 
 set -uo pipefail
 
-cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${HERE}"
 
-PY=".venv-local/bin/python"
+# Where the thesis repository is. The checks that read source and run tests
+# operate on it, and after the working infrastructure was split out on
+# 2026-09-05 the two live in separate directories. When this script sits
+# inside the thesis repository itself, HERE is already the answer.
+THESIS="${THESIS:-}"
+if [[ -z "${THESIS}" ]]; then
+    if [[ -d "${HERE}/tools/planner/tests" ]]; then
+        THESIS="${HERE}"
+    elif [[ -d "${HERE}/../labeled-fosae/tools/planner/tests" ]]; then
+        THESIS="$(cd "${HERE}/../labeled-fosae" && pwd)"
+    elif [[ -d "${HERE}/../sgg-thesis/tools/planner/tests" ]]; then
+        THESIS="$(cd "${HERE}/../sgg-thesis" && pwd)"
+    else
+        echo "cannot find the thesis repository. Set THESIS=/path/to/it."
+        exit 2
+    fi
+fi
+
+PY="${THESIS}/.venv-local/bin/python"
 if [[ ! -x "${PY}" ]]; then
     echo "WARNING: ${PY} is missing, falling back to python3."
     echo "         Tests needing pillow will be SKIPPED, and a skipped test"
@@ -43,8 +62,9 @@ run () {
 }
 
 # The cheap half. Seconds, and it runs every time.
-run "tests"              "${PY}" -m unittest discover -s tools/planner/tests
-run "python 3.6"         python3 tools/check_py36.py
+run "tests"              "${PY}" -m unittest discover \
+                             -s "${THESIS}/tools/planner/tests"
+run "python 3.6"         python3 tools/check_py36.py --root "${THESIS}"
 
 if (( QUICK )); then
     printf '\n==========================================\n'
