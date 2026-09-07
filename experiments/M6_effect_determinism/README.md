@@ -183,7 +183,7 @@ guard 0 rather than being replaced, because a table that quietly dropped them
 would hide that half the trained exports on disk carry no state at all.
 
 The two oracle codes are in the table as an **anchor for the metric itself**.
-`tools/planner/oracle.py` states that one-hot gives the motion "one bin to the
+`tools/planner/box_geometry.py` states that one-hot gives the motion "one bin to the
 right" a different effect at every start position and that the binary code
 gives it five. That is an M6 statement about a code nobody trained, and its
 value is known from the code's construction. If M6 does not rank the binary

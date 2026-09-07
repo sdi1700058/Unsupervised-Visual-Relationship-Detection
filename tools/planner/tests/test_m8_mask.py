@@ -307,7 +307,7 @@ class TestMaskLatents(unittest.TestCase):
     def test_the_mask_code_is_far_wider_than_the_box_code(self):
         """The cost of the representation, at the resolution actually used."""
         from tools.planner.m8_mask import mask_bits_per_object
-        from tools.planner.oracle import (DEFAULT_BINS_X, DEFAULT_BINS_Y,
+        from tools.planner.box_geometry import (DEFAULT_BINS_X, DEFAULT_BINS_Y,
                                           bits_per_object)
 
         box = bits_per_object(DEFAULT_BINS_X, DEFAULT_BINS_Y)

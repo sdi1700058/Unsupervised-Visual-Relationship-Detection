@@ -119,7 +119,7 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
         # Imported here rather than at module scope: oracle.py can reach for
         # the loader, and the loader pulls TensorFlow.
         try:
-            from tools.planner.oracle import (
+            from tools.planner.box_geometry import (
                 DEFAULT_BINS_X, DEFAULT_BINS_Y, round_trip_error)
             from tools.planner.common.metrics import floor_ratio
             # The export's own bin count, not the decoder's. `floor_ratio` is

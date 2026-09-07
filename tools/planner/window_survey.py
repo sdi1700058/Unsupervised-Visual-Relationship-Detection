@@ -29,7 +29,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 
-from tools.planner.oracle import (                       # noqa: E402
+from tools.planner.box_geometry import (                       # noqa: E402
     DEFAULT_BINS_X, DEFAULT_BINS_Y, boxes_from_vidvrd, boxes_to_latents,
     round_trip_error)
 from tools.planner.common.metrics import moving_gt_steps   # noqa: E402

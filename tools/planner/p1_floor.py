@@ -58,7 +58,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(
 
 from tools.planner.common.metrics import bbox_mse                # noqa: E402
 from tools.planner.common.windows import linear_interp_bboxes    # noqa: E402
-from tools.planner.oracle import round_trip_error                # noqa: E402
+from tools.planner.box_geometry import round_trip_error                # noqa: E402
 
 # Where the two new per-window columns go. `eval_plannability.sh` writes them
 # between `temporal_order` and `decode_fallbacks`, and a summary that puts

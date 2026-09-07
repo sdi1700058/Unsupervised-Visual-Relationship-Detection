@@ -35,7 +35,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir, os.pardir, os.pardir))
 sys.path.insert(0, ROOT)
 
-from tools.planner import oracle
+from tools.planner import box_geometry as oracle
 
 _STUBBED = ("latplan", "latplan.util", "latplan.puzzles",
             "latplan.puzzles.puzzle_labeled_objects",

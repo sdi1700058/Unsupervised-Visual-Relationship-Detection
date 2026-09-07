@@ -4,7 +4,7 @@
 #   bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 #   N_CLIPS=40 bash experiments/M_evaluation_methods/build_oracle_dataset.sh
 #
-# Any dataset whose annotations read through tools/planner/oracle.py works, not
+# Any dataset whose annotations read through tools/planner/deprecated/position_oracle.py works, not
 # only VidVRD. VidOR uses the identical format, so:
 #
 #   CLIPS_FILE=eval/vidor_winnable_w16.txt \
@@ -74,7 +74,7 @@ while read -r clip; do
     # nothing about why -- including when the cause was the memory cap, which
     # looks identical to a malformed annotation.
     if ( ulimit -v "${MEM_KB}"
-         "${PY}" tools/planner/oracle.py "${ANN}" \
+         "${PY}" tools/planner/deprecated/position_oracle.py "${ANN}" \
              --out "${OUT_DIR}/${out_name}.npz" --max-objects 3 --no-fill \
              >/dev/null ); then
         built=$((built + 1))

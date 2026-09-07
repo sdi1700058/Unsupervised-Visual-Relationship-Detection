@@ -20,7 +20,7 @@
 #   2. sh/setup_venv_detect.sh   the py>=3.9 sidecar (MediaPipe needs it; the
 #                                training venv is py3.6, pinned by tf 1.15)
 #   3. tools/synth_bbox.py       frames -> VidVRD-schema JSON with tids
-#   4. tools/planner/oracle.py   JSON -> planner export
+#   4. tools/planner/deprecated/position_oracle.py   JSON -> planner export
 #   5. tools/planner/plan_validity.py    score it
 #
 # Step 5 is M3, and M3 is the reason this is viable at all. It needs no ground
@@ -120,7 +120,7 @@ for j in "${ANN}"/*.json; do
     # --no-fill: filling fabricates transitions, and M3 measures that a filled
     # clip is one it can say nothing about.
     ( ulimit -v "${MEM_KB}"
-      "${PY}" tools/planner/oracle.py "${j}" --out "${EXPORTS}/${stem}.npz" \
+      "${PY}" tools/planner/deprecated/position_oracle.py "${j}" --out "${EXPORTS}/${stem}.npz" \
           --max-objects 3 --no-fill ) || echo "  export failed: ${stem}" >&2
 done
 

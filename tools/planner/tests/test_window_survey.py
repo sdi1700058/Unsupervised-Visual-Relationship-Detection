@@ -195,7 +195,7 @@ class TestTheFloorMatchesTheBaselinesFrames(unittest.TestCase):
         agreeing with whatever the survey happens to do.
         """
         from tools.planner.common.windows import linear_interp_bboxes
-        from tools.planner.oracle import boxes_from_vidvrd, round_trip_error
+        from tools.planner.box_geometry import boxes_from_vidvrd, round_trip_error
 
         boxes, _ = boxes_from_vidvrd(path, num_objs=3, fill=False)
         w = self.WINDOW

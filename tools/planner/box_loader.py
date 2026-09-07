@@ -67,7 +67,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 os.pardir, os.pardir))
 
-from tools.planner import oracle  # noqa: E402
+from tools.planner import box_geometry as oracle  # noqa: E402
 
 # The canvas every dataset is scaled onto, as (width, height). Taken from the
 # oracle so there is one definition rather than a copy (SPEC V5).

@@ -84,7 +84,7 @@ if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 
 from tools.planner.common.metrics import _assign, bbox_iou   # noqa: E402
-from tools.planner.oracle import (CANVAS_H, CANVAS_W,        # noqa: E402
+from tools.planner.box_geometry import (CANVAS_H, CANVAS_W,        # noqa: E402
                                   DEFAULT_BINS_X, DEFAULT_BINS_Y)
 
 DEFAULT_TOL = 2
@@ -845,7 +845,7 @@ def box_code_floor(boxes, bins_x, bins_y, height, width, tol=DEFAULT_TOL):
     floor of the representation *a model actually learns*, and the mask row is
     the floor of a representation *no model has learned yet*.
     """
-    from tools.planner.oracle import boxes_to_latents, latents_to_boxes
+    from tools.planner.box_geometry import boxes_to_latents, latents_to_boxes
 
     z = boxes_to_latents(boxes, bins_x, bins_y, width, height)
     back = latents_to_boxes(z, boxes.shape[1], bins_x, bins_y, width, height)
@@ -916,7 +916,7 @@ def main(argv=None):
         report["agreement"] = {"max_abs_deviation": None, "n_pairs": 0,
                                "source": "none"}
     else:
-        from tools.planner.oracle import boxes_from_vidvrd
+        from tools.planner.box_geometry import boxes_from_vidvrd
 
         boxes, meta = boxes_from_vidvrd(a.annotation,
                                         num_objs=a.max_objects)

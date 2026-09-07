@@ -476,7 +476,7 @@ class TestBfs(unittest.TestCase):
         reaches the module directly, so the same function is imported rather
         than copied.
         """
-        from tools.planner.oracle import load_canvas_scaler
+        from tools.planner.box_geometry import load_canvas_scaler
 
         scale, width, height = load_canvas_scaler()
         self.assertEqual((height, width), (200, 300))
@@ -569,7 +569,7 @@ class TestBfs(unittest.TestCase):
         would then have to undo, and it would silently corrupt every
         trajectory.
         """
-        from tools.planner.oracle import boxes_from_something_else_frames
+        from tools.planner.box_geometry import boxes_from_something_else_frames
 
         def box(x, cat):
             return {"box2d": {"x1": x, "y1": 0.0, "x2": x + 10.0, "y2": 10.0},
@@ -593,7 +593,7 @@ class TestBfs(unittest.TestCase):
                          "interpreter; run under .venv-local")
     def test_something_else_absent_slot_is_zero(self):
         """A slot missing from a frame stays all-zero, meaning 'not here'."""
-        from tools.planner.oracle import boxes_from_something_else_frames
+        from tools.planner.box_geometry import boxes_from_something_else_frames
 
         frames = [
             {"labels": [{"box2d": {"x1": 1., "y1": 1., "x2": 9., "y2": 9.},
@@ -667,7 +667,7 @@ class TestBfs(unittest.TestCase):
         0.298 for a binary code. This adds the binary option so the claim can
         be tested end to end. Both codes must decode to the same boxes.
         """
-        from tools.planner.oracle import boxes_to_latents, latents_to_boxes
+        from tools.planner.box_geometry import boxes_to_latents, latents_to_boxes
 
         boxes = np.array([[[10., 20., 60., 80.], [100., 30., 150., 90.]]])
         for encoding in ("onehot", "binary"):
@@ -678,7 +678,7 @@ class TestBfs(unittest.TestCase):
             self.assertTrue(np.all(np.abs(back - boxes) <= 6), encoding)
 
     def test_binary_encoding_is_far_smaller(self):
-        from tools.planner.oracle import boxes_to_latents
+        from tools.planner.box_geometry import boxes_to_latents
 
         boxes = np.zeros((1, 2, 4))
         boxes[0, 0] = [10., 20., 60., 80.]
@@ -690,7 +690,7 @@ class TestBfs(unittest.TestCase):
 
     def test_binary_encoding_keeps_an_absent_slot_empty(self):
         """A padded slot must stay all-zero, or the oracle invents an object."""
-        from tools.planner.oracle import boxes_to_latents
+        from tools.planner.box_geometry import boxes_to_latents
 
         boxes = np.array([[[10., 20., 60., 80.], [0., 0., 0., 0.]]])
         z = boxes_to_latents(boxes, 60, 40, encoding="binary")
@@ -700,7 +700,7 @@ class TestBfs(unittest.TestCase):
 
     def test_binary_encoding_gives_an_action_one_effect_more_often(self):
         """The point of the option, stated as a test."""
-        from tools.planner.oracle import boxes_to_latents
+        from tools.planner.box_geometry import boxes_to_latents
         from tools.planner.common.metrics import action_effect_consistency
 
         # One object sliding right one bin at a time, from many start points.
@@ -1238,7 +1238,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── oracle: the binary code must hold every bin it claims to ──────────
     def test_binary_code_survives_power_of_two_bin_counts(self):
-        from tools.planner import oracle as O
+        from tools.planner import box_geometry as O
 
         # A box sitting in the TOP bin on every coordinate. Before the fix
         # the code overflowed its field, the object block went all-zero, and
@@ -1261,7 +1261,7 @@ class TestReviewRegressions(unittest.TestCase):
                                     "box inverted at bins=%d" % bins)
 
     def test_code_width_holds_the_offset_value(self):
-        from tools.planner.oracle import _code_width
+        from tools.planner.box_geometry import _code_width
 
         for bins in (2, 8, 16, 31, 32, 33, 64):
             self.assertGreaterEqual(2 ** _code_width(bins) - 1, bins,
@@ -1269,7 +1269,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── oracle: the floor must be the floor the real decoder actually has ─
     def test_dequantise_matches_the_real_decoder(self):
-        from tools.planner import oracle as O
+        from tools.planner import box_geometry as O
 
         # `common/decode.py` maps a bin index to the bin's LEFT EDGE:
         #     x1 = argmax(...) * (canvas_w / X)
@@ -1280,7 +1280,7 @@ class TestReviewRegressions(unittest.TestCase):
         np.testing.assert_allclose(O.dequantise(idx, 60, 300), expected)
 
     def test_round_trip_error_divides_by_present_cells_only(self):
-        from tools.planner import oracle as O
+        from tools.planner import box_geometry as O
 
         one_real = np.array([[[10.0, 10.0, 40.0, 40.0]]])
         with_padding = np.zeros((1, 3, 4))

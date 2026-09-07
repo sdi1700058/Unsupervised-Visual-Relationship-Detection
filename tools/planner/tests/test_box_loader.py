@@ -425,7 +425,7 @@ class TestOneShape(Fixtures):
     @needs_pillow
     def test_the_oracle_encodes_what_every_corpus_returns(self):
         """The whole point: boxes in, planner latents out, no branch per dataset."""
-        from tools.planner.oracle import boxes_to_latents
+        from tools.planner.box_geometry import boxes_to_latents
 
         for name, root, clip in self.each_corpus():
             boxes, _ = box_loader.load_clip(name, clip, root=root, num_objs=3)

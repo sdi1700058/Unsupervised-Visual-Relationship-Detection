@@ -200,7 +200,7 @@ class TestShapeSurvivesTheCanvas(unittest.TestCase):
         """SPEC V5: one definition of the canvas geometry. `oracle.py` exports
         planner inputs and would otherwise drift from what the loader trains
         on, which is a disagreement no test downstream of either could see."""
-        from tools.planner.oracle import load_canvas_scaler
+        from tools.planner.box_geometry import load_canvas_scaler
 
         scale, width, height = load_canvas_scaler()
         self.assertEqual((width, height), (self.W, self.H))

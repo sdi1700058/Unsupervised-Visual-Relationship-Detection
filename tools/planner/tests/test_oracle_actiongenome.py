@@ -14,7 +14,7 @@ import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
-from tools.planner import oracle  # noqa: E402
+from tools.planner import box_geometry as oracle  # noqa: E402
 
 
 class TestRuns(unittest.TestCase):

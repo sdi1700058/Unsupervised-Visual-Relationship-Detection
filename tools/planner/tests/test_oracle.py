@@ -11,8 +11,10 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))))
 
-from tools.planner.oracle import (          # noqa: E402
-    CANVAS_H, CANVAS_W, bits_per_object, boxes_to_latents, build_export,
+from tools.planner.deprecated.position_oracle import (  # noqa: E402
+    build_export)
+from tools.planner.box_geometry import (          # noqa: E402
+    CANVAS_H, CANVAS_W, bits_per_object, boxes_to_latents,
     dequantise, latents_to_boxes, quantise, round_trip_error)
 
 
@@ -331,7 +333,7 @@ class TestSynthBboxContract(unittest.TestCase):
         return p
 
     def test_oracle_reads_a_document_with_no_relation_instances(self):
-        from tools.planner.oracle import boxes_from_vidvrd
+        from tools.planner.box_geometry import boxes_from_vidvrd
 
         boxes, meta = boxes_from_vidvrd(self._write(self._doc()),
                                         num_objs=3, fill=False)
@@ -346,7 +348,7 @@ class TestSynthBboxContract(unittest.TestCase):
         these latents "perfect by construction" -- injected a teleport that
         never happened.
         """
-        from tools.planner.oracle import boxes_from_vidvrd
+        from tools.planner.box_geometry import boxes_from_vidvrd
 
         boxes, _ = boxes_from_vidvrd(self._write(self._doc(grow_left=True)),
                                      num_objs=3, fill=False)
@@ -358,7 +360,7 @@ class TestSynthBboxContract(unittest.TestCase):
 
     def test_the_chain_reaches_a_scoreable_export(self):
         """synth_bbox -> oracle -> M3, which is the VideoNet route."""
-        from tools.planner.oracle import boxes_from_vidvrd, boxes_to_latents
+        from tools.planner.box_geometry import boxes_from_vidvrd, boxes_to_latents
         from tools.planner.plan_validity import motion_model, discrimination
 
         boxes, _ = boxes_from_vidvrd(self._write(self._doc(n=60)),

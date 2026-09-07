@@ -54,7 +54,7 @@ vidor_clips() {
 # a malformed annotation or the memory cap all looked the same.
 build_oracle() {
     [ -f "$2" ] && return 0
-    "$PY" tools/planner/oracle.py "$1" --out "$2" --encoding "$3" \
+    "$PY" tools/planner/deprecated/position_oracle.py "$1" --out "$2" --encoding "$3" \
         --max-objects 3 --no-fill >/dev/null \
         || echo "  could not build $2" >&2
 }
