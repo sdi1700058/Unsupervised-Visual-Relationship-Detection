@@ -35,6 +35,96 @@ def _default_frames_dir(fps):
 last_load_metadata = {}
 
 
+def _bbox_area(obj):
+    b = obj["bbox"]
+    return (b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"])
+
+
+def _slot_order_by_tid(trajectories, num_objs):
+    """`{tid: slot}` for one clip, so a track keeps one slot in every frame.
+
+    **The defect this exists to close.** Slots were filled per frame by
+    descending bbox area, independently of every other frame. An object that
+    leaves the frame moves every object behind it up one slot and turns the
+    tail into padding. FOSAE learns its predicates on slot positions, so a
+    transition whose slot 1 is the dog before and the frisbee after is not the
+    transition that happened. Measured on the VidVRD production read: **138
+    adjacent pairs change the slot name order, 15 change the object count.**
+
+    VidVRD ships `tid`, a per-clip track id, and this loader used it only to
+    look up a category name.
+
+    Ranked by total bbox area over the clip, then by how many frames the track
+    appears in, then by tid. Total area first because it is the same quantity
+    the per-frame sort used, so a frame in which every track is present comes
+    out in the order the default already produced; the rest of the ranking only
+    breaks ties, and tid makes it total, so the order is a property of the clip
+    rather than of whichever frame is being read.
+
+    Tracks beyond `num_objs` are left out of the mapping entirely. Dropping the
+    same track from every frame is the point: rotating it in whenever it
+    happens to be large is the disease being cured.
+    """
+    area, count = {}, {}
+    for frame_objs in trajectories:
+        for obj in frame_objs or []:
+            tid = obj.get("tid")
+            if tid is None:
+                continue
+            area[tid] = area.get(tid, 0) + _bbox_area(obj)
+            count[tid] = count.get(tid, 0) + 1
+    ranked = sorted(area, key=lambda t: (-area[t], -count[t], str(t)))
+    return dict((tid, slot) for slot, tid in enumerate(ranked[:num_objs])), len(ranked)
+
+
+def _place_by_tid(frame_objs, slot_of, num_objs, counts):
+    """One frame's objects into fixed slots. `None` marks a vacancy.
+
+    An object carrying no tid cannot be pinned. It falls back to the old
+    behaviour -- area order into whatever slots are still free -- and is
+    counted, because a fallback nobody counts is the silence this whole change
+    is against.
+    """
+    placed = [None] * num_objs
+    untracked = []
+    for obj in frame_objs:
+        tid = obj.get("tid")
+        if tid is None:
+            untracked.append(obj)
+            continue
+        slot = slot_of.get(tid)
+        if slot is None or placed[slot] is not None:
+            counts["dropped_past_slots"] += 1
+            continue
+        placed[slot] = obj
+        counts["placed_by_id"] += 1
+    if untracked:
+        free = [i for i, p in enumerate(placed) if p is None]
+        for obj, slot in zip(sorted(untracked, key=_bbox_area, reverse=True), free):
+            placed[slot] = obj
+            counts["placed_by_area"] += 1
+        counts["dropped_past_slots"] += max(0, len(untracked) - len(free))
+    return placed
+
+
+def _describe_slots(counts):
+    """One line for a log, so the ordering in force is never a guess."""
+    tail = ("%d placements, %d objects dropped past slot %d; the widest video "
+            "held %d identities"
+            % (counts["placed_by_id"] + counts["placed_by_area"],
+               counts["dropped_past_slots"], counts["num_objs"],
+               counts["max_identities_in_a_video"]))
+    if not counts["strict"]:
+        return ("slots by bbox area per frame, so an object that leaves moves "
+                "every later object up one slot: " + tail
+                + ". Set STRICT_ADJACENCY=1 to pin each identity to one slot")
+    text = ("slots pinned by %s under STRICT_ADJACENCY=1: " % counts["id_source"]) + tail
+    if counts["placed_by_area"]:
+        text += ("; %d of those had no %s and fell back to area order"
+                 % (counts["placed_by_area"], counts["id_source"]))
+    return text
+
+
 def _video_primary_category(ann):
     """Primary subject of a VidVRD annotation = tid that appears in the most
     frames (mean bbox area as tiebreaker). None if no trajectories/subjects."""
@@ -46,10 +136,13 @@ def _video_primary_category(ann):
     tid_area  = {}
     for frame_objs in ann.get("trajectories", []):
         for o in frame_objs:
-            tid = o["tid"]
+            # An object with no tid cannot be the primary subject of anything,
+            # and raising here would refuse the whole video over one box.
+            tid = o.get("tid")
+            if tid is None:
+                continue
             tid_count[tid] = tid_count.get(tid, 0) + 1
-            b = o["bbox"]
-            tid_area[tid] = tid_area.get(tid, 0) + (b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"])
+            tid_area[tid] = tid_area.get(tid, 0) + _bbox_area(o)
     if not tid_count:
         return None
     best_tid = max(tid_count, key=lambda t: (tid_count[t], tid_area.get(t, 0)))
@@ -88,12 +181,27 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     # needed when this is increased.
     _patch_size = patch_size if patch_size is not None else PATCH_SIZE
 
+    # STRICT_ADJACENCY=1 pins each track to one slot for the whole clip; see
+    # _slot_order_by_tid. The same flag that refuses non-adjacent transitions,
+    # because both are the same promise: a transition is one step, between two
+    # states whose slots mean the same objects.
+    from latplan.util.adjacency import strict_from_env
+    strict_slots = strict_from_env()
+
     # SPEC §V7-V9: per-category npz cache short-circuit. Bypassed when
     # max_videos or video_id_filter is set (would contaminate shared cache).
     cache_path = npz_cache_path("video", "vidvrd", category_filter, fps,
                                 num_objs=num_objs, patch_size=_patch_size,
                                 fill_annotations=fill_annotations) \
         if (max_videos is None and video_id_filter is None) else None
+    # Pinning changes what the arrays hold, so it has to change the key too --
+    # cache.py's own rule. Without this a strict bake reads back the
+    # area-ordered tensors an earlier bake wrote, silently, and trains on the
+    # ordering it was set to avoid. The suffix is added here rather than in
+    # npz_cache_path so that a cache written before today is still found by
+    # default.
+    if cache_path is not None and strict_slots:
+        cache_path = cache_path[:-len(".npz")] + "-tid.npz"
     if cache_path is not None:
         hit = load_cached(cache_path)
         if hit is not None:
@@ -164,6 +272,12 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     _dropped = {"annotated_frames": 0, "empty_annotation": 0,
                 "missing_frame_file": 0, "filled": 0}
 
+    # Which ordering produced the slots, and what it cost. Counted in both
+    # modes so the two are comparable.
+    _slots = {"strict": strict_slots, "id_source": "tid", "num_objs": num_objs,
+              "placed_by_id": 0, "placed_by_area": 0, "dropped_past_slots": 0,
+              "max_identities_in_a_video": 0}
+
     for ann_path in ann_files:
         with open(ann_path) as f:
             ann = json.load(f)
@@ -190,6 +304,12 @@ def build_dataset(annotations_dir=None, frames_dir=None,
                 trajectories = list(trajectories)
                 for i in range(first_idx):
                     trajectories[i] = first_objs
+
+        # One ranking per clip, computed before any frame is read, so no frame
+        # can influence where the next one puts its objects.
+        slot_of, n_identities = _slot_order_by_tid(trajectories, num_objs)
+        _slots["max_identities_in_a_video"] = max(
+            _slots["max_identities_in_a_video"], n_identities)
 
         _last_objs = None
         for fid, frame_objs in enumerate(trajectories):
@@ -218,25 +338,30 @@ def build_dataset(annotations_dir=None, frames_dir=None,
 
             pil_img = Image.open(frame_path).convert("RGB")
 
-            # Sort by bbox area descending for stable slot assignment
-            def _area(o):
-                b = o["bbox"]
-                return (b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"])
-            frame_objs = sorted(frame_objs, key=_area, reverse=True)[:num_objs]
+            if strict_slots:
+                slotted = _place_by_tid(frame_objs, slot_of, num_objs, _slots)
+            else:
+                # The old ordering, kept as the default so every existing run
+                # reproduces: bbox area descending, per frame, independently.
+                ranked = sorted(frame_objs, key=_bbox_area, reverse=True)
+                _slots["dropped_past_slots"] += max(0, len(ranked) - num_objs)
+                _slots["placed_by_area"] += min(len(ranked), num_objs)
+                slotted = ranked[:num_objs]
+                slotted += [None] * (num_objs - len(slotted))
 
             patches, bboxes, names = [], [], []
-            for obj in frame_objs:
+            for i, obj in enumerate(slotted):
+                if obj is None:
+                    patches.append(np.zeros((_patch_size, _patch_size, 3), dtype=np.uint8))
+                    bboxes.append((0, 0, 0, 0))
+                    names.append(f"pad_{i}")
+                    continue
                 b    = obj["bbox"]
                 bbox = (b["xmin"], b["ymin"], b["xmax"], b["ymax"])
+                tid  = obj.get("tid")
                 patches.append(_crop_object(pil_img, bbox, patch_size=_patch_size))
                 bboxes.append(_scale_bbox_to_canvas(bbox, W, H))
-                names.append(tid_to_cat.get(obj["tid"], f"obj{obj['tid']}"))
-
-            # Pad to num_objs
-            for i in range(len(frame_objs), num_objs):
-                patches.append(np.zeros((_patch_size, _patch_size, 3), dtype=np.uint8))
-                bboxes.append((0, 0, 0, 0))
-                names.append(f"pad_{i}")
+                names.append(tid_to_cat.get(tid, f"obj{tid}"))
 
             images_list.append(np.array(patches, dtype=np.uint8))
             bboxes_list.append(np.array(bboxes,  dtype=np.uint16))
@@ -264,6 +389,8 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "patch_size": _patch_size,
     })
     last_load_metadata["dropped"] = dict(_dropped)
+    last_load_metadata["slots"]   = dict(_slots)
+    print("[vidvrd-loader] %s" % _describe_slots(_slots))
     print(f"[vidvrd-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(ann_files)} videos, "
           f"{len(images_list)} states")

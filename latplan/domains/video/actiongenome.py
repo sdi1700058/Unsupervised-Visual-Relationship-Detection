@@ -38,6 +38,101 @@ def _load_pkls(ann_dir):
     return obj, per
 
 
+def _bbox_area(obj):
+    x1, y1, x2, y2 = obj["bbox"]
+    return max(0, x2 - x1) * max(0, y2 - y1)
+
+
+def _slot_order_by_class(frames_of_vid, obj_anno, num_objs):
+    """`{class: slot}` for one video, slot 0 held back for person.
+
+    **The defect this exists to close.** Slots were filled per frame by
+    descending bbox area, independently of every other frame, so an object
+    leaving the frame moved every object behind it up one slot. FOSAE learns
+    its predicates on slot positions, so the transition it trains on is then
+    not the transition that happened. The same defect `puzzle_vidvrd` carried.
+
+    **Action Genome ships no instance id.** Verified against
+    `object_bbox_and_relationship.pkl`: 288,782 frames, every object dict
+    carrying exactly `class`, `bbox`, `visible`, three relationship lists and
+    `metadata` -- no tid, no track id, no instance field of any name. What it
+    does carry is `metadata['tag']`, which is `<vid>/<class>/<frame>`, and
+    **no class appears twice in any of the 288,782 frames**. Within a video the
+    class name therefore *is* the instance key, and this pins on it rather than
+    inventing an id the dataset does not have. The limit is stated rather than
+    hidden: two chairs in one room would be one identity to Action Genome, so
+    they are one identity here too.
+
+    Ranked by total bbox area, then frames present, then the class name, for
+    the reason given in `puzzle_vidvrd._slot_order_by_tid`.
+    """
+    area, count = {}, {}
+    for fkey in frames_of_vid:
+        for o in obj_anno.get(fkey, []):
+            if not o.get("visible") or o.get("bbox") is None:
+                continue
+            cls = o.get("class")
+            if cls is None:
+                continue
+            area[cls] = area.get(cls, 0) + _bbox_area(o)
+            count[cls] = count.get(cls, 0) + 1
+    ranked = sorted(area, key=lambda c: (-area[c], -count[c], c))
+    order = dict((cls, slot + 1)
+                 for slot, cls in enumerate(ranked[:max(0, num_objs - 1)]))
+    return order, len(ranked) + 1
+
+
+def _place_by_class(visible_objs, person_bbox, slot_of, num_objs, counts):
+    """One frame into fixed slots. `None` marks a vacancy.
+
+    Slot 0 is person's and stays empty when no person is annotated, rather
+    than being handed to whichever object happens to be largest.
+    """
+    placed = [None] * num_objs
+    if person_bbox is not None and num_objs > 0:
+        placed[0] = ("person", person_bbox)
+        counts["placed_by_id"] += 1
+    unnamed = []
+    for o in visible_objs:
+        cls = o.get("class")
+        if cls is None:
+            unnamed.append(o)
+            continue
+        slot = slot_of.get(cls)
+        if slot is None or placed[slot] is not None:
+            counts["dropped_past_slots"] += 1
+            continue
+        placed[slot] = (cls, tuple(map(float, o["bbox"])))
+        counts["placed_by_id"] += 1
+    if unnamed:
+        free = [i for i, p in enumerate(placed) if p is None]
+        for o, slot in zip(sorted(unnamed, key=_bbox_area, reverse=True), free):
+            placed[slot] = (str(o.get("class")), tuple(map(float, o["bbox"])))
+            counts["placed_by_area"] += 1
+        counts["dropped_past_slots"] += max(0, len(unnamed) - len(free))
+    return placed
+
+
+def _describe_slots(counts):
+    """One line for a log, so the ordering in force is never a guess."""
+    tail = ("%d placements, %d objects dropped past slot %d; the widest video "
+            "held %d identities"
+            % (counts["placed_by_id"] + counts["placed_by_area"],
+               counts["dropped_past_slots"], counts["num_objs"],
+               counts["max_identities_in_a_video"]))
+    if not counts["strict"]:
+        return ("slots by bbox area per frame, so an object that leaves moves "
+                "every later object up one slot: " + tail
+                + ". Set STRICT_ADJACENCY=1 to pin each identity to one slot")
+    text = ("slots pinned by object class under STRICT_ADJACENCY=1 -- Action "
+            "Genome ships no track id, and no class repeats within a frame: "
+            + tail)
+    if counts["placed_by_area"]:
+        text += ("; %d of those carried no class and fell back to area order"
+                 % counts["placed_by_area"])
+    return text
+
+
 def _video_primary_object_category(frames_of_vid, obj_anno):
     """Pick most-visible non-person object class across this video's frames."""
     counts = {}
@@ -90,6 +185,17 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     cache_path = npz_cache_path("video", "actiongenome", category_filter, fps,
                                 num_objs=num_objs, patch_size=_patch_size) \
         if (max_videos is None and video_id_filter is None) else None
+    # STRICT_ADJACENCY=1 pins each class to one slot for the whole video; see
+    # _slot_order_by_class. Same flag as the adjacency refusal, because both
+    # are the same promise: a transition is one step between two states whose
+    # slots mean the same objects. It changes what the arrays hold, so by the
+    # rule cache.py states it has to change the key; the suffix goes on here
+    # rather than in npz_cache_path so a cache written before today is still
+    # found by default.
+    from latplan.util.adjacency import strict_from_env
+    strict_slots = strict_from_env()
+    if cache_path is not None and strict_slots:
+        cache_path = cache_path[:-len(".npz")] + "-cls.npz"
     if cache_path is not None:
         hit = load_cached(cache_path)
         if hit is not None:
@@ -142,6 +248,12 @@ def build_dataset(annotations_dir=None, frames_dir=None,
     _dropped = {"annotated_frames": 0, "empty_annotation": 0,
                 "missing_frame_file": 0, "filled": 0}
 
+    # Which ordering produced the slots, and what it cost. Counted in both
+    # modes so the two are comparable.
+    _slots = {"strict": strict_slots, "id_source": "class",
+              "num_objs": num_objs, "placed_by_id": 0, "placed_by_area": 0,
+              "dropped_past_slots": 0, "max_identities_in_a_video": 0}
+
     for vid in video_ids:
         frames_of_vid = vid_to_frames[vid]
         primary = _video_primary_object_category(frames_of_vid, obj_anno)
@@ -162,6 +274,13 @@ def build_dataset(annotations_dir=None, frames_dir=None,
                     continue
 
         vid_frames_dir = os.path.join(frames_dir, vid)
+
+        # One ranking per video, computed before any frame is read, so no
+        # frame can influence where the next one puts its objects.
+        slot_of, n_identities = _slot_order_by_class(frames_of_vid, obj_anno,
+                                                     num_objs)
+        _slots["max_identities_in_a_video"] = max(
+            _slots["max_identities_in_a_video"], n_identities)
 
         for fkey in frames_of_vid:
             objs   = obj_anno.get(fkey, [])
@@ -187,29 +306,38 @@ def build_dataset(annotations_dir=None, frames_dir=None,
             pil_img = Image.open(frame_path).convert("RGB")
             W, H = pil_img.size
 
-            slots = []
-            if person_bbox is not None:
-                slots.append(("person", person_bbox))
-
-            def _area(o):
-                x1, y1, x2, y2 = o["bbox"]
-                return max(0, x2 - x1) * max(0, y2 - y1)
-
-            for o in sorted(visible_objs, key=_area, reverse=True):
-                slots.append((o["class"], tuple(map(float, o["bbox"]))))
-                if len(slots) >= num_objs:
-                    break
+            if strict_slots:
+                slotted = _place_by_class(visible_objs, person_bbox, slot_of,
+                                          num_objs, _slots)
+            else:
+                # The old ordering, kept as the default so every existing run
+                # reproduces: person first, then bbox area descending, per
+                # frame, independently.
+                slots = []
+                if person_bbox is not None:
+                    slots.append(("person", person_bbox))
+                for o in sorted(visible_objs, key=_bbox_area, reverse=True):
+                    slots.append((o["class"], tuple(map(float, o["bbox"]))))
+                    if len(slots) >= num_objs:
+                        break
+                _slots["placed_by_area"] += len(slots[:num_objs])
+                _slots["dropped_past_slots"] += max(
+                    0, len(visible_objs) - (len(slots[:num_objs])
+                                            - (1 if person_bbox is not None else 0)))
+                slotted = slots[:num_objs]
+                slotted += [None] * (num_objs - len(slotted))
 
             patches, bboxes, names = [], [], []
-            for cls, bbox in slots[:num_objs]:
+            for i, slot in enumerate(slotted):
+                if slot is None:
+                    patches.append(np.zeros((_patch_size, _patch_size, 3), dtype=np.uint8))
+                    bboxes.append((0, 0, 0, 0))
+                    names.append(f"pad_{i}")
+                    continue
+                cls, bbox = slot
                 patches.append(_crop_object(pil_img, bbox, patch_size=_patch_size))
                 bboxes.append(_scale_bbox_to_canvas(bbox, W, H))
                 names.append(cls)
-
-            for i in range(len(slots), num_objs):
-                patches.append(np.zeros((_patch_size, _patch_size, 3), dtype=np.uint8))
-                bboxes.append((0, 0, 0, 0))
-                names.append(f"pad_{i}")
 
             images_list.append(np.array(patches, dtype=np.uint8))
             bboxes_list.append(np.array(bboxes,  dtype=np.uint16))
@@ -236,6 +364,8 @@ def build_dataset(annotations_dir=None, frames_dir=None,
         "patch_size":         _patch_size,
     })
     last_load_metadata["dropped"] = dict(_dropped)
+    last_load_metadata["slots"]   = dict(_slots)
+    print("[ag-loader] %s" % _describe_slots(_slots))
     print(f"[ag-loader] category_filter={category_filter} strict={strict} "
           f"loaded {len(loaded_video_ids)}/{len(video_ids)} videos, "
           f"{len(images_list)} states")
