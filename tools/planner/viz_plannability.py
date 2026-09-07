@@ -28,8 +28,8 @@ def as_float(value):
         return None
 
 
-def is_true(value):
-    return str(value).strip().lower() in ("true", "1", "yes")
+# One function for this column across the project, since 2026-09-07.
+from tools.planner.common.metrics import truthy as is_true   # noqa: E402,F401
 
 
 def write_caption(png_path, title, what, how):

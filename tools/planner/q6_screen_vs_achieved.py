@@ -80,9 +80,9 @@ WINDOW = 16
 MIN_MOVING_GT_STEPS = 6
 
 
-def truthy(value):
-    """`reachability` and `beats_baseline` arrive as both `True` and `false`."""
-    return (value or "").strip().lower() == "true"
+# `truthy` moved to common/metrics.py on 2026-09-07. Five readers parsed the
+# same column five ways; one function now.
+from tools.planner.common.metrics import truthy      # noqa: E402,F401
 
 
 def number(value):

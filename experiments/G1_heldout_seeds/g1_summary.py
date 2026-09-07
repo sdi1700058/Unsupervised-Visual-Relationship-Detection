@@ -34,6 +34,14 @@ And one rule of its own:
 Python 3.6 clean, standard library only.
 """
 
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+
+from tools.planner.common.metrics import truthy  # noqa: E402
+
 import csv
 import os
 import statistics as st
@@ -110,7 +118,7 @@ def summarise_rows(rows):
                 if live else None,
         "iou": st.median([float(r["bbox_iou"]) for r in live if r["bbox_iou"]])
                if live else None,
-        "beats": sum(1 for r in live if r.get("beats_baseline") == "True"),
+        "beats": sum(1 for r in live if truthy(r.get("beats_baseline"))),
     }
 
 

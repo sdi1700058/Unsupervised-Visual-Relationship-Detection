@@ -683,3 +683,24 @@ def summarize(found, plan_length, wall_s, window=None, scores=None, extra=None):
     if extra:
         out.update(extra)
     return out
+
+
+def truthy(value):
+    """Read a CSV boolean written by any of the writers in this project.
+
+    `summary.csv` carries `reachability` and `beats_baseline` as Python's
+    `str(bool)` -- `True` / `False` -- while the skip row written by
+    `eval_plannability.sh` uses lowercase `false`. Four readers compared
+    against the literal `"True"` and one used a helper, so the same column was
+    parsed five ways across the project.
+
+    No wrong number came of it, because `false` and `False` are both not
+    `"True"`. It would have produced one the first time a writer emitted a
+    lowercase `true`, which is why it is one function now.
+
+    `1` and `yes` are accepted because `viz_plannability.is_true` accepted
+    them and folding the broader set in narrows nothing. No writer in this
+    project emits either.
+    """
+    return (value if value is not None else "").strip().lower() in (
+        "true", "1", "yes")

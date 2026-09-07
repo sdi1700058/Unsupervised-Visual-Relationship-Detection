@@ -17,6 +17,15 @@ Sherlock's Python 3.6 as readily as here.
 
 import argparse
 import csv
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__)))))
+
+from tools.planner.common.metrics import truthy  # noqa: E402
+
+import csv  # noqa: E402,F811
 import glob
 import html
 import math
@@ -96,7 +105,7 @@ def summarise(rows, min_motion=6):
     ratio = _median([_num(r, "mse_ratio") for r in scored
                      if _num(r, "mse_ratio") is not None])
     beats = sum(1 for r in scored
-                if (r.get("beats_baseline") or "").strip() == "True")
+                if truthy(r.get("beats_baseline")))
 
     out = {
         "windows": len(rows),

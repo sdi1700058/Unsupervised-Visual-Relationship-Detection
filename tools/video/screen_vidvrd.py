@@ -245,7 +245,7 @@ def window_crossover(per_object, width, height, window=8):
     """
     import numpy as np
 
-    from tools.planner.oracle import (
+    from tools.planner.box_geometry import (
         DEFAULT_BINS_X, DEFAULT_BINS_Y, round_trip_error)
 
     frames = sorted({f for track in per_object.values() for f in track})
