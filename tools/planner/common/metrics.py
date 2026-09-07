@@ -499,8 +499,26 @@ def moving_gt_steps(gt_boxes, tol=1e-3):
 def mse_ratio(planner_mse, baseline_mse, floor=1e-6):
     """`planner_mse / baseline_mse`, or None when the ratio means nothing.
 
-    The headline number of this project, so its degenerate cases matter more
-    than its arithmetic. It is None when either side is missing, and None when
+    **Context, not the result.** The result of the interpolation task is
+    `bbox_mse`: how far the planner put each box from where the ground truth
+    put it, in canvas pixels. That is the question the task asks and it is what
+    gets reported.
+
+    This ratio answers a second and narrower question -- *was the task worth
+    winning* -- because over a short window objects often move nearly linearly,
+    so a straight line between the two given endpoints already lands close to
+    the truth. A small `bbox_mse` on such a window shows the window was easy,
+    not that the planner did anything. Read the two together: the pixel error
+    is the finding, the ratio says how much credit it deserves.
+
+    This docstring called the ratio "the headline number of this project" until
+    2026-09-07, and that inverted the two. The inversion had a cost: because a
+    clip is only "winnable" where `mse_ratio < 1` is arithmetically reachable,
+    the ratio is what drove the crossover screen that cut 800 clips to 88, and
+    then to 26 at window 8 once the floor was corrected. Pixel error needs no
+    such exclusion -- it is defined on every clip.
+
+    Its degenerate cases still matter more than its arithmetic. It is None when either side is missing, and None when
     the baseline is at or below `floor`: linear interpolation is exact on a
     motionless window, so dividing by its error reports how small the
     denominator was and nothing else. A baseline of 4.1e-10 previously
