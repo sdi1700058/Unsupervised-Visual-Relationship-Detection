@@ -480,9 +480,16 @@ class TestBfs(unittest.TestCase):
 
         scale, width, height = load_canvas_scaler()
         self.assertEqual((height, width), (200, 300))
-        # A box filling the left half of a 1280x576 frame maps to the left
-        # half of the canvas.
-        self.assertEqual(scale([0, 0, 640, 288], 1280, 576), (0, 0, 150, 100))
+        # A box filling the top-left quarter of a 1280x576 frame. It reached
+        # the canvas corner, `(0, 0, 150, 100)`, while the map scaled the two
+        # axes independently; since 2026-09-07 it is letterboxed, and 1280x576
+        # is 2.22:1 against the canvas's 1.5:1, so the frame is fitted to the
+        # full width and centred inside 32.5-pixel bars. The box still covers
+        # the left half of the canvas and it no longer reaches the top edge,
+        # because the top of the frame is not the top of the canvas.
+        # `tools/planner/tests/test_canvas_aspect.py` holds the property this
+        # number is one instance of.
+        self.assertEqual(scale([0, 0, 640, 288], 1280, 576), (0, 33, 150, 100))
 
     def test_report_verdict_reads_a_win(self):
         """The report must state the bottom line before any table.
