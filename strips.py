@@ -436,7 +436,7 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
 
     Uses the same encoding as blocksworld (blocks_activation, blocks_renderer):
       feature = [ patch_pixels (32^2*3, sigmoid) | x1_onehot | y1_onehot | x2_onehot | y2_onehot ]
-    Bboxes are mapped to a 200x300 canvas (same as blocks-5-3) with a 5px grid.
+    Bboxes are letterboxed onto a 200x300 canvas, preserving the source aspect ratio (puzzle_labeled_objects._scale_bbox_to_canvas). The blocks-5-3 attribution this line used to carry was never a reason with a 5px grid.
 
     Parameters
     ----------

@@ -13,8 +13,19 @@ carries no dependence on `U`, `A` or `P`. Different architectures converging to
 the same number is then not a coincidence, and not a plateau either. It is the
 analytic solution of a model that has stopped using its latent.
 
-Measured on CPU over 12 VidVRD videos at 30fps, `mo=5 patch=32` gives a
-scalar-mean floor of 0.5235 against `H(0.2182) = 0.5246`.
+**That specific number needs re-deriving, and this module is why.** The
+0.5235 figure was computed over 12 VidVRD videos at 30fps by summing the
+stored patches directly. The stored patches are uint8, and `strips.py` trains
+on `preprocess(images / 256)` where `preprocess` is
+`equalize_hist -> normalise -> enhance`. Measured on the first real bake this
+tool ever read, `diag-5005-30fps-mo3-p32.npz`: **p = 0.2113 raw against 0.2981
+preprocessed, so the floor is 0.5156 against 0.6092.** An 18 percent gap in the
+one quantity this file exists to produce.
+
+So the *mechanism* stands -- a decoder emitting one constant pays `H(mean)`,
+and that is why sixteen architectures converged on one number -- while the
+*value* 0.5245 = H(0.2182) was taken on the wrong vector and has not yet been
+re-derived against a training run. It is not a finding until it is.
 
 **How to use it.** Point it at a baked dataset and, if you have one, a run
 directory::
@@ -55,6 +66,49 @@ BBOX_ONES = 4
 # answer to the precision the training curve is recorded at.
 TOLERANCE = 0.01
 
+# `strips.py` divides the stored uint8 patches by 256 -- not 255 -- and then
+# runs `latplan.puzzles.util.preprocess`. Both are copied rather than
+# approximated, because the floor is a property of the vector the model is
+# trained against and of no other vector.
+PATCH_SCALE = 256.0
+
+
+class NoPreprocess(RuntimeError):
+    """`preprocess` needs scikit-image and it is not installed here."""
+
+
+def has_preprocess():
+    """Whether the real preprocessing chain can be run in this interpreter."""
+    try:
+        import skimage.exposure                      # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def _preprocess(images):
+    """`latplan.puzzles.util.preprocess`, without importing latplan.
+
+    equalize_hist, then normalise to [0, 1], then enhance. Reimplemented here
+    only so this module stays free of keras; the arithmetic is copied line for
+    line and `TestItMeasuresTheVectorTheModelSees` pins the consequence.
+    """
+    try:
+        from skimage import exposure
+    except ImportError:
+        raise NoPreprocess(
+            "computing the floor needs scikit-image, because the model is "
+            "trained on `preprocess(images / 256)` and not on the raw patches. "
+            "Measured on one real bake, the difference is 0.5156 against "
+            "0.6092 -- 18 percent of the only number this tool produces. "
+            "Run it under the conda env that has skimage, or pass "
+            "--no-preprocess and read the result as a LOWER BOUND only.")
+    image = np.asarray(images, dtype=np.float64)
+    image = exposure.equalize_hist(image)
+    lo, hi = image.min(), image.max()
+    image = image - lo if hi == lo else (image - lo) / (hi - lo)
+    return np.clip((image - 0.5) * 3, -0.5, 0.5) + 0.5
+
 
 def entropy(p):
     """Binary entropy in **nats**, because Keras BCE uses the natural log.
@@ -86,7 +140,7 @@ def box_share(patch_size):
     return float(BBOX_DIMS) / (patch_dim + BBOX_DIMS)
 
 
-def feature_mean(images, bboxes):
+def feature_mean(images, bboxes, preprocess=True):
     """`p`, the mean of the feature vector the model actually reconstructs.
 
     Computed from the two arrays a bake writes rather than by building the
@@ -107,6 +161,14 @@ def feature_mean(images, bboxes):
             "(frames, objects, 4); got %r and %r"
             % (images.shape, bboxes.shape))
 
+    # A bake stores patches as uint8. Summing those raw reported a mean of
+    # 53.88 the first time this met a real file -- impossible for a quantity
+    # that must lie in [0, 1]. Scale exactly as `strips.py` does.
+    if not np.issubdtype(images.dtype, np.floating) or images.max() > 1.0:
+        images = images.astype(np.float64) / PATCH_SCALE
+    if preprocess:
+        images = _preprocess(images)
+
     n_frames, n_objs = bboxes.shape[0], bboxes.shape[1]
     patch_dim = int(np.prod(images.shape[2:]))
 
@@ -116,9 +178,9 @@ def feature_mean(images, bboxes):
     return total_ones / total_dims if total_dims else 0.0
 
 
-def floor_of(images, bboxes):
+def floor_of(images, bboxes, preprocess=True):
     """`(p, H(p))` for one baked dataset."""
-    p = feature_mean(images, bboxes)
+    p = feature_mean(images, bboxes, preprocess=preprocess)
     return p, entropy(p)
 
 
@@ -208,6 +270,10 @@ def main(argv=None):
                     help="a run directory holding training_history.csv, to "
                          "compare the achieved loss against the floor")
     ap.add_argument("--tolerance", type=float, default=TOLERANCE)
+    ap.add_argument("--no-preprocess", action="store_true",
+                    help="skip equalize/normalise/enhance. The result is then "
+                         "a LOWER BOUND on the floor, not the floor: measured "
+                         "0.5156 against 0.6092 on one real bake")
     a = ap.parse_args(argv)
 
     achieved = None
@@ -218,6 +284,8 @@ def main(argv=None):
                 "no val_BCE in %s/training_history.csv; reporting the floor "
                 "only\n" % a.run)
 
+    if a.no_preprocess:
+        print("NOTE: --no-preprocess, so every floor below is a LOWER BOUND.\n")
     print("%-44s %8s %8s %s" % ("dataset", "mean", "floor", "reading"))
     print("%-44s %8s %8s %s" % ("-" * 44, "-" * 8, "-" * 8, "-" * 7))
     worst = 0
@@ -228,7 +296,12 @@ def main(argv=None):
             print("%-44s %8s %8s %s" % (os.path.basename(path), "-", "-", exc))
             worst = 1
             continue
-        p, floor = floor_of(images, bboxes)
+        try:
+            p, floor = floor_of(images, bboxes,
+                                preprocess=not a.no_preprocess)
+        except NoPreprocess as exc:
+            sys.stderr.write("%s\n" % exc)
+            return 2
         v = verdict(achieved, floor, a.tolerance)
         print("%-44s %8.4f %8.4f %s"
               % (os.path.basename(path), p, floor, v["reading"]))

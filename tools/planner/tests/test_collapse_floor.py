@@ -61,6 +61,12 @@ class TestFeatureMean(unittest.TestCase):
     The layout is `[patch**2 * 3 | x1(60) | y1(40) | x2(60) | y2(40)]`. A real
     object contributes exactly four ones to the 200-dim box block; a padded
     slot contributes an all-zero patch and an all-zero box.
+
+    These pin the **layout arithmetic**, which is what the concatenation does
+    and is independent of how the patches were scaled. So they pass
+    `preprocess=False`; `TestItMeasuresTheVectorTheModelSees` covers the other
+    half, which is that the production floor must be taken after
+    `preprocess(images / 256)`.
     """
 
     def _clip(self, n_frames, n_objs, patch, fill, real):
@@ -72,28 +78,29 @@ class TestFeatureMean(unittest.TestCase):
 
     def test_an_all_zero_clip_has_mean_zero(self):
         images, boxes = self._clip(2, 3, 4, 0.0, 0)
-        self.assertEqual(cf.feature_mean(images, boxes), 0.0)
+        self.assertEqual(cf.feature_mean(images, boxes, preprocess=False), 0.0)
 
     def test_a_real_object_contributes_four_box_bits(self):
         """One slot, no patch signal: 4 ones out of patch_dim + 200."""
         images, boxes = self._clip(1, 1, 4, 0.0, 1)
         patch_dim = 4 * 4 * 3
-        self.assertAlmostEqual(cf.feature_mean(images, boxes),
-                               4.0 / (patch_dim + 200), places=10)
+        self.assertAlmostEqual(
+            cf.feature_mean(images, boxes, preprocess=False),
+            4.0 / (patch_dim + 200), places=10)
 
     def test_padding_dilutes_the_mean(self):
         """The reason more object slots means a lower floor."""
-        tight = cf.feature_mean(*self._clip(1, 1, 4, 0.5, 1))
-        padded = cf.feature_mean(*self._clip(1, 5, 4, 0.5, 1))
+        tight = cf.feature_mean(*self._clip(1, 1, 4, 0.5, 1), preprocess=False)
+        padded = cf.feature_mean(*self._clip(1, 5, 4, 0.5, 1), preprocess=False)
         self.assertLess(padded, tight)
 
     def test_the_patch_dominates_at_a_large_patch(self):
         """Patch 32 gives the box block 6.1 percent of the vector."""
         images, boxes = self._clip(1, 1, 32, 1.0, 1)
         patch_dim = 32 * 32 * 3
-        self.assertAlmostEqual(cf.feature_mean(images, boxes),
-                               (patch_dim + 4.0) / (patch_dim + 200),
-                               places=10)
+        self.assertAlmostEqual(
+            cf.feature_mean(images, boxes, preprocess=False),
+            (patch_dim + 4.0) / (patch_dim + 200), places=10)
 
     def test_the_box_block_dominates_at_a_small_patch(self):
         share = cf.box_share(8)
@@ -174,3 +181,58 @@ class TestReadingAHistory(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestItMeasuresTheVectorTheModelSees(unittest.TestCase):
+    """Found 2026-09-07, the first time this ran on a real bake.
+
+    Two faults, one inside the other, and the unit tests missed both because
+    every fixture here was already a float in [0, 1].
+
+    1. A bake stores `images` as **uint8, 0 to 255**. `feature_mean` summed
+       those raw and reported a mean of **53.88** -- impossible for a quantity
+       that must lie in [0, 1], and impossible for `entropy` to accept.
+
+    2. Dividing is still not enough. `strips.py` does `images / 256` and then
+       `latplan.puzzles.util.preprocess`, which is
+       `equalize_hist -> normalize -> enhance`. That is what the model is
+       trained against, so that is where the floor lives. Measured on
+       `diag-5005-30fps-mo3-p32.npz`: p = 0.2113 raw against 0.2981
+       preprocessed, so the floor moves 0.5156 -> 0.6092. An 18 percent error
+       in the one number this module exists to produce.
+    """
+
+    def test_integer_patches_are_scaled_before_they_are_averaged(self):
+        """uint8 in, a mean in [0, 1] out."""
+        images = np.full((2, 1, 4, 4, 3), 128, dtype=np.uint8)
+        boxes = np.tile(np.array([1.0, 2.0, 3.0, 4.0]), (2, 1, 1))
+        p = cf.feature_mean(images, boxes, preprocess=False)
+        self.assertGreater(p, 0.0)
+        self.assertLess(p, 1.0)
+
+    def test_a_float_bake_is_not_scaled_twice(self):
+        """Already in [0, 1] means already scaled."""
+        images = np.full((2, 1, 4, 4, 3), 0.5, dtype=np.float32)
+        boxes = np.tile(np.array([1.0, 2.0, 3.0, 4.0]), (2, 1, 1))
+        patch_dim = 4 * 4 * 3
+        self.assertAlmostEqual(
+            cf.feature_mean(images, boxes, preprocess=False),
+            (0.5 * patch_dim + 4.0) / (patch_dim + 200), places=6)
+
+    def test_the_scale_is_256_because_that_is_what_strips_uses(self):
+        """`strips.py` divides by 256, not 255. Copy it rather than round it."""
+        images = np.full((1, 1, 2, 2, 3), 256 // 2, dtype=np.uint8)
+        boxes = np.zeros((1, 1, 4))
+        patch_dim = 2 * 2 * 3
+        self.assertAlmostEqual(
+            cf.feature_mean(images, boxes, preprocess=False),
+            (128.0 / 256) * patch_dim / (patch_dim + 200), places=6)
+
+    def test_asking_for_preprocessing_without_skimage_refuses(self):
+        """No answer beats an answer that is 18 percent wrong."""
+        if cf.has_preprocess():
+            self.skipTest("skimage is installed here, so this path is unused")
+        images = np.full((2, 1, 4, 4, 3), 128, dtype=np.uint8)
+        boxes = np.tile(np.array([1.0, 2.0, 3.0, 4.0]), (2, 1, 1))
+        self.assertRaises(cf.NoPreprocess, cf.feature_mean,
+                          images, boxes, True)
