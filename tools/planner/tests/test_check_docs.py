@@ -8,7 +8,9 @@ first run and must never flag again.
 """
 
 import os
+import shutil
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "..", "..",
@@ -182,3 +184,40 @@ class TestScope(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestItCannotPassOnNothing(unittest.TestCase):
+    """Reading no documents is not the same as finding nothing wrong.
+
+    Found 2026-09-07 while checking whether the migration to Sherlock was
+    safe. `notes/` is gitignored, so a fresh clone has none of it, and
+    `check_docs` exited **0** with zero documents while printing "0 documents
+    checked, all 4 checks pass."
+
+    `check_superseded`, `check_glossary`, `check_py36`, `score_datasets`,
+    `workplan` and `render_index` were each given this guard during the
+    review. This one was missed, and it is the check whose green would have
+    been read first on the new machine.
+    """
+
+    def setUp(self):
+        self.dir = tempfile.mkdtemp()
+        self.cwd = os.getcwd()
+
+    def tearDown(self):
+        os.chdir(self.cwd)
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+    def test_no_documents_at_all_fails(self):
+        os.chdir(self.dir)
+        self.assertEqual(check_docs.main([]), 1)
+
+    def test_the_real_tree_has_documents_to_check(self):
+        """The other direction, so the guard is not simply always red.
+
+        Deliberately not `main([])`: the stale-count check shells out to run
+        the whole suite, so calling it from inside the suite recurses. Asking
+        whether it would have anything to read is the same question here.
+        """
+        os.chdir(self.cwd)
+        self.assertGreater(len(check_docs.live_docs()), 10)

@@ -308,6 +308,18 @@ def main(argv=None):
         if len(hits) > 20:
             print("  ... and %d more" % (len(hits) - 20))
 
+    if not docs:
+        # Reading nothing is not finding nothing wrong. `notes/` is gitignored,
+        # so a fresh clone -- on the cluster, say -- has none of it, and this
+        # printed "0 documents checked, all 4 checks pass". Every sibling check
+        # was given this guard during the 2026-09 review; this one was missed,
+        # and it is the green a reader would have believed first on the new
+        # machine.
+        print("no documents found, so nothing was checked.\n"
+              "  `notes/` is gitignored: clone or copy it alongside before\n"
+              "  reading this check as a pass.")
+        return 1
+
     if not failed:
         print("%d documents checked, all %d checks pass."
               % (len(docs), len(CHECKS)))
