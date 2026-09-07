@@ -37,6 +37,20 @@ import sys
 # value -> why it was withdrawn. The reason is printed with any hit, so a
 # reader learns why rather than only that.
 SUPERSEDED = {
+    # Withdrawn 2026-09-07 (Q11). The window survey divided a per-window error
+    # by a floor computed over the whole clip and all objects -- the mismatch
+    # `oracle.round_trip_error` warns against in its own docstring. Rerun over
+    # all 800 clips with the floor taken over the same frames and the same
+    # present objects. Every figure moved against us; only p90 (24) survived.
+    "11.3": "mean crossover window under the clip-wide floor; the corrected "
+            "per-window figure is 14.7 (SPEC V17, 2026-09-07)",
+    "78 clips": "clips never crossing within window 32 under the clip-wide "
+                "floor; the corrected figure is 129 (SPEC V17, 2026-09-07)",
+    "covers 51%": "share of clips window 8 covers under the clip-wide floor; "
+                  "the corrected figure is 21% (SPEC V17, 2026-09-07)",
+    "covers 76%": "share of clips window 16 covers under the clip-wide floor; "
+                  "the corrected figure is 58% (SPEC V17, 2026-09-07)",
+
     # Replaced on 2026-09-05 when the author made the per-window quantisation
     # floor canonical. The pair reproduces exactly under the per-clip recipe it
     # came from, so it is a correct number under a definition the project no

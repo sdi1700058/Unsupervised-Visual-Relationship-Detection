@@ -52,13 +52,22 @@ def survey_clip(path, num_objs, bins_x, bins_y, windows=WINDOWS, fill=False):
 
     Pass `fill=True` only to reproduce a pre-correction number, never to
     produce a new one.
+
+    **Two floors, two names.** `clip_floor` is the quantisation error over the
+    whole clip and every annotated object; the ratios in `per_window` divide by
+    each window's own floor, computed on the frames and objects that window
+    actually scores. They are different numbers and neither substitutes for the
+    other -- `oracle.round_trip_error` says so at length.
     """
     boxes, meta = boxes_from_vidvrd(path, num_objs=num_objs, fill=fill)
     n = len(boxes)
     if n < min(windows) + 1:
         return None
 
-    floor = round_trip_error(boxes, bins_x, bins_y)
+    # A whole-clip property, reported as one: it is the floor over every
+    # annotated object-frame. It is NOT the denominator of any ratio below --
+    # see the comment on `win_floor` in the window loop.
+    clip_floor = round_trip_error(boxes, bins_x, bins_y)
     z = boxes_to_latents(boxes, bins_x, bins_y)
     distinct = len(np.unique(z, axis=0))
 
@@ -96,11 +105,24 @@ def survey_clip(path, num_objs, bins_x, bins_y, windows=WINDOWS, fill=False):
 
             a = boxes[start][present]
             b = boxes[start + w][present]
+            scored = boxes[mid][:, present, :]
             base = linear_interp_bboxes(a, b, len(mid))
-            e = base - boxes[mid][:, present, :]
+            e = base - scored
             mse = float((e * e).sum(axis=-1).mean())
-            if mse > 0:
-                ratios.append(floor / mse)
+
+            # The floor is taken on **exactly** the boxes the baseline was
+            # taken on: this window's intermediate frames, and only the
+            # objects present through the whole window.
+            #
+            # Until 2026-09-07 the clip-wide `clip_floor` above went here
+            # instead, so numerator and denominator described different frames
+            # AND different objects -- the mistake
+            # `oracle.round_trip_error`'s docstring names by date. Measured
+            # over 40 VidVRD clips at window 8 before the change, the two
+            # recipes differ by a median 7.0% and up to 36.5% on the ratio.
+            win_floor = round_trip_error(scored, bins_x, bins_y)
+            if mse > 0 and win_floor is not None:
+                ratios.append(win_floor / mse)
         if not ratios:
             continue
         per_window[w] = float(np.median(ratios))
@@ -114,7 +136,7 @@ def survey_clip(path, num_objs, bins_x, bins_y, windows=WINDOWS, fill=False):
         "duplicate_frac": 1.0 - distinct / float(n),
         "static_frac": static_frac,
         "empty_slots": empty_slots,
-        "floor": floor,
+        "clip_floor": clip_floor,
         "crossover": crossover,
         "per_window": per_window,
     }
@@ -164,17 +186,17 @@ def main(argv=None):
           f"bins {bins_x}x{bins_y}, {args.max_objects} object slots\n")
 
     frames = np.array([r["frames"] for r in rows])
-    floors = np.array([r["floor"] for r in rows])
+    floors = np.array([r["clip_floor"] for r in rows])
     dups = np.array([r["duplicate_frac"] for r in rows])
     statics = np.array([r["static_frac"] for r in rows])
     empties = np.array([r["empty_slots"] for r in rows], dtype=float)
-    print(f"{'':22}{'median':>10}{'mean':>10}{'p10':>10}{'p90':>10}")
+    print(f"{'':26}{'median':>10}{'mean':>10}{'p10':>10}{'p90':>10}")
     for name, a in (("annotated frames", frames),
-                    ("quantisation floor", floors),
+                    ("quantisation floor (clip)", floors),
                     ("duplicate latents", dups),
                     ("static frame pairs", statics),
                     ("empty object slots", empties)):
-        print(f"{name:22}{np.median(a):>10.2f}{a.mean():>10.2f}"
+        print(f"{name:26}{np.median(a):>10.2f}{a.mean():>10.2f}"
               f"{np.percentile(a, 10):>10.2f}{np.percentile(a, 90):>10.2f}")
 
     solved = [r["crossover"] for r in rows if r["crossover"] is not None]
@@ -213,11 +235,11 @@ def main(argv=None):
         os.makedirs(os.path.dirname(args.csv) or ".", exist_ok=True)
         with open(args.csv, "w") as fh:
             fh.write("video_id,frames,distinct,duplicate_frac,static_frac,"
-                     "empty_slots,floor,crossover\n")
+                     "empty_slots,clip_floor,crossover\n")
             for r in rows:
                 fh.write(f"{r['video_id']},{r['frames']},{r['distinct']},"
                          f"{r['duplicate_frac']:.4f},{r['static_frac']:.4f},"
-                         f"{r['empty_slots']},{r['floor']:.4f},"
+                         f"{r['empty_slots']},{r['clip_floor']:.4f},"
                          f"{r['crossover'] if r['crossover'] else ''}\n")
         print(f"\nper-clip rows written to {args.csv}")
     return 0
