@@ -59,3 +59,14 @@ eval/
 .zshrc
 .idea/
 .venv-local/
+# Also without the slash: on the cluster this is a SYMLINK to `venv`, created so
+# the hardcoded `.venv-local/bin/python` in sh/gate.sh resolves there too, and a
+# directory-only pattern does not match a symlink.
+.venv-local
+
+# Per-machine Claude Code settings. `settings.local.json` holds absolute paths
+# -- the workstation's `/home/panoslat/...` and the cluster's
+# `/scratch/users/konkotsa/panos/...` -- so it cannot be shared between the
+# two. Copied across and rewritten during the 2026-09-07 migration rather than
+# committed. Untracked on both machines; this only makes `git status` agree.
+.claude/
