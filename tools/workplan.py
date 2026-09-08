@@ -699,6 +699,15 @@ def check(plan):
 
     for o in plan.get("observations", []):
         src = o.get("source")
+        # `data/` and `out/` are machine-local and gitignored: the datasets live
+        # on whichever machine downloaded them, and the training output on
+        # whichever machine trained. The project runs on two machines since
+        # 2026-09-07, so an observation citing a dataset that is present on the
+        # workstation and absent on the cluster is a fact about the machine, not
+        # a defect in the plan. `check_docs.ALLOWED_PREFIXES` makes the same
+        # exemption for the same reason.
+        if src and src.startswith(("data/", "out/", "logs/")):
+            continue
         if src and not os.path.exists(src):
             problems.append("observation %s cites %s, which is not on disk"
                             % (o.get("id", "?"), src))

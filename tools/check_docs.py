@@ -116,6 +116,30 @@ DONE_EXEMPT = re.compile(r"never write|forbidden|do not (write|say)|"
                          re.I)
 
 
+
+def _links_into_machine_local(ref):
+    """A symlink pointing into a gitignored, machine-local tree.
+
+    `tools/planner/fast-downward.py` is a symlink into `data/deps/`, created by
+    `install_fd.sh`. Fast Downward is installed on whichever machine builds it,
+    so on the other machine the link dangles and `os.path.exists` reports False
+    even though the link itself is correct.
+
+    A dangling symlink into `data/` is therefore the same situation
+    `ALLOWED_PREFIXES` already exempts -- the target is machine-local -- and it
+    only looks different because the *link* lives under `tools/`. Found
+    2026-09-07, the first time the gate ran on the cluster.
+
+    A dangling symlink to anywhere else is still reported.
+    """
+    if not os.path.islink(ref):
+        return False
+    target = os.readlink(ref)
+    if not os.path.isabs(target):
+        target = os.path.normpath(
+            os.path.join(os.path.dirname(ref), target))
+    return target.startswith(ALLOWED_PREFIXES)
+
 def dead_paths(docs=None):
     """References to repository paths that do not exist."""
     docs = live_docs() if docs is None else docs
@@ -125,6 +149,8 @@ def dead_paths(docs=None):
             for i, line in enumerate(handle, 1):
                 for ref in PATH_PAT.findall(line):
                     if os.path.exists(ref):
+                        continue
+                    if _links_into_machine_local(ref):
                         continue
                     if PLACEHOLDER.search(ref):
                         continue
