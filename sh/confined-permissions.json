@@ -30,53 +30,14 @@
     "prompt. Nor will `git -C dir clone`, which does not start with the matched",
     "prefix. These rules raise the cost of a mistake; they are not a boundary.",
     "",
-    "enabledPlugins is repeated here, and it has to be. Deny rules union across every",
-    "settings layer, so they survive `--settings` -- verified 2026-09-10 by running",
-    "`curl --version` in a confined session and being refused. enabledPlugins does NOT",
-    "union: this file wins outright, and while it lacked the key NO plugin loaded, so",
-    "every plugin skill silently disappeared the moment confinement was switched on.",
-    "Nothing was uninstalled and nothing said anything -- the skills were simply not",
-    "there. The seven below are the merge of three files: caveman from",
-    "$CLAUDE_CONFIG_DIR/settings.json, ck from .claude/settings.json, and the five",
-    "official ones from .claude/settings.local.json. Change a plugin anywhere and it",
-    "must be changed here too, or a confined session will not have it.",
-    "",
-    "extraKnownMarketplaces is repeated for the same reason: without it the three",
-    "marketplaces the plugins come from cannot be resolved."
+    "Plugin enablement is NOT repeated here and does not need to be. It reads",
+    "normally through --settings from the usual settings files; verified",
+    "2026-09-10 with `claude plugin list` showing Scope: user and Scope: project.",
+    "An earlier edit added a duplicate enabledPlugins block on the theory that",
+    "--settings suppressed it. That theory was wrong -- the real fault was stale",
+    "migration paths in .claude/plugins/installed_plugins.json. See",
+    "notes/docs/SANDBOX.md item 0."
   ],
-  "enabledPlugins": {
-    "superpowers@claude-plugins-official": true,
-    "caveman@caveman": true,
-    "ck@cavekit-marketplace": true,
-    "code-simplifier@claude-plugins-official": true,
-    "claude-md-management@claude-plugins-official": true,
-    "security-guidance@claude-plugins-official": true,
-    "math-olympiad@claude-plugins-official": true,
-    "semgrep@claude-plugins-official": false,
-    "sourcegraph@claude-plugins-official": false,
-    "aikido@claude-plugins-official": false,
-    "fiftyone@claude-plugins-official": false
-  },
-  "extraKnownMarketplaces": {
-    "caveman": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/JuliusBrussee/caveman.git"
-      }
-    },
-    "cavekit-marketplace": {
-      "source": {
-        "source": "github",
-        "repo": "juliusbrussee/cavekit"
-      }
-    },
-    "claude-plugins-official": {
-      "source": {
-        "source": "git",
-        "url": "https://github.com/anthropics/claude-plugins-official.git"
-      }
-    }
-  },
   "permissions": {
     "allow": [
       "Bash",
