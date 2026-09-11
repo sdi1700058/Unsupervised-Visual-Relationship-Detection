@@ -38,6 +38,10 @@
     "migration paths in .claude/plugins/installed_plugins.json. See",
     "notes/docs/SANDBOX.md item 0."
   ],
+  "env": {
+    "CLAUDE_CODE_MAX_SUBAGENT_SPAWN_DEPTH": "2",
+    "CLAUDE_CODE_MAX_CONCURRENT_SUBAGENTS": "6"
+  },
   "permissions": {
     "allow": [
       "Bash",
