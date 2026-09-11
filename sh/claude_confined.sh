@@ -44,13 +44,33 @@ mkdir -p "$TMP"
 
 # Files that grant permissions or run code are pinned read-only inside the
 # writable areas, so nothing running in the sandbox can widen its own policy.
-# Only paths that exist can be bound, hence the test.
+# The seven below are the pen: the author writes them from a terminal, and a
+# session cannot. notes/docs/AGENTIC_DESIGN.md section 8.1 gives the reason
+# for each.
+ROSTER=$REPO/workbench/agents/roster.json
 pins=()
 for p in "$STATE/settings.json" \
          "$STATE/hooks" "$STATE/skills" "$STATE/agents" "$STATE/commands" \
-         "$REPO/.claude/settings.json"; do
+         "$REPO/.claude/settings.json" \
+         "$REPO/sh/confined-permissions.json" \
+         "$ROSTER" \
+         "$REPO/workbench/notes/queue/current.json" \
+         "$REPO/workbench/notes/queue/rejected.json" \
+         "$REPO/workbench/notes/queue/canaries.json" \
+         "$REPO/workbench/notes/accepted.json" \
+         "$REPO/workbench/notes/supervisor_docs.txt"; do
   [ -e "$p" ] && pins+=(--ro-bind "$p" "$p")
 done
+
+# A missing roster must be loud. `claude --agents ""` exits 0, so an empty
+# string starts a session with no seats, and that looks the same as a session
+# where nobody configured them. Guard on the file, never on the variable.
+AGENTS=()
+if [ -f "$ROSTER" ]; then
+  AGENTS=(--agents "$(cat "$ROSTER")")
+else
+  echo "claude_confined: no roster at $ROSTER, starting with no seats" >&2
+fi
 
 exec bwrap \
   --ro-bind / / \
@@ -65,4 +85,5 @@ exec bwrap \
   --unshare-pid \
   --unshare-ipc \
   --die-with-parent \
-  claude --settings "$REPO/sh/confined-permissions.json" "$@"
+  claude --settings "$REPO/sh/confined-permissions.json" \
+         ${AGENTS[@]+"${AGENTS[@]}"} "$@"
