@@ -27,7 +27,12 @@ data/*
 notebooks/fiftyone_data/
 latplan/puzzles/*.npz
 latplan/puzzles/*.npy
-notes/
+# No trailing slash, deliberately. Since the split on 2026-09-10 this is a
+# SYMLINK to workbench/notes, and git treats a symlink as a file, so the
+# pattern `notes/` stopped matching it. The entry then appeared as untracked
+# rather than ignored, and any `git add -A` would have committed a symlink
+# naming the private repository into the public one.
+/notes
 old_working_strips.py
 venv/
 .keras/
@@ -44,7 +49,9 @@ data/video/videonet/frames_*
 # Model exports are the one exception and they are deliberate: there is no scp
 # to Sherlock, so git is the only transport. Force-add a single export when it
 # must cross machines, then untrack it once it has been consumed.
-eval/
+# No trailing slash. A symlink to workbench/eval since 2026-09-10; see the
+# note on /notes above.
+/eval
 
 # Shell and editor files that live in the working copy but belong to the user.
 .bash_profile
@@ -70,3 +77,6 @@ eval/
 # two. Copied across and rewritten during the 2026-09-07 migration rather than
 # committed. Untracked on both machines; this only makes `git status` agree.
 .claude/
+
+# The private repository. A nested repo, not a submodule.
+/workbench/

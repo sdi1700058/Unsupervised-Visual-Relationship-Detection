@@ -29,9 +29,15 @@ cd "${PROJECT_DIR}"
 # Sherlock image we built the venv against.  CPU-only job so cuda/cudnn warnings
 # can be ignored, but having the correct python module avoids ABI surprises.
 # Fallback to bare venv activate if sherlock_env not present (out-of-tree run).
+# The cluster scripts live in the private repository since 2026-09-10, so look
+# there as well. Without the second branch this silently took the venv-only
+# fallback on Sherlock and lost the module loads.
 if [[ -f "${PROJECT_DIR}/sh/sherlock_env.sh" ]]; then
     # shellcheck disable=SC1091
     source "${PROJECT_DIR}/sh/sherlock_env.sh"
+elif [[ -f "${PROJECT_DIR}/workbench/sh/sherlock_env.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PROJECT_DIR}/workbench/sh/sherlock_env.sh"
 else
     source "${PROJECT_DIR}/venv/bin/activate"
 fi

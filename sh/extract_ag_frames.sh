@@ -32,10 +32,14 @@ PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd
 cd "${PROJECT_DIR}"
 
 # Prefer sherlock_env.sh (loads modules + venv consistently). Fallback to bare
-# venv activate so out-of-tree invocations still work.
+# venv activate so out-of-tree invocations still work. The cluster scripts live
+# in the private repository since 2026-09-10, so look there as well.
 if [[ -f "${PROJECT_DIR}/sh/sherlock_env.sh" ]]; then
     # shellcheck disable=SC1091
     source "${PROJECT_DIR}/sh/sherlock_env.sh"
+elif [[ -f "${PROJECT_DIR}/workbench/sh/sherlock_env.sh" ]]; then
+    # shellcheck disable=SC1091
+    source "${PROJECT_DIR}/workbench/sh/sherlock_env.sh"
 else
     source "${PROJECT_DIR}/venv/bin/activate"
 fi
