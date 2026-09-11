@@ -1,0 +1,103 @@
+{
+  "_comment": [
+    "Permission profile for sh/claude_confined.sh only. Loaded via `claude --settings`,",
+    "so it applies to sandboxed sessions and to nothing else. A normal `claude` launch",
+    "never reads this file and keeps the usual prompting.",
+    "",
+    "Everything here is allowed because the bubblewrap sandbox is the real boundary:",
+    "the repository is the only writable path, so a permitted command cannot reach",
+    "outside it. Deletions still ask, because the sandbox cannot tell a wanted delete",
+    "from an unwanted one inside the repository.",
+    "",
+    "Deny rules always win, and they cannot be overridden from here. The user-level",
+    "settings deny curl, wget, ssh, scp, rsync, git push and sudo, so those stay",
+    "blocked in a confined session too. Lift them in that file if you want them.",
+    "",
+    "Cloning asks, and it has to ask here rather than rely on the domain allowlist.",
+    "sh/fetch.sh enforces that list by parsing the host, but it only governs itself:",
+    "WebFetch(domain:...) rules bind the WebFetch tool, never a Bash command. A git",
+    "clone is a Bash command, the allow list above is a bare `Bash`, and the sandbox",
+    "cannot filter network egress on this cluster -- so without the rule below a",
+    "clone of any repository at all would run unprompted. The same applies to",
+    "`gh repo clone` and `git submodule add`, which reach the network the same way.",
+    "",
+    "git clean asks because `git clean -xdf` here would delete workbench/ and its",
+    ".git. The private repository is gitignored, -x removes ignored files, and it is",
+    "the one tree in this project that would not regenerate. See notes/docs/SPLIT.md.",
+    "",
+    "Pattern matching only catches the common spellings. A delete routed through an",
+    "interpreter (python -c 'os.remove(...)') or a clobbering git checkout will not",
+    "prompt. Nor will `git -C dir clone`, which does not start with the matched",
+    "prefix. These rules raise the cost of a mistake; they are not a boundary.",
+    "",
+    "enabledPlugins is repeated here, and it has to be. Deny rules union across every",
+    "settings layer, so they survive `--settings` -- verified 2026-09-10 by running",
+    "`curl --version` in a confined session and being refused. enabledPlugins does NOT",
+    "union: this file wins outright, and while it lacked the key NO plugin loaded, so",
+    "every plugin skill silently disappeared the moment confinement was switched on.",
+    "Nothing was uninstalled and nothing said anything -- the skills were simply not",
+    "there. The seven below are the merge of three files: caveman from",
+    "$CLAUDE_CONFIG_DIR/settings.json, ck from .claude/settings.json, and the five",
+    "official ones from .claude/settings.local.json. Change a plugin anywhere and it",
+    "must be changed here too, or a confined session will not have it.",
+    "",
+    "extraKnownMarketplaces is repeated for the same reason: without it the three",
+    "marketplaces the plugins come from cannot be resolved."
+  ],
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "caveman@caveman": true,
+    "ck@cavekit-marketplace": true,
+    "code-simplifier@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "math-olympiad@claude-plugins-official": true,
+    "semgrep@claude-plugins-official": false,
+    "sourcegraph@claude-plugins-official": false,
+    "aikido@claude-plugins-official": false,
+    "fiftyone@claude-plugins-official": false
+  },
+  "extraKnownMarketplaces": {
+    "caveman": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/JuliusBrussee/caveman.git"
+      }
+    },
+    "cavekit-marketplace": {
+      "source": {
+        "source": "github",
+        "repo": "juliusbrussee/cavekit"
+      }
+    },
+    "claude-plugins-official": {
+      "source": {
+        "source": "git",
+        "url": "https://github.com/anthropics/claude-plugins-official.git"
+      }
+    }
+  },
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Read",
+      "Write",
+      "Edit",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "ask": [
+      "Bash(git clone:*)",
+      "Bash(git submodule add:*)",
+      "Bash(gh repo clone:*)",
+      "Bash(rm:*)",
+      "Bash(rmdir:*)",
+      "Bash(unlink:*)",
+      "Bash(shred:*)",
+      "Bash(truncate:*)",
+      "Bash(git clean:*)",
+      "Bash(find * -delete*)",
+      "Bash(find * -exec rm*)"
+    ]
+  }
+}
