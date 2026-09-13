@@ -44,15 +44,40 @@ mkdir -p "$TMP"
 
 # Files that grant permissions or run code are pinned read-only inside the
 # writable areas, so nothing running in the sandbox can widen its own policy.
-# The seven below are the pen: the author writes them from a terminal, and a
+# Every path below is the pen: the author writes them from a terminal, and a
 # session cannot. notes/docs/AGENTIC_DESIGN.md section 8.1 gives the reason
 # for each.
+#
+# The list used to say "the seven below" and had grown past that. A count in a
+# comment beside the thing it counts is the staleness this project keeps
+# finding, so the list describes itself instead.
 ROSTER=$REPO/workbench/agents/roster.json
+SEATS=$REPO/workbench/agents
+
+# Build the roster from its sources before pinning it, so a seat change needs
+# no command from the author. Editing agents/foreman.md used to leave the
+# built roster.json stale, the `roster` capability red, and the author holding
+# a command to run before anything else could proceed.
+#
+# The sources are pinned with the artefact, and that is the part that matters.
+# Rebuilding from sources a session could write would hand a session the
+# ability to grant its own seats new tools, one restart later, which is the
+# single escalation the pen exists to stop. Pinning agents/ closes that: the
+# author edits a seat from a terminal, the launcher rebuilds it, and a session
+# can change neither the source nor the result.
+if [ -d "$SEATS" ] && [ -f "$REPO/workbench/tools/roster.py" ]; then
+  if ! python3 "$REPO/workbench/tools/roster.py" --out "$ROSTER" >/dev/null; then
+    echo "claude_confined: the seat sources do not build, keeping the" >&2
+    echo "                 roster that is already on disk" >&2
+  fi
+fi
+
 pins=()
 for p in "$STATE/settings.json" \
          "$STATE/hooks" "$STATE/skills" "$STATE/agents" "$STATE/commands" \
          "$REPO/.claude/settings.json" \
          "$REPO/sh/confined-permissions.json" \
+         "$SEATS" \
          "$ROSTER" \
          "$REPO/workbench/notes/queue/current.json" \
          "$REPO/workbench/notes/queue/rejected.json" \
