@@ -59,6 +59,11 @@ SEATS=$REPO/workbench/agents
 # built roster.json stale, the `roster` capability red, and the author holding
 # a command to run before anything else could proceed.
 #
+# Pinning the directory covers roster.json inside it, so the file is not
+# listed separately: two overlapping ro-binds on the same path are an
+# untested failure mode, and a launcher that refuses to start is worse than
+# the redundancy it was guarding against.
+#
 # The sources are pinned with the artefact, and that is the part that matters.
 # Rebuilding from sources a session could write would hand a session the
 # ability to grant its own seats new tools, one restart later, which is the
@@ -78,7 +83,6 @@ for p in "$STATE/settings.json" \
          "$REPO/.claude/settings.json" \
          "$REPO/sh/confined-permissions.json" \
          "$SEATS" \
-         "$ROSTER" \
          "$REPO/workbench/notes/queue/current.json" \
          "$REPO/workbench/notes/queue/rejected.json" \
          "$REPO/workbench/notes/queue/canaries.json" \
