@@ -57,6 +57,7 @@ for p in "$STATE/settings.json" \
          "$REPO/workbench/notes/queue/current.json" \
          "$REPO/workbench/notes/queue/rejected.json" \
          "$REPO/workbench/notes/queue/canaries.json" \
+         "$REPO/workbench/notes/queue/revoked.json" \
          "$REPO/workbench/notes/accepted.json" \
          "$REPO/workbench/notes/supervisor_docs.txt"; do
   [ -e "$p" ] && pins+=(--ro-bind "$p" "$p")
