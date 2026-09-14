@@ -42,7 +42,7 @@ because reading a VidVRD annotation goes through the canvas scaler in
 
 ```bash
 ( ulimit -v 6000000
-  MPLCONFIGDIR=/tmp/claude-1000/mpl .venv-local/bin/python tools/planner/m8_mask.py \
+  MPLCONFIGDIR=$TMPDIR/mpl .venv-local/bin/python tools/planner/m8_mask.py \
       data/video/vidvrd/annotations/train/ILSVRC2015_train_00005005.json \
       --limit 40 --out-dir eval/M8 )
 ```

@@ -71,16 +71,22 @@ data/video/videonet/frames_*
 # directory-only pattern does not match a symlink.
 .venv-local
 
-# Per-machine Claude Code settings. `settings.local.json` holds absolute paths
-# -- the workstation's `/home/panoslat/...` and the cluster's
-# `/scratch/users/konkotsa/panos/...` -- so it cannot be shared between the
-# two. Copied across and rewritten during the 2026-09-07 migration rather than
-# committed. Untracked on both machines; this only makes `git status` agree.
+# Per-machine editor and tooling state. Holds absolute paths, so it cannot be
+# shared between the workstation and the cluster.
 .claude/
 
 # The private repository. A nested repo, not a submodule.
 /workbench/
 
-# The project prose. A symlink into the private repository, the same
-# shape as notes/ and eval/. Readable on disk, absent from what is published.
+# Local working notes. A symlink into the private repository, the same shape as
+# notes/ and eval/.
 /CLAUDE.md
+
+# Local environment scripts. They set up and confine the working environment on
+# one machine, so they hold absolute paths and machine-specific state and are
+# not part of what a reader needs to reproduce the results.
+/sh/*_confined.sh
+/sh/confined-permissions.json
+/sh/statusline.sh
+/sh/fetch.sh
+/sh/README.md
