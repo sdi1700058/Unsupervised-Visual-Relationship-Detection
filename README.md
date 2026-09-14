@@ -1,6 +1,6 @@
 # labeled-fosae — User Guide
 
-A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video. Three datasets carry an evaluation score: VidVRD, VidOR, and Something-Else. Action Genome is downloaded and screened, and it has no export yet, so a screen is all it carries. More candidates have a verified download route. `bash sh/dataset.sh list` prints the stage that each dataset reached, and `python3 tools/grid.py --source oracle` prints which dataset has been measured by which evaluation method.
+A Master's thesis fork of [guicho271828/latplan-fosae](https://github.com/guicho271828/latplan-fosae). The fork extends FOSAE (First-Order State AutoEncoder) to real-world video. Three datasets carry an evaluation score: VidVRD, VidOR, and Something-Else. Action Genome is downloaded and screened, and it has no export yet, so a screen is all it carries. More candidates have a verified download route. `bash sh/dataset.sh list` prints the stage that each dataset reached, and `python3 workbench/tools/grid.py --source oracle` prints which dataset has been measured by which evaluation method.
 
 The document is a runbook. It tells you how to install the code, how to bake data, how to train the model, and how to look at the results. The document does not explain the theory. For the theory, read `notes/docs/THEORY.md`.
 
@@ -139,7 +139,7 @@ NPZ_PATH=$SCRATCH/panos/sgg-thesis/data/npz/video/vidvrd/overfit/<CAT>-<VID>-30f
 DOMAIN=vidvrd TRANSITION_MODE=sequential EPOCH=2000 NO_EARLYSTOP=1 \
 LR=0.001 PREENC_LAYERS=0 MAX_TEMPERATURE=1.0 \
 MEM=16G TIME=0:45:00 AUTO_RESOURCES=0 \
-bash sh/submit.sh
+bash workbench/sh/submit.sh
 ```
 
 Critical override knobs for video overfit:
@@ -160,7 +160,7 @@ Critical override knobs for video overfit:
 ```bash
 DOMAIN=puzzle PUZZLE_TYPE=mnist WIDTH=3 HEIGHT=3 NUM_EXAMPLES=20000 \
 EPOCH=1000 NO_EARLYSTOP=1 \
-bash sh/submit.sh
+bash workbench/sh/submit.sh
 ```
 
 Verified result: `val_BCE = 1.038e-07` at epoch 1000. `sh/baseline_verify.sh` runs this as a regression sentinel.
@@ -251,8 +251,8 @@ Three commands say whether the repository still holds together.
 
 ```bash
 .venv-local/bin/python -m unittest discover -s tools/planner/tests   # the whole suite
-python3 tools/check_docs.py                                          # the documents
-python3 tools/workplan.py check                                      # the plan
+python3 workbench/tools/check_docs.py                                          # the documents
+python3 workbench/tools/workplan.py check                                      # the plan
 ```
 
 Run the test suite under `.venv-local/bin/python`. Under a different interpreter some tests skip, and a skipped test hides a failure. `notes/QUALITY.md` holds the full gate and the order to run it in.

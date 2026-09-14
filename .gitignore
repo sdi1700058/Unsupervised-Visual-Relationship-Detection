@@ -80,3 +80,7 @@ data/video/videonet/frames_*
 
 # The private repository. A nested repo, not a submodule.
 /workbench/
+
+# The project prose. A symlink into the private repository, the same
+# shape as notes/ and eval/. Readable on disk, absent from what is published.
+/CLAUDE.md
