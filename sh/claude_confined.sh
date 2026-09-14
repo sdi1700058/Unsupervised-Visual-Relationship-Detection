@@ -70,8 +70,47 @@ SEATS=$REPO/workbench/agents
 # single escalation the pen exists to stop. Pinning agents/ closes that: the
 # author edits a seat from a terminal, the launcher rebuilds it, and a session
 # can change neither the source nor the result.
+#
+# A seat has two halves. What it *may do* is the author's. How it *works* --
+# model, effort, maxTurns, the prose -- is tuning, and pinning the directory
+# locked both together. Two measured costs on the first real run came from
+# tuning alone: a hand lost 45 tool calls to `maxTurns: 30`, and each
+# verifier cost about 100,000 tokens because of its model tier. Neither
+# needed a new tool, and both needed the author at a terminal.
+#
+# So `agents/tools.lock` records the capability half, and the seats are
+# unpinned only while they still match it. The harness tier survives because
+# the roster is built here, before the pen closes and before any session
+# runs: a drifted seat file never reaches `--agents` at all.
+#
+# Three states, and the safe one is the default. With no lock on disk this
+# behaves exactly as it did before, so installing the lock and installing
+# this launcher can happen in either order without a broken night.
+SEAT_LOCK=$REPO/workbench/agents/tools.lock
+
+# seat_pins is a list because the two states pin different things, and the
+# whole-directory case must not also name roster.json inside it.
+seat_pins=("$SEATS")
+rebuild=yes
 if [ -d "$SEATS" ] && [ -f "$REPO/workbench/tools/roster.py" ]; then
-  if ! python3 "$REPO/workbench/tools/roster.py" --out "$ROSTER" >/dev/null; then
+  if [ ! -f "$SEAT_LOCK" ]; then
+    : # No lock. The directory stays pinned, as it was.
+  elif python3 "$REPO/workbench/tools/roster.py" --lock-matches \
+      --lock "$SEAT_LOCK" >/dev/null 2>&1; then
+    seat_pins=("$SEAT_LOCK" "$ROSTER")
+  else
+    echo "claude_confined: a seat's tools, permission mode or spawn" >&2
+    echo "                 rights differ from agents/tools.lock. The" >&2
+    echo "                 seats stay pinned. Run, from a terminal," >&2
+    echo "                 python3 workbench/tools/roster.py --lock-matches" >&2
+    # And the roster is not rebuilt. Building it from sources that failed
+    # the lock would hand the drifted tool list straight to --agents, which
+    # is the one escalation this gate exists to stop.
+    rebuild=no
+  fi
+  if [ "$rebuild" = yes ] && \
+      ! python3 "$REPO/workbench/tools/roster.py" --out "$ROSTER" \
+        >/dev/null; then
     echo "claude_confined: the seat sources do not build, keeping the" >&2
     echo "                 roster that is already on disk" >&2
   fi
@@ -82,7 +121,7 @@ for p in "$STATE/settings.json" \
          "$STATE/hooks" "$STATE/skills" "$STATE/agents" "$STATE/commands" \
          "$REPO/.claude/settings.json" \
          "$REPO/sh/confined-permissions.json" \
-         "$SEATS" \
+         "${seat_pins[@]}" \
          "$REPO/workbench/notes/queue/current.json" \
          "$REPO/workbench/notes/queue/rejected.json" \
          "$REPO/workbench/notes/queue/canaries.json" \
