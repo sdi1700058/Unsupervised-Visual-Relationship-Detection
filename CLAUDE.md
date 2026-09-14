@@ -8,14 +8,29 @@ run `git clean -x` here: it destroys the nested repository.
 
 ## Start here, every session
 
-**`notes/docs/DEV.md`** is the index. It carries a numbered read order for a
-new session and a table saying what each of the 29 documents governs and
-when to read it. Read it first and follow it. `notes/` is a symlink to
-`workbench/notes`, so every path in the index resolves from this directory.
+Read these, in this order. It is section 1 of `notes/docs/DEV.md`, copied
+here because a pointer gets skipped and this does not. `notes/` is a symlink
+to `workbench/notes`, so every path resolves from this directory.
 
-On 2026-09-14 a session worked for nine hours without opening it, used five
-of the 29 documents, and never ran the gate below. Both failures were
-invisible because nothing pointed at either.
+1. `notes/OVERNIGHT_PROMPT.md` — how the work is done. The authority on
+   working rules.
+2. `notes/NOW.md` — the queue. The author writes it by hand and it outranks
+   the task list in item 1.
+3. `notes/PROGRESS.md` — where the work stands, and the open problems.
+4. `notes/docs/SUPERVISOR.md` — what the thesis is marked against.
+5. `notes/docs/STE.md` — the writing style. Before every write.
+6. `notes/docs/DEV.md` — the full index: what each of the 29 documents
+   governs, and when to read it. Go here whenever you do not know which
+   document rules a question.
+
+```bash
+python3 workbench/tools/workplan.py next     # what to work on
+python3 workbench/tools/workplan.py check    # is the plan consistent
+```
+
+On 2026-09-14 a session worked nine hours, opened five of the 29 documents,
+never opened the index and never ran the gate below. Both were reachable and
+neither was reached, so both are inlined or probed now rather than named.
 
 | File | What it governs |
 |---|---|
