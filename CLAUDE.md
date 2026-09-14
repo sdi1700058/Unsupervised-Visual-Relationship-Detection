@@ -6,15 +6,40 @@ Two repositories, nested. `sgg-thesis` is public and holds code. `workbench`
 inside it is private and holds notes, plans, the queue and the runs. Never
 run `git clean -x` here: it destroys the nested repository.
 
-## Read these before you act
+## Start here, every session
+
+**`notes/docs/DEV.md`** is the index. It carries a numbered read order for a
+new session and a table saying what each of the 29 documents governs and
+when to read it. Read it first and follow it. `notes/` is a symlink to
+`workbench/notes`, so every path in the index resolves from this directory.
+
+On 2026-09-14 a session worked for nine hours without opening it, used five
+of the 29 documents, and never ran the gate below. Both failures were
+invisible because nothing pointed at either.
 
 | File | What it governs |
 |---|---|
-| `workbench/notes/docs/WORKING_RULES.md` | style, process, code, the claim ladder |
-| `workbench/notes/docs/AGENTIC_PROCEDURE.md` | how to run the loop, step by step |
-| `workbench/notes/docs/AGENTIC_DESIGN.md` | why the loop is shaped this way |
-| `workbench/notes/docs/SANDBOX.md` | the confinement, and what permission covers |
-| `workbench/notes/docs/STE.md` | the writing rules |
+| `notes/docs/DEV.md` | **the index. Read order and what each file is for** |
+| `notes/docs/WORKING_RULES.md` | style, process, code, the claim ladder |
+| `notes/docs/STE.md` | the writing rules, before every write |
+| `notes/docs/AGENTIC_PROCEDURE.md` | how to run the loop, step by step |
+| `notes/docs/AGENTIC_DESIGN.md` | why the loop is shaped this way |
+| `notes/docs/SANDBOX.md` | the confinement, and what permission covers |
+
+## The gate answers most of it for you
+
+```bash
+bash workbench/sh/gate.sh
+```
+
+Ten checks, one exit code. It reads the wiki's own rules: whether a
+document cites a file that is not there, whether any Markdown gained a
+writing violation, whether a withdrawn number reads as current, whether the
+plan is consistent. Run it before you commit anything that touches the
+notes.
+
+Two of its checks are also probe rows, `documents` and `writing_rules`, so
+every batch answers them whether or not anyone runs the gate.
 
 ## Rules that fail silently, so they are here and not only there
 
