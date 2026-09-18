@@ -2,6 +2,7 @@
 """Tests for the oracle export. numpy only — no keras, no data on disk."""
 
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -327,7 +328,9 @@ class TestSynthBboxContract(unittest.TestCase):
 
     def _write(self, doc):
         import json
-        p = os.path.join(tempfile.mkdtemp(), "SYNTH_0001.json")
+        d = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, d, True)
+        p = os.path.join(d, "SYNTH_0001.json")
         with open(p, "w") as f:
             json.dump(doc, f)
         return p
