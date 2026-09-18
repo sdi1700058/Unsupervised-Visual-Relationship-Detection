@@ -7,6 +7,11 @@
 #      sh/claude_confined.sh puts at <repo>/.claude/tmp.
 #   2. The __pycache__ directories under workbench/tools.
 #
+# The plan this came from asked for the `tmp` prefix alone. The author widened
+# it to `slotid-` as well on 2026-09-18, because that prefix names 6264
+# directories from the same defect in an older public fixture, and no other
+# command in this project reaches them. Do not narrow it back without asking.
+#
 # Measured 2026-09-18, before the leaking fixtures were repaired: 8119
 # directories and 44 MB in .claude/tmp, and one run of the private suite added
 # 9 more. tools/verify.py layer 2 attributes a result by a diff of the tree, so
