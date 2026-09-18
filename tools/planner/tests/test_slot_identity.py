@@ -107,6 +107,12 @@ class LoaderCase(unittest.TestCase):
         self._was_strict = os.environ.get("STRICT_ADJACENCY")
         os.environ.pop("STRICT_ADJACENCY", None)
         self.tmp = tempfile.mkdtemp(prefix="slotid-")
+        # Registered before the next line, not in tearDown. unittest skips
+        # tearDown when setUp raises, and _stub_latplan raises whenever the
+        # stub targets are not importable. Measured 2026-09-18: that path
+        # leaked 24 directories for each run of tools/check_docs.py, which
+        # the notes gate runs at SessionStart and before every commit.
+        self.addCleanup(shutil.rmtree, self.tmp, True)
         _stub_latplan(self.tmp)
 
     def tearDown(self):
@@ -119,7 +125,6 @@ class LoaderCase(unittest.TestCase):
             os.environ.pop("STRICT_ADJACENCY", None)
         else:
             os.environ["STRICT_ADJACENCY"] = self._was_strict
-        shutil.rmtree(self.tmp, ignore_errors=True)
 
     def strict(self, on=True):
         os.environ["STRICT_ADJACENCY"] = "1" if on else "0"
