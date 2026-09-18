@@ -230,8 +230,59 @@ robovqa_oracle()  { warn "blocked on prepare"; return 3; }
 robovqa_verify()  { [[ -d "${DATA}/robovqa" ]]; }
 
 # ===========================================================================
+# EPIC-KITCHENS — egocentric, so no camera-motion confound (notes/lit
+# dataset_sources.json). Verb-noun narrations plus timestamps are annotation
+# text, small and git-clonable. Video, RGB/flow frames and per-frame masks
+# (the boxes) are hosted at data.bris.ac.uk and run to hundreds of GB; that
+# pull is a Slurm job, never the login node, so download here only clones
+# the two small repos and prints the job command for the rest.
+# ===========================================================================
+epic_kitchens_download() {
+    mkdir -p "${DATA}/epic_kitchens"
+    if [[ -d "${DATA}/epic_kitchens/scripts/.git" ]]; then
+        say "download-scripts already cloned"
+    else
+        git clone --depth 1 https://github.com/epic-kitchens/epic-kitchens-download-scripts \
+            "${DATA}/epic_kitchens/scripts" || { warn "clone of download-scripts failed"; return 1; }
+    fi
+    if [[ -d "${DATA}/epic_kitchens/annotations/.git" ]]; then
+        say "annotations already cloned"
+    else
+        git clone --depth 1 https://github.com/epic-kitchens/epic-kitchens-100-annotations \
+            "${DATA}/epic_kitchens/annotations" || { warn "clone of annotations failed"; return 1; }
+    fi
+    say "verb-noun narrations and timestamps are in ${DATA}/epic_kitchens/annotations/EPIC_100_*.csv"
+    say "video, frames and masks (the boxes) are 100s of GB on data.bris.ac.uk;"
+    say "fetch them from a Slurm job, not this shell, e.g.:"
+    say "  python ${DATA}/epic_kitchens/scripts/epic_downloader.py --masks --participants P01 \\"
+    say "    --output-path ${DATA}/epic_kitchens/raw \\"
+    say "    --epic100-splits ${DATA}/epic_kitchens/annotations/EPIC_100_video_info.csv"
+}
+epic_kitchens_prepare() {
+    say "annotations are ready to read as-is: CSV and pandas .pkl, no unpack step"
+    find "${DATA}/epic_kitchens/annotations" -maxdepth 1 -name '*.csv' 2>/dev/null | wc -l \
+        | xargs -I{} say "{} annotation CSVs present"
+}
+epic_kitchens_screen() {
+    warn "not yet built: no screener reads EPIC-KITCHENS narrations into clip windows"
+    return 3
+}
+epic_kitchens_oracle() {
+    warn "blocked on screen, and on the box pull (masks are not yet fetched)"
+    return 3
+}
+epic_kitchens_verify() {
+    local n
+    n=$(find "${DATA}/epic_kitchens/annotations" -maxdepth 1 -name '*.csv' 2>/dev/null | wc -l)
+    say "annotation CSVs ${n}"
+    [[ -d "${DATA}/epic_kitchens/scripts" ]] && say "download-scripts present" || warn "download-scripts missing"
+    [[ "${n}" -gt 0 ]] || { warn "no annotations; run download"; return 1; }
+    return 0
+}
 
-KNOWN="vidor actiongenome vidvrd something_else open_x language_table robovqa"
+# ===========================================================================
+
+KNOWN="vidor actiongenome vidvrd something_else open_x language_table robovqa epic_kitchens"
 
 do_list() {
     printf '%-16s %-9s %-9s %-8s %s\n' dataset download prepare screen "oracle / notes"
@@ -243,6 +294,7 @@ do_list() {
     printf '%-16s %-9s %-9s %-8s %s\n' open_x gsutil no no 'needs an RLDS reader + detector'
     printf '%-16s %-9s %-9s %-8s %s\n' language_table gsutil no no 'needs an RLDS reader + detector'
     printf '%-16s %-9s %-9s %-8s %s\n' robovqa git no no 'needs a reader + detector'
+    printf '%-16s %-9s %-9s %-8s %s\n' epic_kitchens git n/a no 'annotations only; video/masks need a Slurm job'
     echo
     echo "Provenance and the date each url was last fetched:"
     echo "  notes/lit/dataset_sources.json"
