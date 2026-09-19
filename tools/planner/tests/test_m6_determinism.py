@@ -275,21 +275,49 @@ class TestACollapsedExport(unittest.TestCase):
     """An export whose encoder collapsed has no transition to measure.
 
     It would otherwise arrive as the emptiest possible dataset and leave every
-    rate at 0/0. Four exports on disk are in this state, and the collapse
-    tracks the latent shape rather than its size: 200 bits is dead at U20 P10
-    and alive at U40 P5.
+    rate at 0/0.
+
+    **The reading these lists were written under is falsified, 2026-09-18.**
+    The docstring said the collapse "tracks the latent shape rather than its
+    size: 200 bits is dead at U20 P10 and alive at U40 P5". Retraining the
+    collapsed configurations unchanged, with no seed pinned anywhere in this
+    project so a re-run is a fresh draw, moved **U20 P10 from 1 distinct state
+    to 1330** and **U40 P20 from 1 to 4382**. The same shape, the same
+    hyperparameters, a different draw, and the opposite verdict. So collapse is
+    at least partly a property of the run, and any claim that a latent shape is
+    unusable needs seeds behind it. `experiments/G3_collapse_rerun/` holds the
+    pre-registered reading.
+
+    These two lists are therefore a RATCHET OVER LIVE FILES, not a statement
+    about latent shapes. They record what was on disk on a date. When a rerun
+    lands, the numbers move and this test fails on purpose: that failure is the
+    record noticing the world changed, and the repair is to re-measure and move
+    the name, never to loosen the assertion.
     """
 
-    # Measured 2026-09-05 over every file in eval/exports/. These are
-    # gitignored, so a checkout without them skips the check rather than
-    # failing it.
+    # Measured 2026-09-05, re-measured 2026-09-18 after the G3 rerun.
+    # eval/ is gitignored, so a checkout without these skips rather than fails.
+    #
+    # Both survivors here are STALE rather than collapsed: they are exports of
+    # the pre-rerun models onto clip 150010, dated 2026-08-30, and the rerun's
+    # export job globs *H14-winnable* so it never refreshed them. Their models
+    # live now, at 1330 and 4382. Re-export them and they leave this list.
+    #
+    # U5 P5 is the one arm that collapsed twice on an independent draw. At 25
+    # bits it is the smallest latent in the sweep. One repeat is not a finding
+    # about that shape; it is the single point that seeds would test.
     DEAD = ("H14-U20_A2_P10-150010.npz",
             "H14-U40_A2_P20-150010.npz",
-            "U20_A2_P10_catH14-winnable88-30fps-mo3-nofill-p8_fps30_f2b8c5.npz",
-            "U40_A2_P20_catH14-winnable88-30fps-mo3-nofill-p8_fps30_78b02d.npz")
+            "U5_A2_P5_catH14-winnable88-30fps-mo3-nofill-p8_fps30_a89b0c.npz")
 
+    # The last four recovered on 2026-09-18 from a single distinct state, on a
+    # retrain with nothing changed: 1330, 733, 939 and 4382.
     LIVE = ("U40_A2_P10_catH14-winnable88-30fps-mo3-nofill-p8_fps30_0cab2f.npz",
-            "U40_A2_P5_catH14-winnable88-30fps-mo3-nofill-p8_fps30_c95ea4.npz")
+            "U40_A2_P5_catH14-winnable88-30fps-mo3-nofill-p8_fps30_c95ea4.npz",
+            "U20_A2_P10_catH14-winnable88-30fps-mo3-nofill-p8_fps30_f2b8c5.npz",
+            "U10_A2_P10_catH14-winnable88-30fps-mo3-nofill-p8_fps30_ceae11.npz",
+            "U20_A2_P20_catH14-winnable88-30fps-mo3-nofill-p8_fps30_5a05dd.npz",
+            "U40_A2_P20_catH14-winnable88-30fps-mo3-nofill-p8_fps30_78b02d.npz")
 
     def _analyse(self, name, limit=None):
         """One export, optionally only its first `limit` frames.
@@ -329,7 +357,7 @@ class TestACollapsedExport(unittest.TestCase):
                "determinism_naive": 1.0, "control": {"determinism": 0.0}}
         self.assertIn("dead export", verdict(row).lower())
 
-    def test_the_four_collapsed_exports_are_named_and_caught(self):
+    def test_the_collapsed_exports_are_named_and_caught(self):
         for name in self.DEAD:
             row = self._analyse(name)
             self.assertEqual(row["n_distinct_states"], 1, name)
