@@ -88,8 +88,24 @@ fi
 # what would destroy the evidence. Move the five aside first.
 ARCHIVE="out/video/vidvrd/collapsed-$(date +%Y-%m-%d)"
 mkdir -p "${ARCHIVE}"
-section "G3  archive the five collapsed run directories"
-for arm in U20_A2_P10 U40_A2_P20 U10_A2_P10 U20_A2_P20 U5_A2_P5; do
+# ARMS names which of the five to run. The default is all five. Give it a
+# subset to finish a partial run without overwriting the arms that already
+# landed: on 2026-09-18 two of the five died with `Blas GEMM launch failed`,
+# a cuBLAS init failure and not a property of the configuration, and
+# re-running all five would have thrown away the three fresh results.
+#
+#     ARMS="U10_A2_P10 U20_A2_P20" sbatch experiments/G3_collapse_rerun/rerun_collapsed.sh
+ARMS="${ARMS:-U20_A2_P10 U40_A2_P20 U10_A2_P10 U20_A2_P20 U5_A2_P5}"
+for a in ${ARMS}; do
+    case " U20_A2_P10 U40_A2_P20 U10_A2_P10 U20_A2_P20 U5_A2_P5 " in
+        *" ${a} "*) ;;
+        *) echo "FATAL: ${a} is not one of the five collapsed arms." >&2; exit 4 ;;
+    esac
+done
+echo "arms: ${ARMS}"
+
+section "G3  archive the collapsed run directories"
+for arm in ${ARMS}; do
     for d in out/video/vidvrd/FirstOrderSAE_${arm}_catH14-winnable88-*; do
         [[ -d "${d}" ]] || continue
         if [[ -e "${ARCHIVE}/$(basename "${d}")" ]]; then
@@ -117,11 +133,13 @@ MID=(32G 6:00:00); BIG=(48G 10:00:00)
 
 # Bits = U * P. The 800-bit arm took BIG in H14 and a wrong TIME costs a
 # night, so both 400-bit-and-above P20 arms take it here.
-submit "G3 U20 P10  (200 bits)" "${STEM}" "${MID[@]}"  U=20 P=10
-submit "G3 U10 P10  (100 bits)" "${STEM}" "${MID[@]}"  U=10 P=10
-submit "G3 U5  P5   (25 bits)"  "${STEM}" "${MID[@]}"  U=5  P=5
-submit "G3 U20 P20  (400 bits)" "${STEM}" "${BIG[@]}"  U=20 P=20
-submit "G3 U40 P20  (800 bits)" "${STEM}" "${BIG[@]}"  U=40 P=20
+arm_wanted () { case " ${ARMS} " in *" $1 "*) return 0 ;; *) return 1 ;; esac; }
+
+arm_wanted U20_A2_P10 && submit "G3 U20 P10  (200 bits)" "${STEM}" "${MID[@]}"  U=20 P=10
+arm_wanted U10_A2_P10 && submit "G3 U10 P10  (100 bits)" "${STEM}" "${MID[@]}"  U=10 P=10
+arm_wanted U5_A2_P5   && submit "G3 U5  P5   (25 bits)"  "${STEM}" "${MID[@]}"  U=5  P=5
+arm_wanted U20_A2_P20 && submit "G3 U20 P20  (400 bits)" "${STEM}" "${BIG[@]}"  U=20 P=20
+arm_wanted U40_A2_P20 && submit "G3 U40 P20  (800 bits)" "${STEM}" "${BIG[@]}"  U=40 P=20
 
 sweep_totals
 
