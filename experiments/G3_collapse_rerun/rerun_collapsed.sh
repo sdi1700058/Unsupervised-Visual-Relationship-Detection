@@ -31,16 +31,38 @@
 
 set -eo pipefail
 
-# The public root holds strips.py, data/ and venv/. This file sits under
-# experiments/, and the runners sit under workbench/sh/, so both are derived
-# rather than assumed. SLURM_SUBMIT_DIR is wherever sbatch was typed and is
-# not used for that reason.
-HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_DIR="$(cd "${HERE}" && until [ -f strips.py ] || [ "${PWD}" = / ]; do cd ..; done; pwd)"
-if [ ! -f "${PROJECT_DIR}/strips.py" ]; then
-    echo "FATAL: no public root above ${HERE} (no strips.py)." >&2
+# Resolve the public root, which holds strips.py, setup-dataset.py, data/ and
+# venv/. Three things make this harder than it looks, and each one broke a run:
+#
+#   1. This file sits at workbench/sh/ since the split of 2026-09-10, so the
+#      old `dirname/..` resolved to the PRIVATE root and every relative path
+#      below missed by one level.
+#   2. Under sbatch, ${BASH_SOURCE[0]} is NOT this path. Slurm copies the
+#      batch script to /var/spool/slurmd/job<id>/slurm_script, so walking up
+#      from it finds no repository at all. Measured 2026-09-18, job 44184992:
+#      "FATAL: no public root above /var/spool/slurmd/job44184992".
+#   3. SLURM_SUBMIT_DIR is wherever sbatch was typed, which is usually but not
+#      always inside the tree.
+#
+# So try every candidate and take the first that has a public root above it.
+_find_root () {
+    local d r
+    for d in "$@"; do
+        [ -n "${d}" ] || continue
+        [ -d "${d}" ] || continue
+        r="$(cd "${d}" && until [ -f strips.py ] || [ "${PWD}" = / ]; do cd ..; done; pwd)"
+        if [ -f "${r}/strips.py" ]; then echo "${r}"; return 0; fi
+    done
+    return 1
+}
+if ! PROJECT_DIR="$(_find_root "${SLURM_SUBMIT_DIR:-}" \
+                                "$(dirname "${BASH_SOURCE[0]}")" \
+                                "${PWD}" "${THESIS:-}")"; then
+    echo "FATAL: no public root (no strips.py) above SLURM_SUBMIT_DIR," >&2
+    echo "       this script, the working directory or \$THESIS." >&2
     exit 2
 fi
+# From the root, not from BASH_SOURCE: under sbatch that is the spool copy.
 SH_DIR="${PROJECT_DIR}/workbench/sh"
 cd "${PROJECT_DIR}"
 mkdir -p logs
