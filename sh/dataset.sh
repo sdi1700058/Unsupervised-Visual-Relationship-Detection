@@ -285,16 +285,53 @@ epic_kitchens_verify() {
 KNOWN="vidor actiongenome vidvrd something_else open_x language_table robovqa epic_kitchens"
 
 do_list() {
-    printf '%-16s %-9s %-9s %-8s %s\n' dataset download prepare screen "oracle / notes"
-    printf '%-16s %-9s %-9s %-8s %s\n' ---------------- --------- --------- -------- ---------------
-    printf '%-16s %-9s %-9s %-8s %s\n' vidor yes yes yes 'yes, scored 2026-09-04'
-    printf '%-16s %-9s %-9s %-8s %s\n' vidvrd yes yes yes 'yes, the reference dataset'
-    printf '%-16s %-9s %-9s %-8s %s\n' actiongenome manual n/a yes 'loader tested, no export yet'
-    printf '%-16s %-9s %-9s %-8s %s\n' something_else gdown yes yes 'reader exists, 8 clips scored'
-    printf '%-16s %-9s %-9s %-8s %s\n' open_x gsutil no no 'needs an RLDS reader + detector'
-    printf '%-16s %-9s %-9s %-8s %s\n' language_table gsutil no no 'needs an RLDS reader + detector'
-    printf '%-16s %-9s %-9s %-8s %s\n' robovqa git no no 'needs a reader + detector'
-    printf '%-16s %-9s %-9s %-8s %s\n' epic_kitchens git n/a no 'annotations only; video/masks need a Slurm job'
+    # THE ROUTE COLUMNS ARE A RECORD AND THE DISK COLUMN IS A MEASUREMENT,
+    # and until 2026-09-21 this function did not say which was which. It was
+    # a frozen block of printf: it reported something_else as prepare=yes and
+    # screen=yes while `ls data/video/something_else` answered "No such file
+    # or directory". An adversary found that on 2026-09-21, and it mattered
+    # because notes/DECIDE-DATASETS.md sends the author here to judge whether
+    # a dataset can be trained on.
+    #
+    # The route columns still come from this table, because a route is a
+    # recorded fact about the world and not about this machine. The ON DISK
+    # column is measured at every run, so the two can never be confused again.
+    printf '%-16s %-9s %-9s %-8s %-22s %s\n' \
+        dataset download prepare screen "ON DISK, measured now" "route notes"
+    printf '%-16s %-9s %-9s %-8s %-22s %s\n' \
+        ---------------- --------- --------- -------- ---------------------- -----------
+    _row () {
+        local name="$1" dl="$2" prep="$3" scr="$4" note="$5"
+        local here="nothing"
+        local raw="${DATA}/${name}/raw"
+        local ann="${DATA}/${name}/annotations"
+        local npz="${ROOT}/data/npz/video/${name}"
+        local bits=""
+        [[ -d "${raw}" ]] && bits="raw $(du -sh "${raw}" 2>/dev/null | cut -f1)"
+        if [[ -d "${ann}" ]]; then
+            bits="${bits}${bits:+, }ann $(du -sh "${ann}" 2>/dev/null | cut -f1)"
+        fi
+        if [[ -d "${npz}" ]]; then
+            local n
+            n=$(find "${npz}" -maxdepth 1 -name '*.npz' 2>/dev/null | wc -l)
+            [[ "${n}" -gt 0 ]] && bits="${bits}${bits:+, }${n} npz"
+        fi
+        [[ -n "${bits}" ]] && here="${bits}"
+        printf '%-16s %-9s %-9s %-8s %-22s %s\n' \
+            "${name}" "${dl}" "${prep}" "${scr}" "${here}" "${note}"
+    }
+    _row vidor yes yes yes 'scored 2026-09-04'
+    _row vidvrd yes yes yes 'the reference dataset'
+    _row actiongenome manual n/a yes 'loader tested, no export yet'
+    _row something_else gdown yes yes 'reader exists, 8 clips scored'
+    _row open_x gsutil no no 'needs an RLDS reader + detector'
+    _row language_table gsutil no no 'needs an RLDS reader + detector'
+    _row robovqa git no no 'needs a reader + detector'
+    _row epic_kitchens git n/a no 'video/masks need a Slurm job'
+    echo
+    echo "download/prepare/screen are a RECORD of what route exists, written"
+    echo "by hand. ON DISK is MEASURED at every run. They disagree on purpose:"
+    echo "a route can exist while nothing has been fetched to this machine."
     echo
     echo "Provenance and the date each url was last fetched:"
     echo "  notes/lit/dataset_sources.json"
