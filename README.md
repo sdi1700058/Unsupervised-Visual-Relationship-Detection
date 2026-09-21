@@ -21,9 +21,9 @@ The FOSAE paper is at [arXiv:1902.08093](https://arxiv.org/abs/1902.08093). Read
 - **The oracle.** `tools/planner/relation_oracle.py` encodes the ground-truth *relations* into the state format FOSAE produces, so a planner can be given perfect relations instead of learned ones. (A position oracle, built from boxes rather than relations, is deprecated at `tools/planner/deprecated/position_oracle.py`.)
 - **Per-video overfit pipeline.** `setup-dataset.py video_vidvrd <cat> --video-id <VID>` bakes a single-video training set. The training pipeline reads it through the `NPZ_PATH` env var.
 - **Env-var knobs for hyperparameters.** `LR`, `PREENC_LAYERS`, `PREENC_DIM`, `MAX_TEMPERATURE`, `ZEROSUPPRESS`, `DROPOUT`, `NOISE`, `NO_EARLYSTOP`, `EPOCH`, `TRANSITION_MODE`, `BATCH`, `FPS`.
-- **Sherlock HPC workflow.** `sh/submit.sh` composes a hierarchical output directory with a sha1 hash. `run_training.sh` runs post-train hooks: `tools/replot.py`, `viz/recon.py`, and `tools/plot_training_curve.py`.
+- **Sherlock HPC workflow.** `workbench/sh/submit.sh` composes a hierarchical output directory with a sha1 hash. `run_training.sh` runs post-train hooks: `tools/replot.py`, `viz/recon.py`, and `tools/plot_training_curve.py`.
 - **Deterministic output paths.** `latplan/util/paths.py::resolved_out_dir` composes `out/<domain>/<category>/<run_tag>/`. Two runs with the same config land in the same directory. Two concurrent runs with the same config get `_2`, `_3` suffixes.
-- **Baseline verification.** `sh/baseline_verify.sh` runs a pinned MNIST puzzle config and checks against `val_BCE = 1.038e-07`.
+- **Baseline verification.** `workbench/sh/baseline_verify.sh` runs a pinned MNIST puzzle config and checks against `val_BCE = 1.038e-07`.
 
 ## 3. Install
 
@@ -46,9 +46,9 @@ bash smoke_test.sh                                 # confirm the install
 source activate.sh                                 # loads module collection `fosae` + venv
 ```
 
-The module collection `fosae` holds `gcc/8.1.0`, `python/3.6.1`, `cudnn/7.6.5`, `cuda/10.0.130`, and `ffmpeg`. `activate.sh` sources `sh/sherlock_env.sh`. That file loads the collection and activates the project venv.
+The module collection `fosae` holds `gcc/8.1.0`, `python/3.6.1`, `cudnn/7.6.5`, `cuda/10.0.130`, and `ffmpeg`. `activate.sh` sources `workbench/sh/sherlock_env.sh`. That file loads the collection and activates the project venv.
 
-**Warning**: The `cudnn/7.6.5` module has a dependency on `cuda/10.2.89`. Load `cuda/10.0.130` after `cudnn/7.6.5` so that the second `cuda` load swaps to `cuda/10.0.130`. TensorFlow 1.15.2 requires `libcudart.so.10.0` and `libcudnn.so.7`. `sh/sherlock_env.sh` handles the order.
+**Warning**: The `cudnn/7.6.5` module has a dependency on `cuda/10.2.89`. Load `cuda/10.0.130` after `cudnn/7.6.5` so that the second `cuda` load swaps to `cuda/10.0.130`. TensorFlow 1.15.2 requires `libcudart.so.10.0` and `libcudnn.so.7`. `workbench/sh/sherlock_env.sh` handles the order.
 
 Verify the GPU stack:
 
@@ -130,7 +130,7 @@ ActionGenome has 17 viable classes (≥ 5000 transitions). See `tools/video/insp
 
 ## 5. Train
 
-The canonical entry point is `sh/submit.sh`. It composes the output directory and submits an sbatch job on Sherlock. For a local dry run, prepend `DRY_RUN=1`.
+The canonical entry point is `workbench/sh/submit.sh`. It composes the output directory and submits an sbatch job on Sherlock. For a local dry run, prepend `DRY_RUN=1`.
 
 ### 5.1 Video overfit (recommended)
 
@@ -163,7 +163,7 @@ EPOCH=1000 NO_EARLYSTOP=1 \
 bash workbench/sh/submit.sh
 ```
 
-Verified result: `val_BCE = 1.038e-07` at epoch 1000. `sh/baseline_verify.sh` runs this as a regression sentinel.
+Verified result: `val_BCE = 1.038e-07` at epoch 1000. `workbench/sh/baseline_verify.sh` runs this as a regression sentinel.
 
 ### 5.3 Env-var reference
 
@@ -257,7 +257,7 @@ python3 workbench/tools/workplan.py check                                      #
 
 Run the test suite under `.venv-local/bin/python`. Under a different interpreter some tests skip, and a skipped test hides a failure. `notes/QUALITY.md` holds the full gate and the order to run it in.
 
-`sh/baseline_verify.sh` is the model sentinel. No test in the suite trains anything, so run the sentinel after any change that touches training.
+`workbench/sh/baseline_verify.sh` is the model sentinel. No test in the suite trains anything, so run the sentinel after any change that touches training.
 
 ## 9. Where to Find More
 
