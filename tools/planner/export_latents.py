@@ -35,6 +35,78 @@ import sys
 from pathlib import Path
 
 
+def bindings_from_attention(attention):
+    """Hard (unit, argument) to object bindings, and the attention behind each.
+
+    FOSAE attends softly over the objects of a state. The hard binding is the
+    argmax, which is what `latplan/util/fol.py` already does, and this is the
+    same definition rather than a second one. `test_relation_inversion.py`
+    pins the two together, because an export that disagreed with the oracle
+    arm about what a bit means would make the two arms incomparable.
+
+    attention is (batch, U, A, num_objs). The answer is (batch, U, A).
+    """
+    import numpy as np
+    attention = np.asarray(attention)
+    bindings = np.argmax(attention, axis=-1).astype(np.int32)
+    confidences = np.max(attention, axis=-1).astype(np.float32)
+    return bindings, confidences
+
+
+def invert_bit(bit, bindings, P):
+    """One bit of the U*P latent, as (object, ..., predicate).
+
+    THIS IS WHY THE EXPORT NEEDED A `bindings` KEY. Without it a FOSAE bit
+    inverts to (unit, predicate) and stops, so stage one of the two-stage
+    evaluation the supervisors set on 2026-09-15 is not computable for any
+    dataset. With it a bit reads as a predicate over named objects, which is
+    the shape their record asks for.
+
+    `bindings` is one state's (U, A) table. The returned tuple is the A bound
+    object indices followed by the predicate index, so a binary predicate
+    gives (subject, object, predicate) and a ternary one gives four entries.
+    The arity is not fixed at two, because FOSAE's A is a parameter.
+
+    The (unit, predicate) split matches `extract_predicate_values`, which
+    reshapes a flat (U*P,) latent to (U, P). A different split here would
+    name the wrong predicate for every bit.
+    """
+    import numpy as np
+    bindings = np.asarray(bindings)
+    units = bindings.shape[0]
+    if bit < 0 or bit >= units * P:
+        raise IndexError(
+            "bit %r is outside a latent of %d units by %d predicates"
+            % (bit, units, P))
+    unit, predicate = divmod(int(bit), int(P))
+    return tuple(int(o) for o in bindings[unit]) + (predicate,)
+
+
+def relations_of_state(latent, bindings, P):
+    """Every TRUE bit of one state, as a relation over objects.
+
+    This is R(O) in the supervisors' own notation, from the record of
+    2026-09-15: the estimated set of relations their matching metric scores
+    against the true set R'(O).
+
+    `latent` is one state's flat (U*P,) code, `bindings` its (U, A) table.
+    The rounding matches `extract_predicate_values`, because a raw encoder
+    output is not exactly 0 or 1 and reading 0.6 as false would drop
+    relations without saying so.
+    """
+    import numpy as np
+    latent = np.asarray(latent).reshape(-1)
+    bindings = np.asarray(bindings)
+    units = bindings.shape[0]
+    if latent.size != units * P:
+        raise ValueError(
+            "latent of %d bits does not fit %d units by %d predicates"
+            % (latent.size, units, P))
+    truth = np.round(latent).astype(int)
+    return [invert_bit(bit, bindings, P)
+            for bit in range(latent.size) if truth[bit]]
+
+
 def _dedupe_transitions(rows):
     """Keep one row per distinct (add, delete) effect pair.
 
@@ -143,6 +215,27 @@ def export(model_dir, npz_path=None, out_path=None):
         # allow_pickle.
         "frame_ids": np.asarray([str(f) for f in frame_ids], dtype="U256"),
     }
+
+    # WHICH OBJECTS EACH BIT IS ABOUT, and without this the export is not
+    # usable for stage one. The supervisors asked on 2026-09-15 for relations
+    # as a list of predicates with objects as arguments. A latent bit alone
+    # inverts to (unit, predicate) and stops there, so the FOSAE arm and the
+    # oracle arm of `relation_oracle.py` could not be compared at all.
+    #
+    # `bindings` is (batch, U, A): for each state, each unit and each argument
+    # slot, the index of the object FOSAE attended to. `invert_bit` above
+    # turns a bit index into (subject, object, predicate) with it.
+    #
+    # `binding_confidence` ships beside it because the binding is an argmax
+    # over a soft attention. A bit whose binding rests on 0.34 of the mass is
+    # a different claim from one resting on 0.99, and a metric that cannot
+    # see the difference cannot report it.
+    attention = np.asarray(net.encode_attention(states))
+    bindings, binding_confidence = bindings_from_attention(attention)
+    payload["bindings"] = bindings
+    payload["binding_confidence"] = binding_confidence
+    print("bindings %s from attention %s"
+          % (bindings.shape, attention.shape))
 
     # actions.csv carries the transitions the model trained on. Every planner
     # reduces them to distinct effect pairs before use, so we do that here and
