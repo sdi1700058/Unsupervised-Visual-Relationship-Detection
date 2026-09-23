@@ -81,25 +81,32 @@ for f in files:
         if len(preds) < 2:
             continue
         pairs += 1
-        # Only the direction-token pairs can be tested this way.
-        roots = {p.rsplit('_', 1)[0] for p in preds if '_' in p}
-        tails = {p.rsplit('_', 1)[1] for p in preds if '_' in p}
-        if len(roots) != 1 or not (tails <= set(LR) or tails <= set(FB)):
-            continue
-        axis, table = (0, LR) if tails <= set(LR) else (1, FB)
-        dir_flip_pairs += 1
         rs.sort(key=lambda r: r['begin_fid'])
-        # Compare the FIRST segment against the first later segment whose
-        # direction token differs.
-        first = rs[0]
-        ft = first['predicate'].rsplit('_', 1)[1]
-        other = None
-        for r in rs[1:]:
-            if r['predicate'].rsplit('_', 1)[1] != ft:
-                other = r
-                break
-        if other is None:
+        # THE FIRST RUN OF THIS JOB REQUIRED EVERY PREDICATE ON THE PAIR TO
+        # SHARE ONE ROOT AND ONE AXIS, which left 5 testable pairs of 3,879
+        # and answered nothing. A pair carrying `larger` beside `sit_left` and
+        # `sit_right` still contains a testable direction flip. So look for
+        # ANY TWO instances that share a root and differ in tail.
+        cand = []
+        for a in rs:
+            if '_' not in a['predicate']:
+                continue
+            ra, ta = a['predicate'].rsplit('_', 1)
+            if ta not in LR and ta not in FB:
+                continue
+            for b in rs:
+                if b is a or '_' not in b['predicate']:
+                    continue
+                rb, tb = b['predicate'].rsplit('_', 1)
+                if rb != ra or tb == ta:
+                    continue
+                same_axis = (ta in LR and tb in LR) or (ta in FB and tb in FB)
+                if same_axis:
+                    cand.append((a, b, 0 if ta in LR else 1))
+        if not cand:
             continue
+        dir_flip_pairs += 1
+        first, other, axis = cand[0]
         a = rel_at(traj, (first['begin_fid'] + first['end_fid']) // 2, stid, otid)
         b = rel_at(traj, (other['begin_fid'] + other['end_fid']) // 2, stid, otid)
         if a is None or b is None:
