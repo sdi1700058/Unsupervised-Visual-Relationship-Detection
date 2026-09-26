@@ -58,7 +58,13 @@ say "manifest $(grep -cvE '^\s*(#|$)' "${MANIFEST}") file(s)"
 ok=0; failed=0; skipped=0
 while read -r url; do
     [[ -z "${url}" || "${url}" =~ ^[[:space:]]*# ]] && continue
-    name="$(basename "${url%%\?*}")"
+    # A LINE MAY CARRY AN EXPLICIT OUTPUT NAME: "<url> <name>". Without one the
+    # name is the URL's basename, and on 2026-09-26 that silently lost three of
+    # four files: every Google Drive URL is ".../download?id=...", so all four
+    # Something-Else parts resolved to "download" and the last three were
+    # skipped as "already present".
+    read -r url name <<< "${url}"
+    [[ -n "${name}" ]] || name="$(basename "${url%%\?*}")"
     out="${DEST}/${name}"
 
     # A complete file is left alone. A part-file is continued.
