@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
-# measure_furniture_bench.sbatch — every demonstration of one FurnitureBench release
+# measure_furniture_bench.sbatch — every demonstration of nine FurnitureBench releases
 #
 #   sbatch --job-name=fb-all sh/measure_furniture_bench.sbatch
+#   FB_ONLY=lamp sbatch --job-name=fb-lamp sh/measure_furniture_bench.sbatch
 #
 # WHY. FurnitureBench's code declares, for each furniture kind, which part
 # pairs a finished piece joins (`should_be_assembled`), and the dataset page
@@ -20,7 +21,7 @@
 # is refused.
 #
 #SBATCH --partition=normal
-#SBATCH --time=03:00:00
+#SBATCH --time=04:00:00
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=16GB
 #SBATCH --output=logs/%x-%j.out
@@ -29,7 +30,27 @@
 set -uo pipefail
 ROOT="${THESIS_ROOT:-${SLURM_SUBMIT_DIR:-$PWD}}"
 cd "${ROOT}" || exit 2
-# lamp at high randomness, 7,423,005,782 bytes, the smallest release.
-URL="${FB_URL:-https://drive.usercontent.google.com/download?id=1Ia0SHIACIoqwzVjhc_dgzEMsiKffIO6T&export=download&confirm=t}"
-PYTHONPATH="${ROOT}/workbench" "${ROOT}/.venv-local/bin/python" \
-    "${ROOT}/workbench/tools/furniture_bench_probe.py" --all "${URL}"
+# Every furniture kind at HIGH randomness, the ids of
+# furniture_bench/scripts/download_dataset.py read on 2026-09-28. A kind can
+# be named alone with FB_ONLY=<kind>.
+IDS="cabinet:1RHbo27phzXVJDjMXPI91QKPHWByCSQU4
+chair:1D8j1s4v9NL02V03PwEU6moOjn9v5qzFn
+desk:1xOhzI96-BORgjyqF7rBdYRPc_-RxYr_Z
+drawer:1QNqA48y9fFE4251xMmCMaUOdmNcnaZ8T
+lamp:1Ia0SHIACIoqwzVjhc_dgzEMsiKffIO6T
+one_leg:19iLUPDAvrRzevVggfD09nK2ayZ3GrVfC
+round_table:1qS2lIiPdqq8pTJsPN2txU1lzQJ4seWCr
+square_table:1Wq1MVCUSXxi6wJk7CQW-3LMGdUGJdiAR
+stool:1QeEb4Ajz-qN820Y_DVuxU7UdvrZBv7hJ"
+for pair in ${IDS}; do
+    kind="${pair%%:*}"
+    id="${pair#*:}"
+    if [ -n "${FB_ONLY:-}" ] && [ "${kind}" != "${FB_ONLY}" ]; then
+        continue
+    fi
+    echo "=== ${kind} high"
+    PYTHONPATH="${ROOT}/workbench" "${ROOT}/.venv-local/bin/python" \
+        "${ROOT}/workbench/tools/furniture_bench_probe.py" --all \
+        "https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t"
+    echo "=== ${kind} exit $?"
+done
