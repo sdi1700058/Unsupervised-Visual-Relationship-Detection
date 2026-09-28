@@ -32,7 +32,7 @@ ROOT="${THESIS_ROOT:-${SLURM_SUBMIT_DIR:-$PWD}}"
 cd "${ROOT}" || exit 2
 # Every furniture kind at HIGH randomness, the ids of
 # furniture_bench/scripts/download_dataset.py read on 2026-09-28. A kind can
-# be named alone with FB_ONLY=<kind>.
+# be named alone with FB_ONLY=<kind>, or several with FB_ONLY="<kind> <kind>".
 IDS="cabinet:1RHbo27phzXVJDjMXPI91QKPHWByCSQU4
 chair:1D8j1s4v9NL02V03PwEU6moOjn9v5qzFn
 desk:1xOhzI96-BORgjyqF7rBdYRPc_-RxYr_Z
@@ -45,12 +45,15 @@ stool:1QeEb4Ajz-qN820Y_DVuxU7UdvrZBv7hJ"
 for pair in ${IDS}; do
     kind="${pair%%:*}"
     id="${pair#*:}"
-    if [ -n "${FB_ONLY:-}" ] && [ "${kind}" != "${FB_ONLY}" ]; then
-        continue
+    if [ -n "${FB_ONLY:-}" ]; then
+        case " ${FB_ONLY} " in *" ${kind} "*) ;; *) continue ;; esac
     fi
     echo "=== ${kind} high"
     PYTHONPATH="${ROOT}/workbench" "${ROOT}/.venv-local/bin/python" \
         "${ROOT}/workbench/tools/furniture_bench_probe.py" --all \
         "https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t"
     echo "=== ${kind} exit $?"
+    # On 2026-09-28 eight kinds in a row got an HTML page instead of gzip,
+    # and the same URLs served gzip minutes later, so the next kind waits.
+    sleep 60
 done
