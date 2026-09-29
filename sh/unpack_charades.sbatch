@@ -61,4 +61,9 @@ find "${DEST}" -name '*.mp4' | sort | while read -r v; do
         "$(get avg_frame_rate)" "$(get nb_frames)" "$(get duration)" >> "${OUT}"
 done
 echo "frame rates: $(($(wc -l < "${OUT}") - 1)) videos in ${OUT}"
+# A video ffprobe cannot read leaves empty fields, and the verdict above
+# never saw it. An adversary found that on 2026-09-29.
+empty="$(awk -F'\t' 'NR > 1 && ($2 == "" || $3 == "")' "${OUT}" | wc -l)"
+echo "videos with no frame rate: ${empty}"
+[ "${empty}" -eq 0 ] || verdict=1
 exit "${verdict}"
