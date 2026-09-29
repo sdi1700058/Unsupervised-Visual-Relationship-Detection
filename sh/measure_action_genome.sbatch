@@ -24,4 +24,5 @@ PYTHONPATH="..:${PYTHONPATH:-}" "${ROOT}/.venv-local/bin/python" \
     -m tools.action_genome_relations \
     "${RAW}/object_bbox_and_relationship.pkl" \
     --person "${RAW}/person_bbox.pkl" \
-    --frame-rates "${ROOT}/data/video/charades/frame_rates.tsv"
+    --frame-rates "${ROOT}/data/video/charades/frame_rates.tsv" \
+    --timestamps "${ROOT}/data/video/charades/timestamps.tsv"
