@@ -36,4 +36,4 @@ module load viz
 module load py-pillow/9.3.0_py39
 cd "${ROOT}/workbench" || exit 2
 PYTHONPATH="..:${PYTHONPATH:-}" python3 \
-    -m tools.verify_archive "${ROOT}/${ZIP}" "${ARGS[@]}"
+    -m tools.verify_archive "${ROOT}/${ZIP}" ${ARGS[@]+"${ARGS[@]}"}
