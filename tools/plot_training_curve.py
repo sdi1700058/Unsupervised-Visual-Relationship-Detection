@@ -169,6 +169,23 @@ def _find_events_dir(model_dir):
     return candidates[-1] if candidates else None
 
 
+def load_baseline(target):
+    """`baseline.json` beside a run's CSV as a dict, or None when absent.
+
+    `strips.py vidvrd()` writes it from 2026-10-03: the loss of a model that
+    always predicts the mean training state. Older runs and log-file targets
+    have none, and they still plot.
+    """
+    path = os.path.join(target, "baseline.json") if os.path.isdir(target) else None
+    if not path or not os.path.isfile(path):
+        return None
+    import json
+    with open(path) as f:
+        got = json.load(f)
+    return {k: got[k] for k in ("train_BCE", "val_BCE", "train_MSE", "val_MSE")
+            if k in got}
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("target", help="model_dir OR log file (.out/.err) OR events.out.tfevents.*")
@@ -242,12 +259,19 @@ def main():
     if val_bce:
         ax.plot(epochs[:len(val_bce)] if epochs else range(1, len(val_bce) + 1), val_bce,
                 label="val BCE", marker=".", ms=3, lw=1, alpha=0.7)
+    # Only the val line: the logged train BCE comes from train_on_batch with
+    # noise and dropout on, so it is not comparable with a noiseless mean.
+    # val BCE comes from evaluate in the test phase, and it is.
+    base = load_baseline(args.target)
+    if base and "val_BCE" in base:
+        ax.axhline(base["val_BCE"], color="C1", ls="--", lw=1,
+                   label="val BCE of the mean predictor")
     ax.set_ylabel("BCE")
     ax.set_title(f"Reconstruction BCE — {os.path.basename(source)}")
     if args.logy:
         ax.set_yscale("log")
     ax.grid(True, alpha=0.3)
-    if train_bce or val_bce:
+    if train_bce or val_bce or base:
         ax.legend()
     # Don't drop BCE from extras — it might also be useful as a separate panel below.
 

@@ -87,9 +87,29 @@ def _load_video(model_dir, domain, num):
         images, bboxes, names, frame_ids = build_dataset(**kwargs)
         print(f"[replot] rebuilt {len(images)} states from build_dataset")
 
-    N = min(num, images.shape[0])
+    # A run trained with SPLIT=clip names its val and test clips in the
+    # manifest. Its test pictures then come from the test clips only, so the
+    # render_test.png the author looks at shows clips the model never saw.
+    # Without that record, any state of the npz may land in either set.
+    split_info = manifest.get("split_info") or {}
     rng = np.random.RandomState(0)
-    idx = rng.choice(images.shape[0], N, replace=False)
+    n_train = None
+    if split_info.get("test_clips"):
+        from latplan.util.split import frames_of
+        test_pool = frames_of(frame_ids, split_info["test_clips"])
+        held = set(frames_of(frame_ids, list(split_info.get("val_clips") or [])
+                             + list(split_info["test_clips"])))
+        train_pool = [k for k in range(images.shape[0]) if k not in held]
+        n_test = min(len(test_pool), max(1, num // 10))
+        n_train = min(len(train_pool), num - n_test)
+        idx = np.concatenate([rng.choice(train_pool, n_train, replace=False),
+                              rng.choice(test_pool, n_test, replace=False)])
+        print(f"[replot] SPLIT=clip: {n_train} training states, {n_test} "
+              f"states from the {len(split_info['test_clips'])} test clips")
+    else:
+        idx = rng.choice(images.shape[0], min(num, images.shape[0]),
+                         replace=False)
+    N = len(idx)
     images, bboxes = images[idx], bboxes[idx]
 
     picsize_grid = (np.array(PICSIZE) // 5).astype(int)
@@ -100,7 +120,7 @@ def _load_video(model_dir, domain, num):
         (images_f.reshape((N, images_f.shape[1], -1)),
          bboxes_onehot.reshape((N, images_f.shape[1], -1))),
         axis=-1).astype(np.float32)
-    return states, "blocks"
+    return states, "blocks", n_train
 
 
 def _load_blocks(track, num):
@@ -156,8 +176,10 @@ def main():
         args.domain = _auto_domain(args.model_dir)
     print(f"[replot] domain={args.domain}  model_dir={args.model_dir}")
 
+    n_train = None
     if args.domain in ("vidvrd", "actiongenome"):
-        states, plotmode = _load_video(args.model_dir, args.domain, args.num)
+        states, plotmode, n_train = _load_video(args.model_dir, args.domain,
+                                                args.num)
     elif args.domain == "blocks":
         states, plotmode = _load_blocks(args.track, args.num)
     else:
@@ -171,7 +193,7 @@ def main():
     print(f"[replot] model loaded — U={ae.parameters['U']} P={ae.parameters['P']} A={ae.parameters['A']}")
 
     N = states.shape[0]
-    split = max(1, int(N * 0.9))
+    split = n_train if n_train else max(1, int(N * 0.9))
     train, test = states[:split], states[split:]
 
     show_summary(ae, train, test)

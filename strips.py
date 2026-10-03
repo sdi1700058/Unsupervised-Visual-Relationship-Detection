@@ -620,7 +620,26 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     print(f"Built {num_trans} transitions (mode='{transition_mode}')")
 
     states = transitions.reshape((num_trans * 2, num_objs, -1))
-    if num_states < 100:
+    # SPLIT=clip gives each clip to one split. The default cut below puts the
+    # "after" frame of a val pair in training as the "before" frame of the
+    # next pair, so its val curve is not held out. See latplan/util/split.py.
+    split_mode = os.environ.get("SPLIT", "")
+    split_info = None
+    if split_mode == "clip" and transition_mode != "sequential":
+        raise SystemExit(f"vidvrd: SPLIT=clip splits the sequential pairs, so "
+                         f"TRANSITION_MODE={transition_mode!r} would train on "
+                         f"pairs the split never saw; use sequential")
+    if split_mode == "clip":
+        from latplan.util.adjacency import sequential_pairs, strict_from_env
+        from latplan.util.split import split_states
+        _pairs, _ = sequential_pairs(frame_ids, strict=strict_from_env())
+        train, val, test, split_info = split_states(all_states, frame_ids, _pairs)
+        print(f"[split] SPLIT=clip  clips {split_info['clips']}  "
+              f"pairs {split_info['pairs']}")
+    elif split_mode:
+        raise SystemExit(f"vidvrd: SPLIT={split_mode!r} is unknown; use "
+                         f"SPLIT=clip or leave it unset")
+    elif num_states < 100:
         train = val = test = all_states
     else:
         train = states[:int(len(states) * 0.9)]
@@ -634,6 +653,12 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
         "vidvrd", parameters, aeclass, _U, _A, _P,
         video_category=(category or "_all"), fps=fps)
     os.makedirs(out_path, exist_ok=True)
+
+    # The trivial model's loss, drawn as a line by tools/plot_training_curve.py
+    # so a curve can be read against something. See latplan/util/baseline.py.
+    from latplan.util.baseline import mean_baseline
+    with open(os.path.join(out_path, "baseline.json"), "w") as f:
+        _json.dump(mean_baseline(train, val), f, indent=2)
 
     ae = run(out_path, train, val, parameters)
     show_summary(ae, train, test)
@@ -651,7 +676,9 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     manifest_path = os.path.join(out_path, "loaded_videos.json")
     manifest = dict(_pv.last_load_metadata)
     manifest.update({"fps": fps, "transition_mode": transition_mode,
-                     "npz_path": npz_path if npz_path not in (None, "None", "none", "") else None})
+                     "npz_path": npz_path if npz_path not in (None, "None", "none", "") else None,
+                     "split": split_mode or "states_cut",
+                     "split_info": split_info})
     with open(manifest_path, "w") as f:
         _json.dump(manifest, f, indent=2)
     print(f"Loaded-videos manifest saved to {manifest_path}")
