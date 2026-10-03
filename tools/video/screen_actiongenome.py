@@ -93,13 +93,21 @@ def screen_clip(frames, records_by_frame, max_gap):
     }
 
 
+class _NoGlobals(pickle.Unpickler):
+    """Plain containers only: any global the pickle names is refused."""
+
+    def find_class(self, module, name):
+        raise pickle.UnpicklingError("refused global %s.%s" % (module, name))
+
+
 def load_by_clip(path=None):
     """Annotations grouped by clip, then by frame number.
 
     The annotation file is a pickle because that is the format Action Genome
-    publishes; the project ships no JSON alternative. It is the official release
-    downloaded by the author, so it is treated as trusted input. Nothing here
-    unpickles anything that arrives from elsewhere.
+    publishes; the project ships no JSON alternative. It comes from a public
+    Drive folder, so since 2026-10-03 it is read with an unpickler that refuses
+    every global: the object pickle names none, read with pickletools on
+    2026-09-28, and a pickle that names a callable cannot run it.
 
     Loading it costs a few hundred megabytes for a minute, so it is done **once**
     and the result is passed to `screen`. An earlier version re-read the file for
@@ -108,7 +116,7 @@ def load_by_clip(path=None):
     path = path or os.path.join(ANNOTATIONS,
                                 "object_bbox_and_relationship.pkl")
     with open(path, "rb") as handle:
-        raw = pickle.load(handle)
+        raw = _NoGlobals(handle).load()
 
     by_clip = {}
     for key, recs in raw.items():

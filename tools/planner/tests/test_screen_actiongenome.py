@@ -32,6 +32,39 @@ def rec(attention="['looking_at']", spatial="['in_front_of']",
             "visible": visible, "bbox": (0, 0, 10, 10), "class": "cup"}
 
 
+class _Evil(object):
+    def __reduce__(self):
+        return (os.system, ("echo pwned",))
+
+
+class TestLoadRefusesCode(unittest.TestCase):
+    """The pickle comes from a public folder, so loading must run no code.
+
+    Added 2026-10-03. The object pickle names no global at all, read with
+    pickletools on 2026-09-28, so the loader refuses every global.
+    """
+
+    def test_a_pickle_naming_a_callable_is_refused(self):
+        import pickle
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "evil.pkl")
+            with open(path, "wb") as f:
+                pickle.dump(_Evil(), f)
+            with self.assertRaises(pickle.UnpicklingError):
+                ag.load_by_clip(path)
+
+    def test_plain_annotations_still_load(self):
+        import pickle
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "ok.pkl")
+            with open(path, "wb") as f:
+                pickle.dump({"A.mp4/000001.png": [rec()]}, f)
+            got = ag.load_by_clip(path)
+        self.assertEqual(list(got), ["A.mp4"])
+
+
 class TestNonTrivialRelations(unittest.TestCase):
 
     def test_three_real_relations_count_three(self):
