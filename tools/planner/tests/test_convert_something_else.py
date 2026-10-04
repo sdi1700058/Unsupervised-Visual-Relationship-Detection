@@ -91,6 +91,15 @@ class Eligible(unittest.TestCase):
         self.assertEqual(cse.why_not(frames, max_tracks=3, min_frames=30),
                          "a track id repeats inside one frame")
 
+    def test_a_frame_listed_twice_makes_a_clip_ineligible(self):
+        # Found 2026-10-03: clips 100029, 48867 and 134969 list 114 frames
+        # twice with different boxes, and the builder kept the first copy.
+        labels = [_label("a", "0000", 0, 0, 5, 5), _label("hand", "hand", 0, 0, 5, 5)]
+        frames = [_frame("1", n, labels) for n in range(1, 40)]
+        frames.append(_frame("1", 7, [_label("a", "0000", 1, 1, 6, 6)]))
+        self.assertEqual(cse.why_not(frames, max_tracks=3, min_frames=30),
+                         "a frame is listed twice")
+
     def test_more_than_three_tracks_make_a_clip_ineligible(self):
         labels = [_label("a", "0000", 0, 0, 5, 5), _label("b", "0001", 0, 0, 5, 5),
                   _label("c", "0002", 0, 0, 5, 5), _label("hand", "hand", 0, 0, 5, 5)]

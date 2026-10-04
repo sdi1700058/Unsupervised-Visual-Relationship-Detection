@@ -21,6 +21,8 @@ THE RULES THIS FILE ADDS, each a choice of this project:
              orders them.
   two hands  a clip where one track id repeats inside a frame is skipped:
              two boxes under one id cannot be told apart.
+  repeats    a clip that lists one frame twice is skipped: three clips do,
+             with different boxes, found 2026-10-03.
   tracks     at most 3, counting every hand, because the builder drops a
              track past slot 3 for the whole clip.
 
@@ -82,6 +84,11 @@ def why_not(frames, max_tracks=3, min_frames=30):
     """Why a clip is not usable, or None when it is."""
     if len(frames) < min_frames:
         return "fewer than %d annotated frames" % min_frames
+    # Found 2026-10-03: three clips list 114 frames twice with different
+    # boxes, so one track holds two boxes in one frame.
+    names = [f["name"] for f in frames]
+    if len(names) != len(set(names)):
+        return "a frame is listed twice"
     tracks = set()
     for frame in frames:
         stds = [l["standard_category"] for l in frame.get("labels") or []]
