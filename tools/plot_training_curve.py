@@ -169,6 +169,26 @@ def _find_events_dir(model_dir):
     return candidates[-1] if candidates else None
 
 
+def latent_from(target):
+    """The epoch from which every TRAINING reconstruction goes through the latent.
+
+    `latplan/model.py` `build_decoder` skips the latent through the
+    pre-encoder until `epoch * preencoder_delay` and fades it in by twice
+    that, in the training phase only (`K.in_train_phase`): the val curve goes
+    through the latent at every epoch. None when the run has no `aux.json` or
+    no pre-encoder. Found 2026-10-04, corrected the same day by an adversary.
+    """
+    path = os.path.join(target, "aux.json") if os.path.isdir(target) else None
+    if not path or not os.path.isfile(path):
+        return None
+    import json
+    with open(path) as f:
+        p = json.load(f).get("parameters", {})
+    if not p.get("preencoder_layers") or not p.get("preencoder_delay"):
+        return None
+    return int(round(2 * float(p["preencoder_delay"]) * int(p["epoch"])))
+
+
 def load_baseline(target):
     """`baseline.json` beside a run's CSV as a dict, or None when absent.
 
@@ -266,12 +286,18 @@ def main():
     if base and "val_BCE" in base:
         ax.axhline(base["val_BCE"], color="C1", ls="--", lw=1,
                    label="val BCE of the mean predictor")
+    mark = latent_from(args.target)
+    if mark:
+        for a in axes[:, 0]:
+            a.axvline(mark, color="grey", ls=":", lw=1)
+        ax.axvline(mark, color="grey", ls=":", lw=1,
+                   label="train curve: shortcut ends here")
     ax.set_ylabel("BCE")
     ax.set_title(f"Reconstruction BCE — {os.path.basename(source)}")
     if args.logy:
         ax.set_yscale("log")
     ax.grid(True, alpha=0.3)
-    if train_bce or val_bce or base:
+    if train_bce or val_bce or base or mark:
         ax.legend()
     # Don't drop BCE from extras — it might also be useful as a separate panel below.
 

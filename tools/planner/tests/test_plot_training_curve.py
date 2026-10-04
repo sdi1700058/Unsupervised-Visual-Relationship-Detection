@@ -45,5 +45,27 @@ class TestLoadBaseline(unittest.TestCase):
             self.assertIsNone(ptc.load_baseline(log))
 
 
+class TestLatentFrom(unittest.TestCase):
+    """The epoch from which every reconstruction goes through the latent.
+
+    latplan/model.py build_decoder skips the latent through the pre-encoder
+    until epoch * preencoder_delay and fades it in by twice that, so a curve
+    before that epoch does not measure FOSAE. Found 2026-10-04 from a jump at
+    epoch 600 in all eight rung runs.
+    """
+
+    def test_the_mark_is_twice_the_delay_in_epochs(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "aux.json"), "w") as f:
+                json.dump({"parameters": {"epoch": 3000,
+                                          "preencoder_delay": 0.1,
+                                          "preencoder_layers": 2}}, f)
+            self.assertEqual(ptc.latent_from(d), 600)
+
+    def test_no_pre_encoder_or_no_file_gives_none(self):
+        with tempfile.TemporaryDirectory() as d:
+            self.assertIsNone(ptc.latent_from(d))
+
+
 if __name__ == "__main__":
     unittest.main()
