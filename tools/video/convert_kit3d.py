@@ -214,8 +214,10 @@ def read_actions(doc):
             continue
         starts, actions = flat[0:-1:2], flat[1:-1:2]
         ends = [s - 1 for s in starts[1:]] + [flat[-1] - 1]
-        out[hand] = [(a, b, KIT_ACTIONS[k]) for a, b, k
-                     in zip(starts, ends, actions)]
+        # Two label files of takes 0 to 4 hold null for one segment; it
+        # stays None, an unlabelled stretch.
+        out[hand] = [(a, b, None if k is None else KIT_ACTIONS[k])
+                     for a, b, k in zip(starts, ends, actions)]
     return out
 
 
@@ -228,7 +230,7 @@ def cycles(segments):
     primitive task."""
     out, current = [], None
     for start, end, action in segments:
-        if action == "idle":
+        if action in ("idle", None):
             if current:
                 out.append(current)
             current = None

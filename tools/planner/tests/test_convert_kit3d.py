@@ -178,6 +178,15 @@ class Roles(unittest.TestCase):
                          [(0, 28, "idle"), (29, 76, "approach"),
                           (77, 87, "lift"), (88, 157, "pour")])
 
+    def test_an_unlabelled_segment_ends_a_cycle_as_idle_does(self):
+        # subject_3/task_2_k_cooking_with_bowls/take_1 labels frames 194 to
+        # 198 of the right hand with null
+        doc = {"right_hand": [0, 0, 61, 1, 85, 5, 194, None, 199, 1, 206, 3,
+                              300]}
+        segments = ck.read_actions(doc)["right_hand"]
+        self.assertEqual(segments[3], (194, 198, None))
+        self.assertEqual(ck.cycles(segments), [(61, 193), (199, 299)])
+
     def test_a_cycle_runs_from_one_idle_to_the_next(self):
         segments = [(0, 9, "idle"), (10, 19, "approach"), (20, 29, "lift"),
                     (30, 49, "pour"), (50, 54, "retreat"), (55, 60, "idle"),
