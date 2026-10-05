@@ -79,6 +79,23 @@ class TestAssignByGroup(unittest.TestCase):
         got = split.assign_clips(frame_ids, group="S[0-9]+")
         self.assertEqual(got, split.assign_clips(frame_ids))
 
+    def test_named_groups_go_to_val_and_test(self):
+        frame_ids = _session_clips([("S04", 6), ("S21", 2), ("S25", 12),
+                                    ("S28", 2)])
+        got = split.assign_clips(frame_ids, group="S[0-9]+",
+                                 val_groups=["S21"], test_groups=["S28"])
+        by_session = {}
+        for clip, name in got.items():
+            by_session.setdefault(clip[:3], set()).add(name)
+        self.assertEqual(by_session, {"S04": {"train"}, "S21": {"val"},
+                                      "S25": {"train"}, "S28": {"test"}})
+
+    def test_a_named_group_missing_from_the_load_is_refused(self):
+        frame_ids = _session_clips([("S04", 6), ("S21", 2), ("S28", 2)])
+        with self.assertRaises(ValueError):
+            split.assign_clips(frame_ids, group="S[0-9]+",
+                               val_groups=["S99"], test_groups=["S28"])
+
     def test_fewer_than_three_groups_cannot_be_split(self):
         frame_ids = _session_clips([("S04", 6), ("S25", 6)])
         with self.assertRaises(ValueError):

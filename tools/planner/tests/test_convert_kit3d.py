@@ -1,0 +1,135 @@
+"""KIT Bimanual from `3d_objects`: tracked instances and both hands.
+
+Plan `notes/plans/2026-10-05-dataset-fixes.md`, F3. The author decided on
+2026-10-05 to convert KIT from its 3D boxes, because the 2D detections name
+one box for each class, misname objects and hold no hand. No camera values
+ship, so each take fits its own pinhole camera from 3D box centres to the
+centres of the single 2D box of the same class, and a take whose held-out
+error is above 10 px is dropped.
+"""
+
+import unittest
+
+import numpy as np
+
+from tools.video import convert_kit3d as ck
+
+
+TRUE_Q = np.array([560.0, 540.0, 330.0, 250.0, 0.30, -0.05, 0.02,
+                   20.0, 720.0, 0.0])
+
+
+def _table_points(n, seed=0):
+    rng = np.random.RandomState(seed)
+    return np.c_[rng.uniform(-400, 400, n), rng.uniform(-820, -600, n),
+                 rng.uniform(-1700, -1000, n)]
+
+
+def _box(x0, x1, y0, y1, z0, z1):
+    return {"x0": x0, "x1": x1, "y0": y0, "y1": y1, "z0": z0, "z1": z1}
+
+
+class Camera(unittest.TestCase):
+
+    def test_a_fit_recovers_the_projection_of_a_known_camera(self):
+        X = _table_points(200)
+        U = ck.project(ck.camera_matrix(TRUE_Q), X)
+        q = ck.fit_camera(X, U)
+        err = np.hypot(*(ck.project(ck.camera_matrix(q), X) - U).T)
+        self.assertLess(np.median(err), 0.5)
+
+    def test_the_held_out_error_is_small_for_a_known_camera(self):
+        X = _table_points(200, seed=1)
+        U = ck.project(ck.camera_matrix(TRUE_Q), X)
+        self.assertLess(ck.heldout_error(X, U), 0.5)
+
+    def test_the_held_out_error_is_large_when_the_two_halves_disagree(self):
+        X = _table_points(200, seed=2)
+        U = ck.project(ck.camera_matrix(TRUE_Q), X)
+        U[100:] += 40.0
+        self.assertGreater(ck.heldout_error(X, U), 10.0)
+
+
+class ProjectedBox(unittest.TestCase):
+
+    def test_the_box_holds_all_eight_projected_corners_inside_the_image(self):
+        P = ck.camera_matrix(TRUE_Q)
+        b = _box(-50, 50, -800, -700, -1300, -1200)
+        x1, y1, x2, y2 = ck.projected_box(P, b, 640, 480)
+        corners = ck.project(P, ck.box_corners(b))
+        self.assertLessEqual(x1, corners[:, 0].min() + 1)
+        self.assertGreaterEqual(x2, corners[:, 0].max() - 1)
+        self.assertTrue(0 <= x1 < x2 <= 640 and 0 <= y1 < y2 <= 480)
+
+    def test_a_box_behind_the_camera_gives_none(self):
+        P = ck.camera_matrix(TRUE_Q)
+        self.assertIsNone(ck.projected_box(P, _box(-50, 50, -800, -700,
+                                                   400, 500), 640, 480))
+
+    def test_a_box_wholly_outside_the_image_gives_none(self):
+        P = ck.camera_matrix(TRUE_Q)
+        self.assertIsNone(ck.projected_box(P, _box(5000, 5100, -800, -700,
+                                                   -1300, -1200), 640, 480))
+
+
+class Matching(unittest.TestCase):
+
+    def test_a_class_with_one_box_in_each_gives_one_pair(self):
+        d2 = [{"bounding_box": {"x": 0.5, "y": 0.5, "w": 0.1, "h": 0.1},
+               "candidates": [{"class_name": "cup"}]},
+              {"bounding_box": {"x": 0.2, "y": 0.2, "w": 0.1, "h": 0.1},
+               "candidates": []}]
+        d3 = [{"class_name": "cup", "instance_name": "cup_1",
+               "bounding_box": _box(0, 10, 0, 10, -1010, -1000)}]
+        pairs = ck.matched_centres(d2, d3, 640, 480)
+        self.assertEqual(len(pairs), 1)
+        np.testing.assert_allclose(pairs[0][0], [5, 5, -1005])
+        np.testing.assert_allclose(pairs[0][1], [320, 240])
+
+    def test_a_class_seen_twice_in_3d_gives_no_pair(self):
+        d2 = [{"bounding_box": {"x": 0.5, "y": 0.5, "w": 0.1, "h": 0.1},
+               "candidates": [{"class_name": "bowl"}]}]
+        d3 = [{"class_name": "bowl", "instance_name": "bowl_1",
+               "bounding_box": _box(0, 10, 0, 10, -1010, -1000)},
+              {"class_name": "bowl", "instance_name": "bowl_2",
+               "bounding_box": _box(90, 99, 0, 10, -1010, -1000)}]
+        self.assertEqual(ck.matched_centres(d2, d3, 640, 480), [])
+
+
+class Instances(unittest.TestCase):
+
+    def test_an_instance_takes_its_most_frequent_class(self):
+        frames = [[{"instance_name": "banana_2", "class_name": c}]
+                  for c in ("banana", "knife", "banana", "bowl", "banana")]
+        self.assertEqual(ck.instance_classes(frames), {"banana_2": "banana"})
+
+    def test_the_hands_are_named_by_their_instance(self):
+        frames = [[{"instance_name": "LeftHand_5", "class_name": "LeftHand"}]]
+        self.assertEqual(ck.instance_classes(frames),
+                         {"LeftHand_5": "LeftHand"})
+
+
+class FrameRate(unittest.TestCase):
+
+    def test_the_rate_comes_from_the_metadata_of_the_take(self):
+        text = ("name,type,value\nfps,unsigned int,15\n"
+                "framesPerChunk,unsigned int,100\n")
+        self.assertEqual(ck.take_fps(text), 15)
+
+
+class ClipJson(unittest.TestCase):
+
+    def test_a_track_is_an_instance_and_its_category_is_the_class(self):
+        frames = {0: {"cup_2": (0.9, (1, 2, 30, 40)),
+                      "LeftHand_5": (1.0, (50, 60, 70, 80))},
+                  1: {"cup_2": (0.9, (2, 3, 31, 41))}}
+        doc = ck.clip_json("c", frames, 0, 2, 640, 480,
+                           {"cup_2": "cup", "LeftHand_5": "LeftHand"})
+        cats = dict((o["tid"], o["category"]) for o in doc["subject/objects"])
+        self.assertEqual(sorted(cats.values()), ["LeftHand", "cup"])
+        self.assertEqual(len(doc["trajectories"]), 2)
+        self.assertEqual(len(doc["trajectories"][1]), 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

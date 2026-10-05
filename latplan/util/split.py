@@ -48,9 +48,11 @@ def _group_of(clip, group):
     return found.group(0) if found else clip
 
 
-def _assign_groups(clips, group, n_val, n_test):
-    """Whole groups from the end: test, then val, each until it holds its
-    clip count. At least one group stays for each split."""
+def _assign_groups(clips, group, n_val, n_test, val_groups=None,
+                   test_groups=None):
+    """Whole groups: the named ones, or else from the end, test and then
+    val, each until it holds its clip count. At least one group stays for
+    each split."""
     groups = collections.OrderedDict()
     for clip in clips:
         groups.setdefault(_group_of(clip, group), []).append(clip)
@@ -59,6 +61,19 @@ def _assign_groups(clips, group, n_val, n_test):
                          "test need one each" % (group, len(groups)))
     order = list(groups)
     split_of = dict((g, "train") for g in order)
+    if val_groups or test_groups:
+        for name, named in (("val", val_groups), ("test", test_groups)):
+            missing = [g for g in (named or []) if g not in groups]
+            if not named or missing:
+                raise ValueError("SPLIT_%s names %r, and the load holds "
+                                 "the groups %r" % (name.upper(), named,
+                                                    order))
+            for g in named:
+                split_of[g] = name
+        out = collections.OrderedDict()
+        for clip in clips:
+            out[clip] = split_of[_group_of(clip, group)]
+        return out
     k = len(order) - 1
     for name, need, keep in (("test", n_test, 2), ("val", n_val, 1)):
         got = 0
@@ -72,14 +87,17 @@ def _assign_groups(clips, group, n_val, n_test):
     return out
 
 
-def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05), group=None):
+def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05), group=None,
+                 val_groups=None, test_groups=None):
     """`{clip: "train" | "val" | "test"}`, clips in first-appearance order.
 
     `group`, a regex such as `S[0-9]+`, keeps the clips whose names start
     with one match in one split, so that val and test show sessions that
     training never saw. Added 2026-10-05: HA-ViD windows load in sorted name
     order, and the val windows of the 2026-10-03 runs came from session S25,
-    which training also held.
+    which training also held. `val_groups` and `test_groups` name the
+    groups of val and test, because the largest HA-ViD session, S25, sorts
+    second to last.
     """
     clips = list(collections.OrderedDict.fromkeys(_video_of(f)
                                                   for f in frame_ids))
@@ -89,7 +107,8 @@ def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05), group=None):
     n_val = max(1, int(round(fractions[1] * len(clips))))
     n_test = max(1, int(round(fractions[2] * len(clips))))
     if group:
-        return _assign_groups(clips, group, n_val, n_test)
+        return _assign_groups(clips, group, n_val, n_test, val_groups,
+                              test_groups)
     n_train = len(clips) - n_val - n_test
     out = collections.OrderedDict()
     for k, clip in enumerate(clips):
@@ -99,13 +118,14 @@ def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05), group=None):
 
 
 def split_states(states, frame_ids, pairs, fractions=(0.90, 0.05, 0.05),
-                 group=None):
+                 group=None, val_groups=None, test_groups=None):
     """`(train, val, test, info)`, each split the states of its own clips' pairs.
 
     `states` is indexed like `frame_ids`. `info` holds the clip and pair counts
     of each split, for the log and the run manifest.
     """
-    assignment = assign_clips(frame_ids, fractions, group=group)
+    assignment = assign_clips(frame_ids, fractions, group=group,
+                              val_groups=val_groups, test_groups=test_groups)
     by_split = dict((s, []) for s in SPLITS)
     for i, j in pairs:
         by_split[assignment[_video_of(frame_ids[i])]].append((i, j))

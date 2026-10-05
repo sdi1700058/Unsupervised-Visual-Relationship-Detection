@@ -639,12 +639,19 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     elif split_mode == "clip":
         from latplan.util.adjacency import sequential_pairs, strict_from_env
         from latplan.util.split import split_states
+        import re
         _pairs, _ = sequential_pairs(frame_ids, strict=strict_from_env())
         # SPLIT_GROUP, a regex on the clip name, keeps one session in one
         # split, so val and test show sessions that training never saw.
         train, val, test, split_info = split_states(
             all_states, frame_ids, _pairs,
-            group=os.environ.get("SPLIT_GROUP") or None)
+            group=os.environ.get("SPLIT_GROUP") or None,
+            val_groups=[g for g in re.split(r"[,:\s]+",
+                                            os.environ.get("SPLIT_VAL", ""))
+                        if g] or None,
+            test_groups=[g for g in re.split(r"[,:\s]+",
+                                             os.environ.get("SPLIT_TEST", ""))
+                         if g] or None)
         print(f"[split] SPLIT=clip  group {split_info['group']!r}  "
               f"clips {split_info['clips']}  pairs {split_info['pairs']}")
     elif split_mode:

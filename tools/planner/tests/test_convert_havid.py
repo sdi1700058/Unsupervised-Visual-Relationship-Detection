@@ -108,5 +108,74 @@ class ClipJson(unittest.TestCase):
                          {"xmin": 635, "ymin": 355, "xmax": 640, "ymax": 360})
 
 
+
+def _role_boxes():
+    """Two hands, two ball seats and one cylinder base over frames 0 to 9.
+
+    Hand 2 sits beside ball seat 5. Ball seat 9 lies far from both hands.
+    """
+    out = {}
+    for f in range(10):
+        out[f] = [(1, "Hand", (0, 0, 10, 10)),
+                  (2, "Hand", (100, 100, 110, 110)),
+                  (5, "Ball Seat", (105, 105, 115, 115)),
+                  (9, "Ball Seat", (500, 500, 510, 510)),
+                  (7, "Cylinder Base", (120, 120, 140, 140))]
+    return out
+
+
+class Roles(unittest.TestCase):
+    """Role-based slot selection. Plan notes/plans/2026-10-05-dataset-fixes.md
+    F4, decided by the author on 2026-10-05: the slots are the acting hand,
+    the moved object and the target object, from the action labels. The
+    codes and their objects are Figure 9 of `zheng2023`, p.17.
+    """
+
+    def test_a_code_gives_its_verb_moved_object_target_and_tool(self):
+        self.assertEqual(ch.parse_code("ibscb"),
+                         ("i", "Ball Seat", "Cylinder Base", None))
+        self.assertEqual(ch.parse_code("sshc1dh"),
+                         ("s", "Screw (hex)", "Hole C1", "Screwdriver (hex)"))
+        self.assertEqual(ch.parse_code("sntftwn"),
+                         ("s", "Nut", "Shaft", "Wrench (nut)"))
+
+    def test_a_code_with_one_object_has_no_target(self):
+        self.assertEqual(ch.parse_code("gdh"),
+                         ("g", "Screwdriver (hex)", None, None))
+
+    def test_segments_drop_null_and_wrong(self):
+        text = "0 11 null\n12 40 ibscb\n41 50 w\n51 90 sshc1dh\n"
+        self.assertEqual(ch.read_segments(text),
+                         [(12, 40, "ibscb"), (51, 90, "sshc1dh")])
+
+    def test_the_hand_nearest_the_moved_object_acts(self):
+        got = ch.role_tracks(_role_boxes(), 0, 9, "Ball Seat",
+                             "Cylinder Base")
+        self.assertEqual(got, (2, 5, 7))
+
+    def test_no_target_box_gives_no_roles(self):
+        self.assertIsNone(ch.role_tracks(_role_boxes(), 0, 9, "Ball Seat",
+                                         "Hole C1"))
+
+    def test_coverage_is_the_share_of_frames_with_a_box(self):
+        boxes = _role_boxes()
+        for f in range(4):
+            boxes[f] = [b for b in boxes[f] if b[0] != 7]
+        self.assertAlmostEqual(ch.coverage(boxes, 0, 9, 7), 0.6)
+
+    def test_a_role_clip_holds_only_the_three_role_tracks(self):
+        doc = ch.role_clip_json("v_pt000000_rh", _role_boxes(), 0, 10, 640,
+                                360, 0.5, (2, 5, 7))
+        cats = [o["category"] for o in sorted(doc["subject/objects"],
+                                               key=lambda o: o["tid"])]
+        self.assertEqual(cats, ["Hand", "Ball Seat", "Cylinder Base"])
+        self.assertEqual(len(doc["trajectories"]), 10)
+        self.assertEqual(sorted(b["tid"] for b in doc["trajectories"][0]),
+                         [0, 1, 2])
+
+    def test_a_role_clip_id_names_its_video_start_and_hand(self):
+        self.assertEqual(ch.role_clip_id("S25A05I01M0", 30, "rh"),
+                         "S25A05I01M0_pt000030_rh")
+
 if __name__ == "__main__":
     unittest.main()
