@@ -623,13 +623,20 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     # SPLIT=clip gives each clip to one split. The default cut below puts the
     # "after" frame of a val pair in training as the "before" frame of the
     # next pair, so its val curve is not held out. See latplan/util/split.py.
+    # SPLIT=none trains and scores the same frames, for an overfit check.
     split_mode = os.environ.get("SPLIT", "")
     split_info = None
-    if split_mode == "clip" and transition_mode != "sequential":
+    if split_mode == "none":
+        # An overfit: train, val and test are the same frames on purpose.
+        train = val = test = all_states
+        split_info = {"mode": "none", "states": int(len(all_states))}
+        print(f"[split] SPLIT=none  train, val and test are all "
+              f"{len(all_states)} states, an overfit")
+    elif split_mode == "clip" and transition_mode != "sequential":
         raise SystemExit(f"vidvrd: SPLIT=clip splits the sequential pairs, so "
                          f"TRANSITION_MODE={transition_mode!r} would train on "
                          f"pairs the split never saw; use sequential")
-    if split_mode == "clip":
+    elif split_mode == "clip":
         from latplan.util.adjacency import sequential_pairs, strict_from_env
         from latplan.util.split import split_states
         _pairs, _ = sequential_pairs(frame_ids, strict=strict_from_env())
@@ -638,7 +645,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
               f"pairs {split_info['pairs']}")
     elif split_mode:
         raise SystemExit(f"vidvrd: SPLIT={split_mode!r} is unknown; use "
-                         f"SPLIT=clip or leave it unset")
+                         f"SPLIT=clip, SPLIT=none or leave it unset")
     elif num_states < 100:
         train = val = test = all_states
     else:
