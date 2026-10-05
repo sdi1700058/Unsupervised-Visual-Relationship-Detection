@@ -38,6 +38,53 @@ def _clips(n_clips, frames_each):
     return frame_ids, pairs
 
 
+def _session_clips(sessions):
+    """Frame ids of clips named like HA-ViD windows, `S25A05I01M0_000150`."""
+    frame_ids = []
+    for session, n_clips in sessions:
+        for c in range(n_clips):
+            for f in range(2):
+                frame_ids.append("%sA%02dI01M0_%06d/%06d" % (session, c, 0, f))
+    return frame_ids
+
+
+class TestAssignByGroup(unittest.TestCase):
+    """SPLIT_GROUP keeps one session in one split. Added 2026-10-05.
+
+    HA-ViD windows load in sorted name order, so the 4 val windows of the
+    2026-10-03 runs came from session S25, which training also held. A
+    regex on the clip name names its group, and whole groups go to val and
+    test, so a val clip shows a session that training never saw.
+    """
+
+    def test_a_session_never_spans_two_splits(self):
+        frame_ids = _session_clips([("S04", 6), ("S13", 6), ("S25", 4),
+                                    ("S28", 4)])
+        got = split.assign_clips(frame_ids, group="S[0-9]+")
+        by_session = {}
+        for clip, name in got.items():
+            by_session.setdefault(clip[:3], set()).add(name)
+        self.assertEqual(by_session, {"S04": {"train"}, "S13": {"train"},
+                                      "S25": {"val"}, "S28": {"test"}})
+
+    def test_a_large_last_session_goes_whole_to_val(self):
+        frame_ids = _session_clips([("S04", 30), ("S25", 12), ("S28", 4)])
+        got = split.assign_clips(frame_ids, group="S[0-9]+")
+        val = [c for c, s in got.items() if s == "val"]
+        self.assertEqual(len(val), 12)
+        self.assertTrue(all(c.startswith("S25") for c in val))
+
+    def test_a_name_the_regex_misses_is_its_own_group(self):
+        frame_ids, _ = _clips(20, 2)
+        got = split.assign_clips(frame_ids, group="S[0-9]+")
+        self.assertEqual(got, split.assign_clips(frame_ids))
+
+    def test_fewer_than_three_groups_cannot_be_split(self):
+        frame_ids = _session_clips([("S04", 6), ("S25", 6)])
+        with self.assertRaises(ValueError):
+            split.assign_clips(frame_ids, group="S[0-9]+")
+
+
 class TestAssign(unittest.TestCase):
 
     def test_twenty_clips_give_eighteen_one_and_one_in_load_order(self):

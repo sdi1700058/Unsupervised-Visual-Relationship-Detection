@@ -22,6 +22,7 @@ This module imports nothing from `latplan`, so it loads without TensorFlow.
 """
 
 import collections
+import re
 
 import numpy as np
 
@@ -37,8 +38,49 @@ def _video_of(frame_id):
     return str(frame_id).rpartition("/")[0]
 
 
-def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05)):
-    """`{clip: "train" | "val" | "test"}`, clips in first-appearance order."""
+def _group_of(clip, group):
+    """The group of a clip: what `group`, a regex, matches at its start.
+
+    A clip the regex does not match is its own group, so a pattern written
+    for one dataset leaves the clips of another as they were.
+    """
+    found = re.match(group, clip) if group else None
+    return found.group(0) if found else clip
+
+
+def _assign_groups(clips, group, n_val, n_test):
+    """Whole groups from the end: test, then val, each until it holds its
+    clip count. At least one group stays for each split."""
+    groups = collections.OrderedDict()
+    for clip in clips:
+        groups.setdefault(_group_of(clip, group), []).append(clip)
+    if len(groups) < 3:
+        raise ValueError("SPLIT_GROUP=%r leaves %d groups; train, val and "
+                         "test need one each" % (group, len(groups)))
+    order = list(groups)
+    split_of = dict((g, "train") for g in order)
+    k = len(order) - 1
+    for name, need, keep in (("test", n_test, 2), ("val", n_val, 1)):
+        got = 0
+        while k >= keep and got < need:
+            split_of[order[k]] = name
+            got += len(groups[order[k]])
+            k -= 1
+    out = collections.OrderedDict()
+    for clip in clips:
+        out[clip] = split_of[_group_of(clip, group)]
+    return out
+
+
+def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05), group=None):
+    """`{clip: "train" | "val" | "test"}`, clips in first-appearance order.
+
+    `group`, a regex such as `S[0-9]+`, keeps the clips whose names start
+    with one match in one split, so that val and test show sessions that
+    training never saw. Added 2026-10-05: HA-ViD windows load in sorted name
+    order, and the val windows of the 2026-10-03 runs came from session S25,
+    which training also held.
+    """
     clips = list(collections.OrderedDict.fromkeys(_video_of(f)
                                                   for f in frame_ids))
     if len(clips) < 3:
@@ -46,6 +88,8 @@ def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05)):
                          "train, val and test; this load has %d" % len(clips))
     n_val = max(1, int(round(fractions[1] * len(clips))))
     n_test = max(1, int(round(fractions[2] * len(clips))))
+    if group:
+        return _assign_groups(clips, group, n_val, n_test)
     n_train = len(clips) - n_val - n_test
     out = collections.OrderedDict()
     for k, clip in enumerate(clips):
@@ -54,13 +98,14 @@ def assign_clips(frame_ids, fractions=(0.90, 0.05, 0.05)):
     return out
 
 
-def split_states(states, frame_ids, pairs, fractions=(0.90, 0.05, 0.05)):
+def split_states(states, frame_ids, pairs, fractions=(0.90, 0.05, 0.05),
+                 group=None):
     """`(train, val, test, info)`, each split the states of its own clips' pairs.
 
     `states` is indexed like `frame_ids`. `info` holds the clip and pair counts
     of each split, for the log and the run manifest.
     """
-    assignment = assign_clips(frame_ids, fractions)
+    assignment = assign_clips(frame_ids, fractions, group=group)
     by_split = dict((s, []) for s in SPLITS)
     for i, j in pairs:
         by_split[assignment[_video_of(frame_ids[i])]].append((i, j))
@@ -79,6 +124,7 @@ def split_states(states, frame_ids, pairs, fractions=(0.90, 0.05, 0.05)):
         "pairs": dict((s, len(by_split[s])) for s in SPLITS),
         "val_clips": [c for c, s in assignment.items() if s == "val"],
         "test_clips": [c for c, s in assignment.items() if s == "test"],
+        "group": group,
     }
     return out[0], out[1], out[2], info
 
