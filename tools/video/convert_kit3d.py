@@ -101,6 +101,16 @@ def fit_camera(X, U, q0=None):
     return best[1]
 
 
+def oriented(P, X):
+    """`P` or `-P`, whichever puts the points `X` in front of the camera.
+
+    Both give the same pixels, so a fit may return either. Found on
+    2026-10-05: with the wrong one, `projected_box` refused every box of 47
+    of 66 windows as behind the camera.
+    """
+    return -P if np.median(_homogeneous(P, X)[:, 2]) < 0 else P
+
+
 def heldout_error(X, U):
     """Median px error on the second half when fit on the first half."""
     X = np.asarray(X, dtype=float)
@@ -185,17 +195,87 @@ def clip_json(clip, frames, start, size, width, height, category_of):
             "trajectories": trajectories, "relation_instances": []}
 
 
+# The 14 actions of the labels, in the order of `dreher2019` p.3. The label
+# number is the place in this list: the right hand of
+# `subject_2/task_5_k_cereals/take_0` reads approach, lift, pour, retreat.
+KIT_ACTIONS = ("idle", "approach", "retreat", "lift", "place", "hold",
+               "stir", "pour", "cut", "drink", "wipe", "hammer", "saw",
+               "screw")
+NO_OBJECT = ("idle", "approach", "retreat")
+TOUCH = ("contact", "moving together", "fixed moving together")
+
+
+def read_actions(doc):
+    """`{hand: [(start, end, action)]}` of one label file, where the list
+    alternates a start frame and an action number and ends with the last
+    frame."""
+    out = {}
+    for hand, flat in doc.items():
+        if not isinstance(flat, list):
+            continue
+        starts, actions = flat[0:-1:2], flat[1:-1:2]
+        ends = [s - 1 for s in starts[1:]] + [flat[-1] - 1]
+        out[hand] = [(a, b, KIT_ACTIONS[k]) for a, b, k
+                     in zip(starts, ends, actions)]
+    return out
+
+
+def _touch_counts(frames3d, relations, start, end, who):
+    """`{instance: frames in which it touches an instance named by who}`."""
+    counts = collections.Counter()
+    for f in range(start, end + 1):
+        names = [o["instance_name"] for o in frames3d[f]]
+        seen = set()
+        for r in relations[f]:
+            if r["relation_name"] not in TOUCH:
+                continue
+            a, b = names[r["subject_index"]], names[r["object_index"]]
+            for x, y in ((a, b), (b, a)):
+                if who(x) and "Hand" not in y:
+                    seen.add(y)
+        counts.update(seen)
+    return counts
+
+
+def kit_role_tracks(frames3d, relations, start, end, hand_prefix,
+                    min_share=0.5):
+    """`(hand, moved, target)` instances of one action, or None.
+
+    The moved object touches the acting hand in at least `min_share` of
+    the frames, and the target is the object that touches the moved object
+    most often, in at least one frame in five."""
+    n = end - start + 1
+    hands = collections.Counter(o["instance_name"] for f in range(start, end + 1)
+                                for o in frames3d[f]
+                                if o["instance_name"].startswith(hand_prefix))
+    if not hands:
+        return None
+    hand = hands.most_common(1)[0][0]
+    moved = _touch_counts(frames3d, relations, start, end,
+                          lambda x: x == hand)
+    if not moved or moved.most_common(1)[0][1] < min_share * n:
+        return None
+    m = moved.most_common(1)[0][0]
+    target = _touch_counts(frames3d, relations, start, end,
+                           lambda x: x == m)
+    target.pop(m, None)
+    if not target or target.most_common(1)[0][1] < 0.2 * n:
+        return None
+    return (hand, m, target.most_common(1)[0][0])
+
+
 def _load(path):
     with open(path) as handle:
         return json.load(handle)
 
 
 def convert_take(derived, base, width, height, max_error, stride=2):
-    """`(frames, category_of, error)`, or `(None, None, reason)`."""
+    """`(frames, category_of, error, frames3d)`, or
+    `(None, None, reason, None)`."""
     n = len(glob.glob(os.path.join(derived, base, "3d_objects",
                                    "frame_*.json")))
     if n == 0:
-        return None, None, "no 3d_objects"
+        return None, None, "no 3d_objects", None
     d3 = [_load(os.path.join(derived, base, "3d_objects",
                              "frame_%d.json" % f)) for f in range(n)]
     pairs = []
@@ -204,13 +284,13 @@ def convert_take(derived, base, width, height, max_error, stride=2):
         if os.path.exists(p2):
             pairs += matched_centres(_load(p2), d3[f], width, height)
     if len(pairs) < 40:
-        return None, None, "%d matched boxes, too few to fit" % len(pairs)
+        return None, None, "%d matched boxes, too few to fit" % len(pairs), None
     X = np.array([p[0] for p in pairs])
     U = np.array([p[1] for p in pairs])
     error = heldout_error(X, U)
     if error > max_error:
-        return None, None, "held-out error %.1f px" % error
-    P = camera_matrix(fit_camera(X, U))
+        return None, None, "held-out error %.1f px" % error, None
+    P = oriented(camera_matrix(fit_camera(X, U)), X)
     frames = {}
     for f in range(n):
         row = {}
@@ -220,7 +300,55 @@ def convert_take(derived, base, width, height, max_error, stride=2):
                 row[obj["instance_name"]] = (float(obj.get("certainty", 1.0)),
                                              box)
         frames[f] = row
-    return frames, instance_classes(d3), error
+    return frames, instance_classes(d3), error, d3
+
+
+def role_clips(derived, labels, base, clip_stem, frames, d3, category_of,
+               size, min_length, min_coverage, refused):
+    """`[(clip, start, length, document)]`: one clip for each action of a
+    hand that touches an object, with only the hand, the moved object and
+    the target. `refused` counts the others by reason."""
+    def refuse(reason):
+        refused[reason] = refused.get(reason, 0) + 1
+
+    path = os.path.join(labels, base + ".json")
+    if not os.path.exists(path):
+        refuse("no label file")
+        return []
+    relations = [_load(os.path.join(derived, base, "spatial_relations",
+                                    "frame_%d.json" % f))
+                 if os.path.exists(os.path.join(derived, base,
+                                                "spatial_relations",
+                                                "frame_%d.json" % f)) else []
+                 for f in range(len(d3))]
+    out = []
+    for hand, segments in sorted(read_actions(_load(path)).items()):
+        prefix = {"right_hand": "RightHand", "left_hand": "LeftHand"}[hand]
+        for start, end, action in segments:
+            if action in NO_OBJECT:
+                continue
+            if end - start + 1 < min_length:
+                refuse("shorter than %d frames" % min_length)
+                continue
+            end = min(end, start + size - 1, len(d3) - 1)
+            tracks = kit_role_tracks(d3, relations, start, end, prefix)
+            if tracks is None:
+                refuse("no moved object or no target by contact")
+                continue
+            share = min(sum(1 for f in range(start, end + 1)
+                            if t in frames.get(f, {})) / float(end - start + 1)
+                        for t in tracks)
+            if share < min_coverage:
+                refuse("a role is boxed in under %d%% of the frames"
+                       % int(100 * min_coverage))
+                continue
+            keep = dict((f, dict((t, frames[f][t]) for t in tracks
+                                 if t in frames.get(f, {})))
+                        for f in range(start, end + 1))
+            clip = "%s_a%06d_%s" % (clip_stem, start,
+                                    "rh" if hand == "right_hand" else "lh")
+            out.append((clip, start, end - start + 1, keep))
+    return out
 
 
 def main(argv=None):
@@ -237,15 +365,24 @@ def main(argv=None):
     ap.add_argument("--size", type=int, default=150)
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--max-error", type=float, default=10.0)
+    ap.add_argument("--roles", action="store_true",
+                    help="one clip for each action of a hand that touches an "
+                         "object, with only the hand, the moved object and "
+                         "the target")
+    ap.add_argument("--labels", default=None,
+                    help="ext/bimacs_rgbd_data_ground_truth, for --roles")
+    ap.add_argument("--min-length", type=int, default=30)
+    ap.add_argument("--min-coverage", type=float, default=0.8)
     args = ap.parse_args(argv)
 
     from PIL import Image
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from convert_kit import clip_id, window_starts
-    ann_dir = os.path.join(args.out, "annotations")
+    ann_dir = os.path.join(args.out,
+                           "annotations_roles" if args.roles else "annotations")
     frames_root = os.path.join(args.out, "frames_%dfps" % args.fps)
     os.makedirs(ann_dir, exist_ok=True)
-    kept, dropped, errors = [], {}, {}
+    kept, dropped, errors, refused = [], {}, {}, {}
     for spec in args.takes:
         subject, task, take = spec.split(":")
         subject, take = int(subject), int(take)
@@ -267,8 +404,8 @@ def main(argv=None):
             continue
         with Image.open(pngs[min(pngs)]) as im:
             width, height = im.size
-        frames, category_of, error = convert_take(args.derived, base, width,
-                                                  height, args.max_error)
+        frames, category_of, error, d3 = convert_take(
+            args.derived, base, width, height, args.max_error)
         if frames is None:
             dropped[spec] = error
             continue
@@ -285,6 +422,25 @@ def main(argv=None):
             if not os.path.exists(dst):
                 with Image.open(pngs[f]) as im:
                     im.convert("RGB").save(dst, quality=92)
+        if args.roles:
+            stem = "s%d_%s_take%d" % (subject, task, take)
+            for clip, start, length, keep in role_clips(
+                    args.derived, args.labels, base, stem, frames, d3,
+                    category_of, args.size, args.min_length,
+                    args.min_coverage, refused):
+                link_dir = os.path.join(frames_root, clip)
+                os.makedirs(link_dir, exist_ok=True)
+                for k in range(length):
+                    dst = os.path.join(link_dir, "%06d.jpg" % k)
+                    if not os.path.lexists(dst):
+                        os.symlink(os.path.join(
+                            "..", "_video", os.path.basename(whole),
+                            "%06d.jpg" % (start + k)), dst)
+                with open(os.path.join(ann_dir, clip + ".json"), "w") as f:
+                    json.dump(clip_json(clip, keep, start, length, width,
+                                        height, category_of), f)
+                kept.append(clip)
+            continue
         for start in window_starts(len(frames), args.size):
             clip = clip_id(subject, task, take, start)
             link_dir = os.path.join(frames_root, clip)
@@ -302,6 +458,9 @@ def main(argv=None):
         handle.write("\n".join(sorted(kept)) + "\n")
     print("wrote %d clips. held-out px error by take: %s. dropped takes: %s"
           % (len(kept), json.dumps(errors), json.dumps(dropped)))
+    if args.roles:
+        print("refused actions, by reason: %s"
+              % json.dumps(refused, sort_keys=True))
     return 0 if kept else 1
 
 

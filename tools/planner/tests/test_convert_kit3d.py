@@ -50,6 +50,21 @@ class Camera(unittest.TestCase):
         self.assertGreater(ck.heldout_error(X, U), 10.0)
 
 
+class Orientation(unittest.TestCase):
+    """P and -P give the same pixels, so a fit can return a camera with every
+    point behind it. Found 2026-10-05: 47 of 66 converted windows held no
+    box, because `projected_box` refused boxes behind such a camera."""
+
+    def test_a_camera_with_the_points_behind_it_is_turned_around(self):
+        X = _table_points(50)
+        P = -ck.camera_matrix(TRUE_Q)
+        Q = ck.oriented(P, X)
+        np.testing.assert_allclose(ck.project(Q, X), ck.project(P, X))
+        b = _box(-50, 50, -800, -700, -1300, -1200)
+        self.assertIsNone(ck.projected_box(P, b, 640, 480))
+        self.assertIsNotNone(ck.projected_box(Q, b, 640, 480))
+
+
 class ProjectedBox(unittest.TestCase):
 
     def test_the_box_holds_all_eight_projected_corners_inside_the_image(self):
@@ -129,6 +144,48 @@ class ClipJson(unittest.TestCase):
         self.assertEqual(sorted(cats.values()), ["LeftHand", "cup"])
         self.assertEqual(len(doc["trajectories"]), 2)
         self.assertEqual(len(doc["trajectories"][1]), 1)
+
+
+
+def _rel(frames):
+    """Relations of `frames` frames: the right hand touches the cup, and
+    the cup touches the bowl."""
+    objs = [{"instance_name": n} for n in ("RightHand_4", "LeftHand_5",
+                                            "cup_2", "bowl_7", "knife_3")]
+    rels = [{"subject_index": 0, "relation_name": "contact",
+             "object_index": 2},
+            {"subject_index": 2, "relation_name": "moving together",
+             "object_index": 0},
+            {"subject_index": 2, "relation_name": "contact",
+             "object_index": 3},
+            {"subject_index": 1, "relation_name": "left of",
+             "object_index": 4}]
+    return [objs] * frames, [rels] * frames
+
+
+class Roles(unittest.TestCase):
+    """Role-based slot selection for KIT. Plan
+    notes/plans/2026-10-05-dataset-fixes.md, F5. The labels give an action
+    for each hand and no object (`dreher2019` p.3), so the moved object is
+    the one in contact with the acting hand most often, and the target the
+    one in contact with the moved object most often, by the
+    `spatial_relations` KIT derives from its 3D boxes."""
+
+    def test_a_label_list_becomes_segments(self):
+        doc = {"right_hand": [0, 0, 29, 1, 77, 3, 88, 7, 158],
+               "left_hand": [0, 0, 158]}
+        self.assertEqual(ck.read_actions(doc)["right_hand"],
+                         [(0, 28, "idle"), (29, 76, "approach"),
+                          (77, 87, "lift"), (88, 157, "pour")])
+
+    def test_the_hand_its_moved_object_and_the_target(self):
+        objs, rels = _rel(10)
+        self.assertEqual(ck.kit_role_tracks(objs, rels, 0, 9, "RightHand"),
+                         ("RightHand_4", "cup_2", "bowl_7"))
+
+    def test_a_hand_that_touches_nothing_gives_no_roles(self):
+        objs, rels = _rel(10)
+        self.assertIsNone(ck.kit_role_tracks(objs, rels, 0, 9, "LeftHand"))
 
 
 if __name__ == "__main__":
