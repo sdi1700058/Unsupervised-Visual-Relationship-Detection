@@ -202,7 +202,8 @@ def load_baseline(target):
     import json
     with open(path) as f:
         got = json.load(f)
-    return {k: got[k] for k in ("train_BCE", "val_BCE", "train_MSE", "val_MSE")
+    return {k: got[k] for k in ("train_BCE", "val_BCE", "train_MSE", "val_MSE",
+                                "val_BCE_floor")
             if k in got}
 
 
@@ -286,6 +287,9 @@ def main():
     if base and "val_BCE" in base:
         ax.axhline(base["val_BCE"], color="C1", ls="--", lw=1,
                    label="val BCE of the mean predictor")
+    if base and "val_BCE_floor" in base:
+        ax.axhline(base["val_BCE_floor"], color="black", ls="-.", lw=1,
+                   label="val BCE of a perfect copy")
     mark = latent_from(args.target)
     if mark:
         for a in axes[:, 0]:

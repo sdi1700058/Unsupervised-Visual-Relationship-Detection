@@ -57,5 +57,31 @@ class TestMeanBaseline(unittest.TestCase):
         self.assertIn("rule", got)
 
 
+class TestBceFloor(unittest.TestCase):
+    """The lowest BCE that a perfect copy scores on non-binary targets.
+
+    BCE reaches 0 only where each target is 0 or 1. The MNIST panels are
+    rounded to 0 and 1 (latplan/util/mnist.py:8-9), so the sentinel
+    reaches 1e-07. Video patches are equalised and stretched into values
+    between 0 and 1 (latplan/puzzles/util.py), so a perfect copy still scores
+    the mean binary entropy of its targets. Added 2026-10-05.
+    """
+
+    def test_binary_targets_have_a_floor_of_zero(self):
+        states = np.array([[0.0, 1.0], [1.0, 0.0]], dtype=np.float32)
+        self.assertAlmostEqual(baseline.bce_floor(states), 0.0, places=5)
+
+    def test_a_half_target_has_a_floor_of_log_two(self):
+        states = np.full((3, 2, 4), 0.5, dtype=np.float32)
+        self.assertAlmostEqual(baseline.bce_floor(states), math.log(2), places=5)
+
+    def test_the_mean_baseline_reports_both_floors(self):
+        train = np.full((2, 2), 0.5, dtype=np.float32)
+        val = np.zeros((2, 2), dtype=np.float32)
+        got = baseline.mean_baseline(train, val)
+        self.assertAlmostEqual(got["train_BCE_floor"], math.log(2), places=5)
+        self.assertAlmostEqual(got["val_BCE_floor"], 0.0, places=5)
+
+
 if __name__ == "__main__":
     unittest.main()

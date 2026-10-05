@@ -44,6 +44,12 @@ class TestLoadBaseline(unittest.TestCase):
             open(log, "w").close()
             self.assertIsNone(ptc.load_baseline(log))
 
+    def test_the_floor_comes_back_when_the_file_has_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "baseline.json"), "w") as f:
+                json.dump({"val_BCE": 0.65, "val_BCE_floor": 0.21}, f)
+            self.assertEqual(ptc.load_baseline(d)["val_BCE_floor"], 0.21)
+
 
 class TestLatentFrom(unittest.TestCase):
     """The epoch from which every reconstruction goes through the latent.
