@@ -1,26 +1,17 @@
 #!/usr/bin/env bash
-# KIT Bimanual from its 3D boxes with role-based slot selection: one clip for
-# each action of a hand that touches an object, holding only the hand, the
-# moved object and the target, take 0 of the nine tasks of subjects 2 to 6.
-# Plan workbench/notes/plans/2026-10-05-dataset-fixes.md, F5. The labels give
-# no object, so the moved object and the target come from the contact
-# relations KIT derives from its 3D boxes. Run after sh/convert_kit3d.sbatch,
-# whose frames it shares. The notes below are that script's.
+# KIT Bimanual role clips, one for each manipulation cycle of a hand, from
+# takes 0 to 4 of the nine tasks of subjects 2 to 6.
 #
+# Plan workbench/notes/plans/2026-10-05-dataset-fixes.md, F5. Take 0 alone
+# gave 43 cycles with all three roles on 2026-10-05, too few to hold out two
+# whole subjects, so this takes five takes of each task. It unpacks the RGB of
+# those takes first; unzip -n skips what is on disk. Each take fits its own
+# camera, and a take whose held-out error is above 10 px is dropped.
 #
-# Plan workbench/notes/plans/2026-10-05-dataset-fixes.md, F3. Subject 1 left
-# because 83 of its 90 takes run at 15 fps. The RGB of subjects 3, 4 and 5
-# is unpacked here first, as sh/unpack_kit_rgb.sbatch did for 2 and 6. Five
-# subjects let SPLIT_GROUP hold out whole subjects: on 2026-10-05 subjects
-# 2, 3 and 6 gave 66 windows, 27 of them from subject 6, so the default
-# split would have trained on 21 windows of the test subject. Each take
-# fits its own camera, and a take whose held-out error is above 10 px is
-# dropped and named in the log.
-#
-#   sbatch sh/convert_kit3d.sbatch
+#   sbatch sh/convert_kit3d_roles.sbatch
 #SBATCH --job-name=convert-kit3d-roles
 #SBATCH --partition=normal
-#SBATCH --time=05:00:00
+#SBATCH --time=08:00:00
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=8G
 #SBATCH --output=logs/%x-%j.out
@@ -31,15 +22,15 @@ ROOT="${SLURM_SUBMIT_DIR:-$PWD}"
 cd "${ROOT}"
 RAW=data/video/kit_bimanual/raw
 RGB=data/video/kit_bimanual/rgb_ext
-for s in 3 4 5; do
+for s in 2 3 4 5 6; do
     unzip -q -n "${RAW}/bimacs_rgbd_data_subject_${s}.zip" \
-        "bimacs_rgbd_data/subject_${s}/*/take_0/rgb/*" -d "${RGB}"
+        "bimacs_rgbd_data/subject_${s}/*/take_[0-4]/rgb/*" -d "${RGB}"
     echo "subject ${s}: $(find "${RGB}/bimacs_rgbd_data/subject_${s}" -name '*.png' | wc -l) png"
 done
 .venv-local/bin/python tools/video/convert_kit3d.py \
     --derived data/video/kit_bimanual/ext/bimacs_derived_data \
     --rgb "${RGB}/bimacs_rgbd_data" \
-    --takes 2:task_1_k_cooking:0 2:task_2_k_cooking_with_bowls:0 2:task_3_k_pouring:0 2:task_4_k_wiping:0 2:task_5_k_cereals:0 2:task_6_w_hard_drive:0 2:task_7_w_free_hard_drive:0 2:task_8_w_hammering:0 2:task_9_w_sawing:0 3:task_1_k_cooking:0 3:task_2_k_cooking_with_bowls:0 3:task_3_k_pouring:0 3:task_4_k_wiping:0 3:task_5_k_cereals:0 3:task_6_w_hard_drive:0 3:task_7_w_free_hard_drive:0 3:task_8_w_hammering:0 3:task_9_w_sawing:0 4:task_1_k_cooking:0 4:task_2_k_cooking_with_bowls:0 4:task_3_k_pouring:0 4:task_4_k_wiping:0 4:task_5_k_cereals:0 4:task_6_w_hard_drive:0 4:task_7_w_free_hard_drive:0 4:task_8_w_hammering:0 4:task_9_w_sawing:0 5:task_1_k_cooking:0 5:task_2_k_cooking_with_bowls:0 5:task_3_k_pouring:0 5:task_4_k_wiping:0 5:task_5_k_cereals:0 5:task_6_w_hard_drive:0 5:task_7_w_free_hard_drive:0 5:task_8_w_hammering:0 5:task_9_w_sawing:0 6:task_1_k_cooking:0 6:task_2_k_cooking_with_bowls:0 6:task_3_k_pouring:0 6:task_4_k_wiping:0 6:task_5_k_cereals:0 6:task_6_w_hard_drive:0 6:task_7_w_free_hard_drive:0 6:task_8_w_hammering:0 6:task_9_w_sawing:0 \
+    --takes 2:task_1_k_cooking:0 2:task_1_k_cooking:1 2:task_1_k_cooking:2 2:task_1_k_cooking:3 2:task_1_k_cooking:4 2:task_2_k_cooking_with_bowls:0 2:task_2_k_cooking_with_bowls:1 2:task_2_k_cooking_with_bowls:2 2:task_2_k_cooking_with_bowls:3 2:task_2_k_cooking_with_bowls:4 2:task_3_k_pouring:0 2:task_3_k_pouring:1 2:task_3_k_pouring:2 2:task_3_k_pouring:3 2:task_3_k_pouring:4 2:task_4_k_wiping:0 2:task_4_k_wiping:1 2:task_4_k_wiping:2 2:task_4_k_wiping:3 2:task_4_k_wiping:4 2:task_5_k_cereals:0 2:task_5_k_cereals:1 2:task_5_k_cereals:2 2:task_5_k_cereals:3 2:task_5_k_cereals:4 2:task_6_w_hard_drive:0 2:task_6_w_hard_drive:1 2:task_6_w_hard_drive:2 2:task_6_w_hard_drive:3 2:task_6_w_hard_drive:4 2:task_7_w_free_hard_drive:0 2:task_7_w_free_hard_drive:1 2:task_7_w_free_hard_drive:2 2:task_7_w_free_hard_drive:3 2:task_7_w_free_hard_drive:4 2:task_8_w_hammering:0 2:task_8_w_hammering:1 2:task_8_w_hammering:2 2:task_8_w_hammering:3 2:task_8_w_hammering:4 2:task_9_w_sawing:0 2:task_9_w_sawing:1 2:task_9_w_sawing:2 2:task_9_w_sawing:3 2:task_9_w_sawing:4 3:task_1_k_cooking:0 3:task_1_k_cooking:1 3:task_1_k_cooking:2 3:task_1_k_cooking:3 3:task_1_k_cooking:4 3:task_2_k_cooking_with_bowls:0 3:task_2_k_cooking_with_bowls:1 3:task_2_k_cooking_with_bowls:2 3:task_2_k_cooking_with_bowls:3 3:task_2_k_cooking_with_bowls:4 3:task_3_k_pouring:0 3:task_3_k_pouring:1 3:task_3_k_pouring:2 3:task_3_k_pouring:3 3:task_3_k_pouring:4 3:task_4_k_wiping:0 3:task_4_k_wiping:1 3:task_4_k_wiping:2 3:task_4_k_wiping:3 3:task_4_k_wiping:4 3:task_5_k_cereals:0 3:task_5_k_cereals:1 3:task_5_k_cereals:2 3:task_5_k_cereals:3 3:task_5_k_cereals:4 3:task_6_w_hard_drive:0 3:task_6_w_hard_drive:1 3:task_6_w_hard_drive:2 3:task_6_w_hard_drive:3 3:task_6_w_hard_drive:4 3:task_7_w_free_hard_drive:0 3:task_7_w_free_hard_drive:1 3:task_7_w_free_hard_drive:2 3:task_7_w_free_hard_drive:3 3:task_7_w_free_hard_drive:4 3:task_8_w_hammering:0 3:task_8_w_hammering:1 3:task_8_w_hammering:2 3:task_8_w_hammering:3 3:task_8_w_hammering:4 3:task_9_w_sawing:0 3:task_9_w_sawing:1 3:task_9_w_sawing:2 3:task_9_w_sawing:3 3:task_9_w_sawing:4 4:task_1_k_cooking:0 4:task_1_k_cooking:1 4:task_1_k_cooking:2 4:task_1_k_cooking:3 4:task_1_k_cooking:4 4:task_2_k_cooking_with_bowls:0 4:task_2_k_cooking_with_bowls:1 4:task_2_k_cooking_with_bowls:2 4:task_2_k_cooking_with_bowls:3 4:task_2_k_cooking_with_bowls:4 4:task_3_k_pouring:0 4:task_3_k_pouring:1 4:task_3_k_pouring:2 4:task_3_k_pouring:3 4:task_3_k_pouring:4 4:task_4_k_wiping:0 4:task_4_k_wiping:1 4:task_4_k_wiping:2 4:task_4_k_wiping:3 4:task_4_k_wiping:4 4:task_5_k_cereals:0 4:task_5_k_cereals:1 4:task_5_k_cereals:2 4:task_5_k_cereals:3 4:task_5_k_cereals:4 4:task_6_w_hard_drive:0 4:task_6_w_hard_drive:1 4:task_6_w_hard_drive:2 4:task_6_w_hard_drive:3 4:task_6_w_hard_drive:4 4:task_7_w_free_hard_drive:0 4:task_7_w_free_hard_drive:1 4:task_7_w_free_hard_drive:2 4:task_7_w_free_hard_drive:3 4:task_7_w_free_hard_drive:4 4:task_8_w_hammering:0 4:task_8_w_hammering:1 4:task_8_w_hammering:2 4:task_8_w_hammering:3 4:task_8_w_hammering:4 4:task_9_w_sawing:0 4:task_9_w_sawing:1 4:task_9_w_sawing:2 4:task_9_w_sawing:3 4:task_9_w_sawing:4 5:task_1_k_cooking:0 5:task_1_k_cooking:1 5:task_1_k_cooking:2 5:task_1_k_cooking:3 5:task_1_k_cooking:4 5:task_2_k_cooking_with_bowls:0 5:task_2_k_cooking_with_bowls:1 5:task_2_k_cooking_with_bowls:2 5:task_2_k_cooking_with_bowls:3 5:task_2_k_cooking_with_bowls:4 5:task_3_k_pouring:0 5:task_3_k_pouring:1 5:task_3_k_pouring:2 5:task_3_k_pouring:3 5:task_3_k_pouring:4 5:task_4_k_wiping:0 5:task_4_k_wiping:1 5:task_4_k_wiping:2 5:task_4_k_wiping:3 5:task_4_k_wiping:4 5:task_5_k_cereals:0 5:task_5_k_cereals:1 5:task_5_k_cereals:2 5:task_5_k_cereals:3 5:task_5_k_cereals:4 5:task_6_w_hard_drive:0 5:task_6_w_hard_drive:1 5:task_6_w_hard_drive:2 5:task_6_w_hard_drive:3 5:task_6_w_hard_drive:4 5:task_7_w_free_hard_drive:0 5:task_7_w_free_hard_drive:1 5:task_7_w_free_hard_drive:2 5:task_7_w_free_hard_drive:3 5:task_7_w_free_hard_drive:4 5:task_8_w_hammering:0 5:task_8_w_hammering:1 5:task_8_w_hammering:2 5:task_8_w_hammering:3 5:task_8_w_hammering:4 5:task_9_w_sawing:0 5:task_9_w_sawing:1 5:task_9_w_sawing:2 5:task_9_w_sawing:3 5:task_9_w_sawing:4 6:task_1_k_cooking:0 6:task_1_k_cooking:1 6:task_1_k_cooking:2 6:task_1_k_cooking:3 6:task_1_k_cooking:4 6:task_2_k_cooking_with_bowls:0 6:task_2_k_cooking_with_bowls:1 6:task_2_k_cooking_with_bowls:2 6:task_2_k_cooking_with_bowls:3 6:task_2_k_cooking_with_bowls:4 6:task_3_k_pouring:0 6:task_3_k_pouring:1 6:task_3_k_pouring:2 6:task_3_k_pouring:3 6:task_3_k_pouring:4 6:task_4_k_wiping:0 6:task_4_k_wiping:1 6:task_4_k_wiping:2 6:task_4_k_wiping:3 6:task_4_k_wiping:4 6:task_5_k_cereals:0 6:task_5_k_cereals:1 6:task_5_k_cereals:2 6:task_5_k_cereals:3 6:task_5_k_cereals:4 6:task_6_w_hard_drive:0 6:task_6_w_hard_drive:1 6:task_6_w_hard_drive:2 6:task_6_w_hard_drive:3 6:task_6_w_hard_drive:4 6:task_7_w_free_hard_drive:0 6:task_7_w_free_hard_drive:1 6:task_7_w_free_hard_drive:2 6:task_7_w_free_hard_drive:3 6:task_7_w_free_hard_drive:4 6:task_8_w_hammering:0 6:task_8_w_hammering:1 6:task_8_w_hammering:2 6:task_8_w_hammering:3 6:task_8_w_hammering:4 6:task_9_w_sawing:0 6:task_9_w_sawing:1 6:task_9_w_sawing:2 6:task_9_w_sawing:3 6:task_9_w_sawing:4 \
     --out data/video/kit_bimanual/vidvrd_format_3d \
     --ids-out workbench/sh/rung_ids/kit3d-roles.txt \
     --roles --labels data/video/kit_bimanual/ext/bimacs_rgbd_data_ground_truth

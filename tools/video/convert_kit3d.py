@@ -201,7 +201,6 @@ def clip_json(clip, frames, start, size, width, height, category_of):
 KIT_ACTIONS = ("idle", "approach", "retreat", "lift", "place", "hold",
                "stir", "pour", "cut", "drink", "wipe", "hammer", "saw",
                "screw")
-NO_OBJECT = ("idle", "approach", "retreat")
 TOUCH = ("contact", "moving together", "fixed moving together")
 
 
@@ -217,6 +216,26 @@ def read_actions(doc):
         ends = [s - 1 for s in starts[1:]] + [flat[-1] - 1]
         out[hand] = [(a, b, KIT_ACTIONS[k]) for a, b, k
                      in zip(starts, ends, actions)]
+    return out
+
+
+def cycles(segments):
+    """`[(start, end)]`, each a run of actions of one hand from one idle to
+    the next: approach, lift, pour, place and retreat around one object.
+
+    A single action is short at 30 fps: 194 of the actions of 41 takes ran
+    under 30 frames on 2026-10-05. A cycle is the unit HA-ViD calls a
+    primitive task."""
+    out, current = [], None
+    for start, end, action in segments:
+        if action == "idle":
+            if current:
+                out.append(current)
+            current = None
+        else:
+            current = (current[0], end) if current else (start, end)
+    if current:
+        out.append(current)
     return out
 
 
@@ -305,9 +324,9 @@ def convert_take(derived, base, width, height, max_error, stride=2):
 
 def role_clips(derived, labels, base, clip_stem, frames, d3, category_of,
                size, min_length, min_coverage, refused):
-    """`[(clip, start, length, document)]`: one clip for each action of a
-    hand that touches an object, with only the hand, the moved object and
-    the target. `refused` counts the others by reason."""
+    """`[(clip, start, length, frames)]`: one clip for each cycle of a hand,
+    from one idle to the next, with only the hand, the moved object and the
+    target. `refused` counts the others by reason."""
     def refuse(reason):
         refused[reason] = refused.get(reason, 0) + 1
 
@@ -324,14 +343,16 @@ def role_clips(derived, labels, base, clip_stem, frames, d3, category_of,
     out = []
     for hand, segments in sorted(read_actions(_load(path)).items()):
         prefix = {"right_hand": "RightHand", "left_hand": "LeftHand"}[hand]
-        for start, end, action in segments:
-            if action in NO_OBJECT:
-                continue
+        for start, end in cycles(segments):
             if end - start + 1 < min_length:
                 refuse("shorter than %d frames" % min_length)
                 continue
             end = min(end, start + size - 1, len(d3) - 1)
-            tracks = kit_role_tracks(d3, relations, start, end, prefix)
+            # Approach and retreat touch nothing, so a cycle holds frames
+            # without contact, and the share asked of the moved object is
+            # lower than for one action.
+            tracks = kit_role_tracks(d3, relations, start, end, prefix,
+                                     min_share=0.3)
             if tracks is None:
                 refuse("no moved object or no target by contact")
                 continue
@@ -345,7 +366,7 @@ def role_clips(derived, labels, base, clip_stem, frames, d3, category_of,
             keep = dict((f, dict((t, frames[f][t]) for t in tracks
                                  if t in frames.get(f, {})))
                         for f in range(start, end + 1))
-            clip = "%s_a%06d_%s" % (clip_stem, start,
+            clip = "%s_c%06d_%s" % (clip_stem, start,
                                     "rh" if hand == "right_hand" else "lh")
             out.append((clip, start, end - start + 1, keep))
     return out

@@ -178,6 +178,12 @@ class Roles(unittest.TestCase):
                          [(0, 28, "idle"), (29, 76, "approach"),
                           (77, 87, "lift"), (88, 157, "pour")])
 
+    def test_a_cycle_runs_from_one_idle_to_the_next(self):
+        segments = [(0, 9, "idle"), (10, 19, "approach"), (20, 29, "lift"),
+                    (30, 49, "pour"), (50, 54, "retreat"), (55, 60, "idle"),
+                    (61, 70, "approach"), (71, 80, "place")]
+        self.assertEqual(ck.cycles(segments), [(10, 54), (61, 80)])
+
     def test_the_hand_its_moved_object_and_the_target(self):
         objs, rels = _rel(10)
         self.assertEqual(ck.kit_role_tracks(objs, rels, 0, 9, "RightHand"),
