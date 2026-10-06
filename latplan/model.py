@@ -410,6 +410,19 @@ Poor python coders cannot enjoy the cleanness of CLOS :before, :after, :around m
             indices_cache       = [ indices for indices in make_batch(index_array) ]
             train_data_cache    = [[ train_subdata   [indices] for train_subdata    in train_data    ] for indices in indices_cache ]
             train_data_to_cache = [[ train_subdata_to[indices] for train_subdata_to in train_data_to ] for indices in indices_cache ]
+            # KEEP_BEST=1 keeps the weights of the lowest val BCE and restores
+            # them before the save, because the runs at patch 48 overfit after
+            # epoch 1,000 of 5,000 (2026-10-06). See latplan/util/best.py.
+            from latplan.util.best import BestKeeper, split_by_counts
+            keeper = None
+            if os.environ.get("KEEP_BEST") == "1":
+                # Count only from the end of the pre-encoder fade-in, which is
+                # 2 * delay * epochs, or from KEEP_BEST_FROM when it is set.
+                fade_end = 0
+                if self.parameters.get("preencoder_layers", 0):
+                    fade_end = 2 * int(epoch * self.parameters.get("preencoder_delay", 0))
+                keeper = BestKeeper(start=int(os.environ.get("KEEP_BEST_FROM", fade_end)))
+                counts = [len(net.get_weights()) for net in self.nets]
             for epoch in range(epoch):
                 clist.on_epoch_begin(epoch,logs)
                 # Capture train_on_batch return values directly — this avoids the
@@ -430,10 +443,24 @@ Poor python coders cannot enjoy the cleanness of CLOS :before, :after, :around m
 
                 for k,v in generate_logs(val_data,  val_data_to).items():
                     logs["val_"+k] = v
+                if keeper is not None:
+                    keeper.update(epoch, logs.get("val_BCE", logs.get("val_loss")),
+                                  lambda: [w for net in self.nets for w in net.get_weights()])
                 clist.on_epoch_end(epoch,logs)
                 if self.nets[0].stop_training:
                     break
             clist.on_train_end()
+            if keeper is not None and keeper.weights is not None:
+                for net, weights in zip(self.nets, split_by_counts(keeper.weights, counts)):
+                    net.set_weights(weights)
+                self.best_epoch, self.best_value = keeper.epoch, keeper.value
+                # On disk too, so that a later scoring without training can
+                # say which weights the saved file holds.
+                with open(self.local("best_epoch.json"), "w") as f:
+                    json.dump({"best_epoch": keeper.epoch, "best_val_BCE": keeper.value,
+                               "counted_from": keeper.start}, f, indent=2)
+                print("[keep-best] restored the weights of epoch %d, val %.6f"
+                      % (keeper.epoch, keeper.value))
 
         except KeyboardInterrupt:
             print("learning stopped\n")

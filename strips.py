@@ -229,7 +229,14 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
             report_best= lambda net: net.save(),
         )
         if ae is None:
-            print("ERROR: Model was not returned by simple_genetic_search. Check parameters and training routine.")
+            # With LIMIT=1 the search never records a best trial, because it
+            # updates the best only while len(open_list) < limit
+            # (latplan/util/tuning.py). The trained network saved itself to
+            # `path` at the end of train(), so it loads from there. Found
+            # 2026-10-06; every run before only printed this error.
+            print("ERROR: Model was not returned by simple_genetic_search; "
+                  "loading the network that train() saved to", path)
+            ae = latplan.model.load(path)
         else:
             ae.save()
     elif 'reproduce' in mode:   # reproduce the best result from the grid search log
@@ -681,6 +688,28 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     ae = run(out_path, train, val, parameters)
     show_summary(ae, train, test)
     plot_autoencoding_image(ae, test, train, "blocks")
+
+    # The test clips, scored with the weights that were saved: those of the
+    # best val epoch under KEEP_BEST=1, else those of the last epoch. Added
+    # 2026-10-06, because no run at patch 48 had a test number.
+    from latplan.util.baseline import mean_baseline, reconstruction_scores
+    _scores = reconstruction_scores(test, ae.autoencode(test, batch_size=1000))
+    _base = mean_baseline(train, test)
+    _best = {}
+    _best_path = os.path.join(out_path, "best_epoch.json")
+    if os.path.isfile(_best_path):
+        with open(_best_path) as f:
+            _best = _json.load(f)
+    with open(os.path.join(out_path, "test_metrics.json"), "w") as f:
+        _json.dump({"test_BCE": _scores["BCE"], "test_MSE": _scores["MSE"],
+                    "test_BCE_mean_predictor": _base["val_BCE"],
+                    "test_BCE_floor": _base["val_BCE_floor"],
+                    "test_states": int(len(test)),
+                    "weights": "best val epoch" if _best else "last epoch",
+                    "best_epoch": _best.get("best_epoch"),
+                    "best_val_BCE": _best.get("best_val_BCE"),
+                    "best_counted_from": _best.get("counted_from")},
+                   f, indent=2)
 
     dump_states (ae, all_states)
     dump_actions(ae, transitions)

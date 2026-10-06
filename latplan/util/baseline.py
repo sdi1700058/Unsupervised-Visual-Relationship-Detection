@@ -36,6 +36,17 @@ def bce_floor(states):
     return float((-(x * np.log(x) + (1.0 - x) * np.log(1.0 - x))).mean())
 
 
+def reconstruction_scores(states, reconstruction):
+    """`{BCE, MSE}` of a reconstruction, scored as the network scores itself:
+    the prediction clipped to [1e-7, 1 - 1e-7], averaged over features and
+    then over states. Added 2026-10-06, to score the test clips."""
+    x = states.reshape(len(states), -1).astype(np.float64)
+    y = reconstruction.reshape(len(reconstruction), -1).astype(np.float64)
+    p = np.clip(y, EPSILON, 1.0 - EPSILON)
+    bce = -(x * np.log(p) + (1.0 - x) * np.log(1.0 - p))
+    return {"BCE": float(bce.mean()), "MSE": float(np.square(x - y).mean())}
+
+
 def mean_baseline(train, val):
     """`{train_BCE, train_MSE, val_BCE, val_MSE, rule}` for the mean predictor,
     and the BCE floor of each split, `train_BCE_floor` and `val_BCE_floor`."""
