@@ -270,6 +270,31 @@ class RelationInstances(unittest.TestCase):
         self.assertEqual([(g["begin_fid"], g["end_fid"]) for g in got],
                          [(0, 2)])
 
+    def test_a_negative_index_is_dropped_and_not_read_from_the_end(self):
+        # Python reads objs[-1] as the last object, so a bounds check that
+        # tests only the upper end pairs the wrong instances in silence.
+        # Added 2026-10-10 after an adversary deleted the check and all six
+        # tests stayed green.
+        order = ["RightHand_4", "cup_2"]
+        rels = [[{"subject_index": -1, "relation_name": "contact",
+                  "object_index": 0}]] * 2
+        self.assertEqual(ck.relation_instances(
+            [self._objs(order)] * 2, rels, ("RightHand_4", "cup_2"), 0, 2,
+            {"RightHand_4": 0, "cup_2": 1}), [])
+
+    def test_a_window_past_the_end_of_the_take_stops_at_the_end(self):
+        # role_clips clamps the window, so this is a guard and not a path
+        # the converter reaches. An adversary deleted the guard on
+        # 2026-10-10 and all six tests stayed green.
+        order = ["RightHand_4", "cup_2"]
+        on = [{"subject_index": 0, "relation_name": "contact",
+               "object_index": 1}]
+        got = ck.relation_instances([self._objs(order)], [on],
+                                    ("RightHand_4", "cup_2"), 0, 3,
+                                    {"RightHand_4": 0, "cup_2": 1})
+        self.assertEqual([(g["begin_fid"], g["end_fid"]) for g in got],
+                         [(0, 1)])
+
     def test_a_frame_without_a_relation_file_breaks_the_run(self):
         order = ["RightHand_4", "cup_2"]
         on = [{"subject_index": 0, "relation_name": "contact",

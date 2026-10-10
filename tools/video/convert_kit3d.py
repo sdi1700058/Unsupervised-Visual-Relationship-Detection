@@ -188,9 +188,13 @@ def relation_instances(d3, relations, tracks, start, size, tid_of):
 
     The relations are written as KIT computes them, with no smoothing.
     Measured 2026-10-10 on 7 role clips: the median instance lasts 1 frame
-    and 57 per cent last a single frame, because KIT scores each frame on its
-    own and a pair near a threshold flickers. Smoothing would change the
-    ground truth, so it is a separate decision. Plan
+    and 57 per cent last a single frame. Two causes, and the first draft of
+    this note gave only one. KIT scores each frame on its own, so a pair near
+    a threshold flickers. AND the track itself drops out of `3d_objects`: in
+    160 of the 199 role clips, 80 per cent, some frame holds no entry for one
+    of the three roles, 5,147 frame-and-track pairs in all, and every relation
+    of that track ends there. Smoothing either one would change the ground
+    truth, so it is a separate decision. Plan
     notes/plans/2026-10-10-relations-and-boxes.md, A1.
     """
     keep = set(tracks)
@@ -209,7 +213,7 @@ def relation_instances(d3, relations, tracks, start, size, tid_of):
         live = set()
         for r in rows:
             i, j = r["subject_index"], r["object_index"]
-            if i >= len(objs) or j >= len(objs):
+            if not 0 <= i < len(objs) or not 0 <= j < len(objs):
                 continue
             a, b = objs[i]["instance_name"], objs[j]["instance_name"]
             if a in keep and b in keep:
