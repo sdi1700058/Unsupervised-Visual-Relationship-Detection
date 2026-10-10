@@ -203,5 +203,82 @@ class Roles(unittest.TestCase):
         self.assertIsNone(ck.kit_role_tracks(objs, rels, 0, 9, "LeftHand"))
 
 
+class RelationInstances(unittest.TestCase):
+    """KIT's own `spatial_relations` into the VidVRD field, plan
+    notes/plans/2026-10-10-relations-and-boxes.md A1. The author chose the
+    dataset's own relations on 2026-10-10. `begin_fid` counts from the start
+    of the CLIP and `end_fid` is one past the last frame, as VidVRD writes
+    them."""
+
+    def _objs(self, order):
+        return [{"instance_name": n} for n in order]
+
+    def test_one_run_of_frames_is_one_instance(self):
+        order = ["RightHand_4", "cup_2", "bowl_7"]
+        d3 = [self._objs(order)] * 3
+        rels = [[{"subject_index": 0, "relation_name": "contact",
+                  "object_index": 1}]] * 3
+        got = ck.relation_instances(d3, rels, ("RightHand_4", "cup_2"),
+                                    0, 3, {"RightHand_4": 0, "cup_2": 1})
+        self.assertEqual(got, [{"predicate": "contact", "subject_tid": 0,
+                                "object_tid": 1, "begin_fid": 0,
+                                "end_fid": 3}])
+
+    def test_a_gap_splits_one_run_into_two_instances(self):
+        order = ["RightHand_4", "cup_2"]
+        on = [{"subject_index": 0, "relation_name": "contact",
+               "object_index": 1}]
+        d3 = [self._objs(order)] * 4
+        got = ck.relation_instances(d3, [on, [], on, on],
+                                    ("RightHand_4", "cup_2"), 0, 4,
+                                    {"RightHand_4": 0, "cup_2": 1})
+        self.assertEqual([(g["begin_fid"], g["end_fid"]) for g in got],
+                         [(0, 1), (2, 4)])
+
+    def test_a_relation_that_leaves_the_three_tracks_is_dropped(self):
+        order = ["RightHand_4", "cup_2", "knife_3"]
+        d3 = [self._objs(order)] * 2
+        rels = [[{"subject_index": 1, "relation_name": "left of",
+                  "object_index": 2}]] * 2
+        self.assertEqual(ck.relation_instances(
+            d3, rels, ("RightHand_4", "cup_2"), 0, 2,
+            {"RightHand_4": 0, "cup_2": 1}), [])
+
+    def test_the_index_is_read_against_that_frame_and_not_the_first(self):
+        # KIT lists the objects of each frame on their own, so index 0 is a
+        # different instance in frame 1 than in frame 0.
+        d3 = [self._objs(["cup_2", "RightHand_4"]),
+              self._objs(["RightHand_4", "cup_2"])]
+        rels = [[{"subject_index": 1, "relation_name": "contact",
+                  "object_index": 0}],
+                [{"subject_index": 0, "relation_name": "contact",
+                  "object_index": 1}]]
+        got = ck.relation_instances(d3, rels, ("RightHand_4", "cup_2"), 0, 2,
+                                    {"RightHand_4": 0, "cup_2": 1})
+        self.assertEqual(got, [{"predicate": "contact", "subject_tid": 0,
+                                "object_tid": 1, "begin_fid": 0,
+                                "end_fid": 2}])
+
+    def test_the_frame_numbers_count_from_the_start_of_the_clip(self):
+        # A clip that starts at frame 29 of its take writes begin_fid 0.
+        order = ["RightHand_4", "cup_2"]
+        d3 = [self._objs(order)] * 31
+        rels = [[]] * 29 + [[{"subject_index": 0, "relation_name": "contact",
+                              "object_index": 1}]] * 2
+        got = ck.relation_instances(d3, rels, ("RightHand_4", "cup_2"), 29, 2,
+                                    {"RightHand_4": 0, "cup_2": 1})
+        self.assertEqual([(g["begin_fid"], g["end_fid"]) for g in got],
+                         [(0, 2)])
+
+    def test_a_frame_without_a_relation_file_breaks_the_run(self):
+        order = ["RightHand_4", "cup_2"]
+        on = [{"subject_index": 0, "relation_name": "contact",
+               "object_index": 1}]
+        got = ck.relation_instances([self._objs(order)] * 3, [on, [], on],
+                                    ("RightHand_4", "cup_2"), 0, 3,
+                                    {"RightHand_4": 0, "cup_2": 1})
+        self.assertEqual(len(got), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

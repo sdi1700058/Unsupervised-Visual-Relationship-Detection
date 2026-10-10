@@ -176,7 +176,57 @@ def take_fps(text):
     return None
 
 
-def clip_json(clip, frames, start, size, width, height, category_of):
+def relation_instances(d3, relations, tracks, start, size, tid_of):
+    """KIT's own relations over the clip's tracks, in the VidVRD field.
+
+    `d3` and `relations` are indexed by the frame of the TAKE, and
+    `subject_index` and `object_index` point into `d3` OF THE SAME FRAME, so
+    index 0 is a different instance in another frame. `begin_fid` counts from
+    the start of the clip and `end_fid` is one past the last frame, which is
+    how VidVRD writes them. A relation whose subject or object is not one of
+    `tracks` is dropped, and an unbroken run of frames is one instance.
+
+    The relations are written as KIT computes them, with no smoothing.
+    Measured 2026-10-10 on 7 role clips: the median instance lasts 1 frame
+    and 57 per cent last a single frame, because KIT scores each frame on its
+    own and a pair near a threshold flickers. Smoothing would change the
+    ground truth, so it is a separate decision. Plan
+    notes/plans/2026-10-10-relations-and-boxes.md, A1.
+    """
+    keep = set(tracks)
+    open_at, out = {}, []
+
+    def close(key, end):
+        begin = open_at.pop(key)
+        out.append({"predicate": key[2], "subject_tid": tid_of[key[0]],
+                    "object_tid": tid_of[key[1]], "begin_fid": begin,
+                    "end_fid": end})
+
+    for off in range(size):
+        f = start + off
+        objs = d3[f] if f < len(d3) else []
+        rows = relations[f] if f < len(relations) else []
+        live = set()
+        for r in rows:
+            i, j = r["subject_index"], r["object_index"]
+            if i >= len(objs) or j >= len(objs):
+                continue
+            a, b = objs[i]["instance_name"], objs[j]["instance_name"]
+            if a in keep and b in keep:
+                live.add((a, b, r["relation_name"]))
+        for key in sorted(set(open_at) - live):
+            close(key, off)
+        for key in sorted(live):
+            open_at.setdefault(key, off)
+    for key in sorted(open_at):
+        close(key, size)
+    out.sort(key=lambda r: (r["begin_fid"], r["subject_tid"],
+                            r["object_tid"], r["predicate"]))
+    return out
+
+
+def clip_json(clip, frames, start, size, width, height, category_of,
+              relation_source=None):
     """The VidVRD-format document for frames start .. start+size-1."""
     names = sorted(set(n for f in range(start, start + size)
                        for n in frames.get(f, {})))
@@ -189,10 +239,14 @@ def clip_json(clip, frames, start, size, width, height, category_of):
                         "bbox": {"xmin": x1, "ymin": y1, "xmax": x2,
                                  "ymax": y2}})
         trajectories.append(row)
+    rels = []
+    if relation_source is not None:
+        d3, relations, tracks = relation_source
+        rels = relation_instances(d3, relations, tracks, start, size, tid)
     return {"video_id": clip, "width": int(width), "height": int(height),
             "subject/objects": [{"tid": tid[n], "category": category_of[n]}
                                 for n in names],
-            "trajectories": trajectories, "relation_instances": []}
+            "trajectories": trajectories, "relation_instances": rels}
 
 
 # The 14 actions of the labels, in the order of `dreher2019` p.3. The label
@@ -326,9 +380,13 @@ def convert_take(derived, base, width, height, max_error, stride=2):
 
 def role_clips(derived, labels, base, clip_stem, frames, d3, category_of,
                size, min_length, min_coverage, refused):
-    """`[(clip, start, length, frames)]`: one clip for each cycle of a hand,
-    from one idle to the next, with only the hand, the moved object and the
-    target. `refused` counts the others by reason."""
+    """`[(clip, start, length, frames, relation_source)]`: one clip for each
+    cycle of a hand, from one idle to the next, with only the hand, the moved
+    object and the target. `refused` counts the others by reason.
+    `relation_source` is `(d3, relations, tracks)` for `clip_json`, so KIT's
+    own relations reach the file by this path and by no other. The window
+    path of `main` holds every object of the frame, and no measurement covers
+    its relation count."""
     def refuse(reason):
         refused[reason] = refused.get(reason, 0) + 1
 
@@ -370,7 +428,8 @@ def role_clips(derived, labels, base, clip_stem, frames, d3, category_of,
                         for f in range(start, end + 1))
             clip = "%s_c%06d_%s" % (clip_stem, start,
                                     "rh" if hand == "right_hand" else "lh")
-            out.append((clip, start, end - start + 1, keep))
+            out.append((clip, start, end - start + 1, keep,
+                        (d3, relations, tracks)))
     return out
 
 
@@ -447,7 +506,7 @@ def main(argv=None):
                     im.convert("RGB").save(dst, quality=92)
         if args.roles:
             stem = "s%d_%s_take%d" % (subject, task, take)
-            for clip, start, length, keep in role_clips(
+            for clip, start, length, keep, rel_src in role_clips(
                     args.derived, args.labels, base, stem, frames, d3,
                     category_of, args.size, args.min_length,
                     args.min_coverage, refused):
@@ -461,7 +520,7 @@ def main(argv=None):
                             "%06d.jpg" % (start + k)), dst)
                 with open(os.path.join(ann_dir, clip + ".json"), "w") as f:
                     json.dump(clip_json(clip, keep, start, length, width,
-                                        height, category_of), f)
+                                        height, category_of, rel_src), f)
                 kept.append(clip)
             continue
         for start in window_starts(len(frames), args.size):
