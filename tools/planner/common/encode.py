@@ -120,8 +120,29 @@ def encode_frame(ae, states, frame_idx):
     return z
 
 
-def encode_all(ae, states):
-    """Batch-encode every state. Returns (N, U*P) int array."""
+def apply_in_batches(fn, states, batch=None):
+    """`fn` over `states`, `batch` rows at a time, concatenated.
+
+    The peak memory of one call is what this controls and nothing else: the
+    rows are independent, so the result equals `fn(states)` exactly.
+    """
     import numpy as np
-    z_continuous = ae.encode(states)             # (N, U*P) float
-    return np.asarray(z_continuous).round().astype(np.int8)
+    states = np.asarray(states)
+    if not batch or len(states) <= batch:
+        return np.asarray(fn(states))
+    return np.concatenate([np.asarray(fn(states[i:i + batch]))
+                           for i in range(0, len(states), batch)])
+
+
+def encode_all(ae, states, batch=None):
+    """Every state encoded, as an (N, U*P) int8 array.
+
+    `batch` encodes that many states per call to the model. Without it the
+    whole array goes in one call, which is what this did until 2026-10-11:
+    `export_latents.py` on the 14,314 states of the KIT role clips was
+    killed at 8 GB on 2026-10-10, so nothing could be exported from a real
+    clip set. Batching changes no value, only the peak memory.
+    """
+    import numpy as np
+    return apply_in_batches(ae.encode, states, batch).round().astype(
+        np.int8)

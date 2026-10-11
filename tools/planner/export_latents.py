@@ -157,11 +157,11 @@ def _assert_initialized():
             "data must load before the model.")
 
 
-def export(model_dir, npz_path=None, out_path=None):
+def export(model_dir, npz_path=None, out_path=None, batch=512):
     import numpy as np
 
     from tools.planner.common.encode import (
-        load_model, load_npz_states, encode_all)
+        load_model, load_npz_states, encode_all, apply_in_batches)
     from tools.planner.common.decode import features_to_bboxes
 
     model_dir = Path(model_dir).resolve()
@@ -181,7 +181,7 @@ def export(model_dir, npz_path=None, out_path=None):
     net = load_model(model_dir)
     _assert_initialized()
 
-    latents = encode_all(net, states)
+    latents = encode_all(net, states, batch=batch)
     print(f"latents {latents.shape}, {int(latents.sum())} bits set")
 
     # Decode every frame now, so the scoring stage never needs the decoder.
@@ -198,7 +198,7 @@ def export(model_dir, npz_path=None, out_path=None):
     # are identical. The planner never decodes a latent that is not already in
     # the table either — common/export.py looks boxes up by latent and falls
     # back to the nearest row by Hamming distance.
-    recon = np.asarray(net.autoencode(states))
+    recon = apply_in_batches(net.autoencode, states, batch)
     decoded = features_to_bboxes(recon)
     print(f"decoded boxes {decoded.shape}")
 
@@ -273,13 +273,18 @@ def main(argv=None):
                     help="defaults to loaded_videos.json['npz_path']")
     ap.add_argument("-o", "--out", type=Path,
                     help="defaults to <model_dir>/planner_export.npz")
+    ap.add_argument("--batch", type=int, default=512,
+                    help="states per call to the model. The whole array in "
+                         "one call was killed at 8 GB on the 14,314 states "
+                         "of the KIT role clips, 2026-10-10. 0 means one "
+                         "call.")
     args = ap.parse_args(argv)
 
     project_root = Path(__file__).resolve().parents[2]
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
-    export(args.model_dir, args.npz_path, args.out)
+    export(args.model_dir, args.npz_path, args.out, batch=args.batch)
     return 0
 
 
