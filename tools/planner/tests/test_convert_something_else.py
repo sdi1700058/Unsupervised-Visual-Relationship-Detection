@@ -222,6 +222,27 @@ class RelationInstances(unittest.TestCase):
                                      self.DOMAIN, self.PREDICATES)
         self.assertEqual([r for r in got if r["predicate"] == "is-rigid"], [])
 
+    def test_one_assertion_survives_a_negation_of_the_same_predicate(self):
+        """`bury` asserts `(in ?a hand)` and negates `(in ?b hand)` and
+        `(in ?a ?b)` in the same precondition. Judging the predicate by name
+        alone threw the true one away. Found by an adversary 2026-10-11."""
+        dom = {"bury": ("(and (in ?a hand) (not (in ?b hand))"
+                        " (not (in ?a ?b)))", "(and (in ?a ?b))")}
+        doc = self._doc([self._full([0, 1, 2])] * 2)
+        got = cse.relation_instances(doc, ["cup", "table"], "bury", dom,
+                                     {"in": 2})
+        self.assertIn({"predicate": "in", "subject_tid": 0, "object_tid": 2,
+                       "begin_fid": 0, "end_fid": 1}, got)
+
+    def test_a_negated_pair_is_not_written_even_when_another_is_asserted(self):
+        dom = {"bury": ("(and (in ?a hand) (not (in ?a ?b)))", "(and)")}
+        doc = self._doc([self._full([0, 1, 2])] * 2)
+        got = cse.relation_instances(doc, ["cup", "table"], "bury", dom,
+                                     {"in": 2})
+        self.assertEqual([r for r in got
+                          if (r["subject_tid"], r["object_tid"]) == (0, 1)],
+                         [])
+
     def test_a_clip_whose_track_count_differs_from_the_placeholders(self):
         doc = {"video_id": "c", "width": 100, "height": 100,
                "subject/objects": [{"tid": 0, "category": "cup"},

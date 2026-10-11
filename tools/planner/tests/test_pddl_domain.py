@@ -51,6 +51,19 @@ DOMAIN = """(define (domain twentybn)
         :precondition (not (is-rigid ?a))
         :effect (is-rigid ?a)
     )
+    (:action last-one
+        :parameters (?a - sth ?b - sth)
+        :precondition (nextto ?a ?b)
+        :effect (and
+            ; (on ?a ?b)
+            (touching ?a ?b)
+        )
+    )
+    (:axiom
+        :vars (?a - sth ?b - sth)
+        :context (on ?a ?b)
+        :implies (not (broken ?a))
+    )
 )
 """
 
@@ -85,7 +98,7 @@ class ParseDomain(unittest.TestCase):
     def test_every_action_is_found_with_both_halves(self):
         self.assertEqual(set(self.actions),
                          {"move-together", "break-it", "hold-still",
-                          "declare-rigid"})
+                          "declare-rigid", "last-one"})
         for pre, eff in self.actions.values():
             self.assertTrue(pre.strip())
             self.assertTrue(eff.strip())
@@ -212,6 +225,34 @@ class BinaryArgs(unittest.TestCase):
 
     def test_an_unknown_action_gives_nothing(self):
         self.assertEqual(se.binary_args(self.actions, "no-such", "on"), set())
+
+
+class CommentsAndBoundaries(unittest.TestCase):
+    """Two defects an adversary found on 2026-10-11, both in the real
+    domain. `twentybn_domain.pddl:997` holds `; (attached ?a ?b)`, a line
+    its own author disabled, and reading it as true put a relation that
+    does not exist into 5 of the 234 training clips. And the last action of
+    the file, `wipe`, had an effect of 8,130 characters because the parser
+    had no terminator and swallowed every axiom after it."""
+
+    def setUp(self):
+        self.path = _domain_file()
+        self.predicates, self.actions = se.parse_domain(self.path)
+
+    def tearDown(self):
+        os.unlink(self.path)
+
+    def test_a_commented_out_line_is_not_part_of_the_effect(self):
+        self.assertNotIn("on", se.binary_args(self.actions, "last-one", "on"))
+        self.assertEqual(se.binary_args(self.actions, "last-one", "on"), set())
+
+    def test_the_last_action_does_not_swallow_what_follows_it(self):
+        self.assertNotIn(":axiom", self.actions["last-one"][1])
+        self.assertLess(len(self.actions["last-one"][1]), 200)
+
+    def test_the_last_action_keeps_its_own_effect(self):
+        self.assertEqual(se.binary_args(self.actions, "last-one", "touching"),
+                         {("?a", "?b")})
 
 
 if __name__ == "__main__":

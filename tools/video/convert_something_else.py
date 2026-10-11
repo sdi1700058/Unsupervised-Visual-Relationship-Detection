@@ -52,13 +52,27 @@ def frame_index(name):
 HAND = "hand"
 
 
-def _asserts(text, name):
-    """Whether `text` states `name` as true, rather than negating it."""
+def asserted_pairs(text, name):
+    """`{(a, b)}`: the argument pairs `text` states `name` TRUE for.
+
+    Judged for each pair, not for the name. `bury` asserts `(in ?a hand)`
+    and negates `(in ?b hand)` and `(in ?a ?b)` in one precondition, and a
+    reader that judged the name alone called the whole predicate negated
+    and threw the true pair away. Found by an adversary on 2026-10-11.
+    """
     import re
-    if not re.search(r"\(\s*%s[\s)]" % re.escape(name), text):
-        return False
-    return not re.search(r"\(\s*not\s*\(\s*%s[\s)]" % re.escape(name),
-                         text)
+    negated = set()
+    for m in re.finditer(r"\(\s*not\s*\(\s*%s\s+([^()]*)\)"
+                         % re.escape(name), text):
+        parts = m.group(1).split()
+        if len(parts) == 2:
+            negated.add((parts[0], parts[1]))
+    out = set()
+    for m in re.finditer(r"\(\s*%s\s+([^()]*)\)" % re.escape(name), text):
+        parts = m.group(1).split()
+        if len(parts) == 2 and (parts[0], parts[1]) not in negated:
+            out.add((parts[0], parts[1]))
+    return out
 
 
 def _order(std):
@@ -102,15 +116,18 @@ def relation_instances(doc, placeholders, action, actions, predicates):
     nothing.
 
     A placeholder binds to an object track by position, `?a` to the first and
-    `?b` to the second, and the constant `hand` to the hand track. The
-    position rule holds on 227 of the 234 clips that train, measured
-    2026-10-11. It is positional and not by name because SSv2 truncates:
-    the placeholder `paper plate` meets the track `paper`.
+    `?b` to the second, and the constant `hand` to the hand track. Positional
+    and not by name, because SSv2 truncates: the placeholder `paper plate`
+    meets the track `paper`, and `can opener` meets `copener`. An earlier
+    draft of this line claimed the rule holds on 227 of 234 clips. No script
+    produced that number and an adversary could not reproduce it on
+    2026-10-11, so it is withdrawn. What the order rests on is the converter
+    itself: `clip_json` sorts the tracks by `standard_category` with the hand
+    last, and SSv2 lists the placeholders in the order of the template's
+    slots.
 
     Plan notes/plans/2026-10-10-relations-and-boxes.md, A2.
     """
-    from tools.video.pddl_domain import binary_args
-
     first, last = _anchors(doc)
     if first is None:
         return []
@@ -134,10 +151,7 @@ def relation_instances(doc, placeholders, action, actions, predicates):
     binary = sorted(n for n, arity in predicates.items() if arity == 2)
     for name in binary:
         for text, begin in ((pre, first), (eff, last)):
-            if not _asserts(text, name):
-                continue
-            for a, b in sorted(binary_args({action: (text, text)}, action,
-                                           name)):
+            for a, b in sorted(asserted_pairs(text, name)):
                 s_tid, o_tid = tid_of(a), tid_of(b)
                 if s_tid is None or o_tid is None or s_tid == o_tid:
                     continue

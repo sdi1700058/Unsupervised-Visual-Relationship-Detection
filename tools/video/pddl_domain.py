@@ -31,6 +31,34 @@ _VAR = re.compile(r"\?[a-z0-9]+")
 STATIC_PREFIX = "is-"
 
 
+def _strip_comments(text):
+    """PDDL comments out a line with `;`, and the domain uses it to DISABLE
+    a predicate: `twentybn_domain.pddl:997` holds `; (attached ?a ?b)` inside
+    an effect. Reading that line as an assertion put a relation its own
+    author had switched off into 5 of the 234 training clips, found
+    2026-10-11."""
+    return "\n".join(line.split(";", 1)[0] for line in text.splitlines())
+
+
+def _balanced(text, start):
+    """The end of the s-expression that opens at `start`, by paren depth.
+
+    The action reader used to take everything to the next `(:action `, so
+    the LAST action of a file swallowed whatever followed it. `wipe` came
+    out with an effect of 8,130 characters holding every axiom of the file,
+    where its own effect is about 70. Found 2026-10-11.
+    """
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "(":
+            depth += 1
+        elif text[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(text)
+
+
 def parse_domain(path):
     """(predicates, actions) from a PDDL domain.
 
@@ -38,7 +66,7 @@ def parse_domain(path):
     (precondition_text, effect_text).
     """
     with open(path) as handle:
-        text = handle.read()
+        text = _strip_comments(handle.read())
 
     predicates = {}
     block = text.split("(:predicates", 1)
@@ -52,12 +80,15 @@ def parse_domain(path):
             predicates.setdefault(name, 0)
 
     actions = {}
-    for chunk in text.split("(:action ")[1:]:
-        name = chunk.split(None, 1)[0]
+    pos = text.find("(:action ")
+    while pos >= 0:
+        chunk = text[pos:_balanced(text, pos)]
+        name = chunk[len("(:action "):].split(None, 1)[0]
         pre = chunk.split(":precondition", 1)
         eff = chunk.split(":effect", 1)
         actions[name] = (pre[1].split(":effect")[0] if len(pre) > 1 else "",
                          eff[1] if len(eff) > 1 else "")
+        pos = text.find("(:action ", pos + 1)
     return predicates, actions
 
 
