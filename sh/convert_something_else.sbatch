@@ -33,4 +33,5 @@ RAW=data/video/something_else/raw
     --templates workbench/sh/rung_ids/se-flip-templates.txt \
     --out data/video/something_else/vidvrd_format \
     --count 250 --seed 0 \
+    --domain "${RAW}/twentybn_domain.pddl" \
     --ids-out workbench/sh/rung_ids/se-250clips.txt
