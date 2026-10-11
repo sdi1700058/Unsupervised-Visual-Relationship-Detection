@@ -155,6 +155,35 @@ class TestSlotsAreStable(unittest.TestCase):
         self.assertIn("slot_of_tid", stats)
         self.assertEqual(len(stats["slot_of_tid"]), 2)
 
+    def test_the_slot_order_is_the_one_the_bake_uses(self):
+        """The bake decides which object FOSAE sees in slot i, so the truth
+        side has to use its key and not another.
+
+        Written 2026-09-07 at 11:45, 55 minutes after the bake's key at
+        10:50, with the two sort terms the other way round. Four places in
+        this repository order slots and the other three put total area
+        first. Measured 2026-10-11: the two keys gave a different slot map
+        on 62 per cent of the KIT role clips, 45 of Something-Else, 16 of
+        HA-ViD and 2 of VidVRD.
+        """
+        from latplan.puzzles import puzzle_vidvrd as pv
+        # Track 0 is in every frame and small, track 1 in one frame and
+        # large: area first puts 1 in slot 0, frame count first puts 0 there.
+        doc = {"video_id": "c", "subject/objects": [
+                   {"tid": 0, "category": "a"}, {"tid": 1, "category": "b"}],
+               "trajectories": [
+                   [{"tid": 0, "bbox": {"xmin": 0, "ymin": 0,
+                                        "xmax": 2, "ymax": 2}},
+                    {"tid": 1, "bbox": {"xmin": 0, "ymin": 0,
+                                        "xmax": 90, "ymax": 90}}],
+                   [{"tid": 0, "bbox": {"xmin": 0, "ymin": 0,
+                                        "xmax": 2, "ymax": 2}}],
+                   [{"tid": 0, "bbox": {"xmin": 0, "ymin": 0,
+                                        "xmax": 2, "ymax": 2}}]],
+               "relation_instances": []}
+        baked, _ = pv._slot_order_by_tid(doc["trajectories"], 2)
+        self.assertEqual(ro.slot_of_tid(doc, 2), baked)
+
 
 class TestItIsPlannable(unittest.TestCase):
     """A planner mines actions from the deltas between consecutive states."""

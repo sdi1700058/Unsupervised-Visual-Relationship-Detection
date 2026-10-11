@@ -89,10 +89,26 @@ def _pair_index(num_objs):
 def slot_of_tid(doc, num_objs):
     """`{tid: slot}`, fixed for the whole clip.
 
-    Ranked by how many frames the track appears in, then by total box area,
-    then by tid so the order is total. Tracks past `num_objs` get no slot and
-    their relations are dropped and counted, rather than rotating into
-    whichever slot happens to be free.
+    Ranked by total box area over the clip, then by how many frames the track
+    appears in, then by tid so the order is total. Tracks past `num_objs` get
+    no slot and their relations are dropped and counted, rather than rotating
+    into whichever slot happens to be free.
+
+    **THE KEY IS THE BAKE'S AND MUST STAY THAT WAY.**
+    `latplan/puzzles/puzzle_vidvrd.py:_slot_order_by_tid` decides which object
+    FOSAE sees in slot *i*, so it alone defines what a slot means, and
+    `tools/planner/box_geometry.py` and `tools/planner/predicate_probe.py`
+    follow it. This function ranked frame count first from 2026-09-07 until
+    2026-10-11. The bake's key went in at 10:50:06 that day and this one at
+    11:45:14 with the two terms the other way round, which reads as a slip
+    rather than a choice: nothing argues for frame count anywhere.
+
+    Measured 2026-10-11, the two keys disagreed on 62 per cent of the KIT
+    role clips, 45 of Something-Else, 16 of HA-ViD and 2 of VidVRD. Nothing
+    under `eval/` was produced by the old key: no file there has changed
+    since 2026-09-07, and the probes import `predicate_probe` and never this
+    module. Frame count is also the weaker key, because it ties on 227 track
+    pairs of the KIT clips where area ties on none.
     """
     count, area = {}, {}
     for frame in doc.get("trajectories", []):
@@ -105,7 +121,7 @@ def slot_of_tid(doc, num_objs):
             area[tid] = area.get(tid, 0) + (
                 max(0, b.get("xmax", 0) - b.get("xmin", 0))
                 * max(0, b.get("ymax", 0) - b.get("ymin", 0)))
-    ranked = sorted(count, key=lambda t: (-count[t], -area.get(t, 0), str(t)))
+    ranked = sorted(area, key=lambda t: (-area[t], -count.get(t, 0), str(t)))
     return dict((tid, slot) for slot, tid in enumerate(ranked[:num_objs]))
 
 
@@ -207,6 +223,10 @@ def build_export(path, out_path, num_objs=3, vocab_path=None):
         decoded_boxes=boxes,
         n_bits=np.int64(states.shape[1]),
         model_name=np.str_("relation-oracle"),
+        # The slot order, so that nothing downstream recomputes it. Four
+        # places in this repository used to derive it and one of them had
+        # the wrong key for a month, `slot_of_tid` above.
+        slot_of_tid=np.str_(json.dumps(stats["slot_of_tid"])),
         frame_ids=frame_ids,
         predicates=np.array(vocab, dtype="U64"),
         num_objs=np.int64(num_objs),
