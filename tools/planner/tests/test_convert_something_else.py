@@ -130,5 +130,106 @@ class Choose(unittest.TestCase):
         self.assertTrue(all(int(v) % 2 for v in first))
 
 
+class RelationInstances(unittest.TestCase):
+    """The PDDL domain's own statement about a clip, in the VidVRD field.
+
+    Plan notes/plans/2026-10-10-relations-and-boxes.md A2. Something-Else
+    ships no per-frame relation. The clip's SSv2 template names a PDDL
+    action, that action's precondition and effect state which binary
+    predicates it changes, and those hold at the ends of the clip and
+    nowhere in between. Measured 2026-10-11 over the 234 clips that train:
+    every clip's template maps to a flipping action, 151 argument pairs
+    join two objects and 139 join an object to the hand, and the
+    placeholders bind to the tracks by position in 227 of 234 clips.
+    """
+
+    # `nextto` holds in the precondition and the action never changes it.
+    # The field lists what is TRUE, not only what changes, so it belongs in
+    # the output. The first version of this code wrote only the flipped
+    # predicates and left 98 of the 234 training clips with nothing,
+    # measured 2026-10-11.
+    DOMAIN = {"put-on": ("(and (not (on ?a ?b)) (in ?a hand)"
+                         " (nextto ?a ?b))",
+                         "(and (on ?a ?b) (not (in ?a hand)))")}
+    PREDICATES = {"on": 2, "in": 2, "nextto": 2, "is-rigid": 1}
+
+    def _doc(self, frames):
+        return {"video_id": "c", "width": 100, "height": 100,
+                "subject/objects": [{"tid": 0, "category": "cup"},
+                                    {"tid": 1, "category": "table"},
+                                    {"tid": 2, "category": "hand"}],
+                "trajectories": frames}
+
+    def _full(self, tids):
+        return [{"tid": t, "bbox": {"xmin": 0, "ymin": 0,
+                                    "xmax": 9, "ymax": 9}} for t in tids]
+
+    def test_an_effect_that_turns_true_lands_on_the_last_anchor(self):
+        doc = self._doc([self._full([0, 1, 2])] * 3)
+        got = cse.relation_instances(doc, ["cup", "table"], "put-on",
+                                     self.DOMAIN, self.PREDICATES)
+        on = [r for r in got if r["predicate"] == "on"]
+        self.assertEqual(on, [{"predicate": "on", "subject_tid": 0,
+                               "object_tid": 1, "begin_fid": 2,
+                               "end_fid": 3}])
+
+    def test_a_precondition_that_is_true_lands_on_the_first_anchor(self):
+        doc = self._doc([self._full([0, 1, 2])] * 3)
+        got = cse.relation_instances(doc, ["cup", "table"], "put-on",
+                                     self.DOMAIN, self.PREDICATES)
+        inn = [r for r in got if r["predicate"] == "in"]
+        self.assertEqual(inn, [{"predicate": "in", "subject_tid": 0,
+                                "object_tid": 2, "begin_fid": 0,
+                                "end_fid": 1}])
+
+    def test_the_anchors_are_the_first_and_last_fully_boxed_frames(self):
+        doc = self._doc([self._full([0, 2]), self._full([0, 1, 2]),
+                         self._full([0, 1, 2]), self._full([1])])
+        got = cse.relation_instances(doc, ["cup", "table"], "put-on",
+                                     self.DOMAIN, self.PREDICATES)
+        self.assertEqual(sorted(set((r["begin_fid"], r["end_fid"])
+                                    for r in got)), [(1, 2), (2, 3)])
+
+    def test_a_clip_with_no_fully_boxed_frame_gets_no_relation(self):
+        doc = self._doc([self._full([0]), self._full([1])])
+        self.assertEqual(cse.relation_instances(
+            doc, ["cup", "table"], "put-on", self.DOMAIN, self.PREDICATES), [])
+
+    def test_the_hand_constant_binds_to_the_hand_track(self):
+        doc = self._doc([self._full([0, 1, 2])] * 2)
+        got = cse.relation_instances(doc, ["cup", "table"], "put-on",
+                                     self.DOMAIN, self.PREDICATES)
+        inn = [r for r in got if r["predicate"] == "in"][0]
+        self.assertEqual(inn["object_tid"], 2)
+
+    def test_placeholders_bind_to_object_tracks_by_position(self):
+        doc = self._doc([self._full([0, 1, 2])] * 2)
+        got = cse.relation_instances(doc, ["cup", "table"], "put-on",
+                                     self.DOMAIN, self.PREDICATES)
+        on = [r for r in got if r["predicate"] == "on"][0]
+        self.assertEqual((on["subject_tid"], on["object_tid"]), (0, 1))
+
+    def test_a_true_precondition_that_the_action_never_changes_is_written(self):
+        doc = self._doc([self._full([0, 1, 2])] * 3)
+        got = cse.relation_instances(doc, ["cup", "table"], "put-on",
+                                     self.DOMAIN, self.PREDICATES)
+        self.assertIn({"predicate": "nextto", "subject_tid": 0,
+                       "object_tid": 1, "begin_fid": 0, "end_fid": 1}, got)
+
+    def test_a_single_argument_predicate_is_not_a_relation(self):
+        doc = self._doc([self._full([0, 1, 2])] * 2)
+        got = cse.relation_instances(doc, ["cup", "table"], "put-on",
+                                     self.DOMAIN, self.PREDICATES)
+        self.assertEqual([r for r in got if r["predicate"] == "is-rigid"], [])
+
+    def test_a_clip_whose_track_count_differs_from_the_placeholders(self):
+        doc = {"video_id": "c", "width": 100, "height": 100,
+               "subject/objects": [{"tid": 0, "category": "cup"},
+                                   {"tid": 1, "category": "hand"}],
+               "trajectories": [self._full([0, 1])] * 2}
+        self.assertEqual(cse.relation_instances(
+            doc, ["cup", "table"], "put-on", self.DOMAIN, self.PREDICATES), [])
+
+
 if __name__ == "__main__":
     unittest.main()

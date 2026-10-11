@@ -49,8 +49,104 @@ def frame_index(name):
     return int(os.path.splitext(os.path.basename(name))[0]) - 1
 
 
+HAND = "hand"
+
+
+def _asserts(text, name):
+    """Whether `text` states `name` as true, rather than negating it."""
+    import re
+    if not re.search(r"\(\s*%s[\s)]" % re.escape(name), text):
+        return False
+    return not re.search(r"\(\s*not\s*\(\s*%s[\s)]" % re.escape(name),
+                         text)
+
+
 def _order(std):
     return (std == "hand", std)
+
+
+def _anchors(doc):
+    """The first and last frame where every track of the clip has a box.
+
+    The relations of this dataset hold at the ends of the clip and nowhere
+    between, so they need a frame where the whole scene is visible. Frame 0
+    does not serve: measured 2026-10-11 over the 237 converted clips, every
+    track is boxed in frame 0 in 99 of them and in the last frame in 64, and
+    `tools/planner/m7_map.py:284` drops an instance whose range holds a frame
+    with a box missing.
+    """
+    want = set(o["tid"] for o in doc.get("subject/objects") or [])
+    if not want:
+        return None, None
+    full = [i for i, frame in enumerate(doc.get("trajectories") or [])
+            if want <= set(b["tid"] for b in frame or [])]
+    return (full[0], full[-1]) if full else (None, None)
+
+
+def relation_instances(doc, placeholders, action, actions, predicates):
+    """The domain's statement about this clip, in the VidVRD field.
+
+    `action` is the PDDL action of the clip's SSv2 template, `actions` maps
+    an action to its (precondition, effect) text, and `predicates` gives each
+    name its arity. EVERY binary predicate the precondition asserts holds at
+    the first anchor frame, and every one the effect asserts holds at the
+    last. A negated one is not written, because the field lists what is
+    true, and a predicate of one argument is a property and not a relation.
+
+    **Not only the predicates the action CHANGES.** The first version of this
+    wrote the flips alone and left 98 of the 234 training clips with no
+    relation at all, measured 2026-10-11. `lift-end-drop` is the case:
+    its precondition holds `(in ?a hand)`, which is true and is a relation,
+    while the only predicate it flips is `touching`, which its effect
+    NEGATES. Writing flips alone threw the true relation away and wrote
+    nothing.
+
+    A placeholder binds to an object track by position, `?a` to the first and
+    `?b` to the second, and the constant `hand` to the hand track. The
+    position rule holds on 227 of the 234 clips that train, measured
+    2026-10-11. It is positional and not by name because SSv2 truncates:
+    the placeholder `paper plate` meets the track `paper`.
+
+    Plan notes/plans/2026-10-10-relations-and-boxes.md, A2.
+    """
+    from tools.video.pddl_domain import binary_args
+
+    first, last = _anchors(doc)
+    if first is None:
+        return []
+    objs = [o for o in sorted(doc["subject/objects"], key=lambda o: o["tid"])
+            if o["category"] != HAND]
+    hands = [o["tid"] for o in doc["subject/objects"]
+             if o["category"] == HAND]
+    if len(objs) != len(placeholders):
+        return []
+
+    def tid_of(arg):
+        if arg == HAND:
+            return hands[0] if hands else None
+        if not arg.startswith("?"):
+            return None
+        k = ord(arg[1]) - ord("a")
+        return objs[k]["tid"] if 0 <= k < len(objs) else None
+
+    pre, eff = actions.get(action, ("", ""))
+    out = []
+    binary = sorted(n for n, arity in predicates.items() if arity == 2)
+    for name in binary:
+        for text, begin in ((pre, first), (eff, last)):
+            if not _asserts(text, name):
+                continue
+            for a, b in sorted(binary_args({action: (text, text)}, action,
+                                           name)):
+                s_tid, o_tid = tid_of(a), tid_of(b)
+                if s_tid is None or o_tid is None or s_tid == o_tid:
+                    continue
+                out.append({"predicate": name, "subject_tid": s_tid,
+                            "object_tid": o_tid, "begin_fid": begin,
+                            "end_fid": begin + 1})
+    out.sort(key=lambda r: (r["begin_fid"], r["subject_tid"],
+                            r["object_tid"], r["predicate"]))
+    return out
 
 
 def clip_json(video_id, frames, width, height):
@@ -113,16 +209,26 @@ def choose(records, template_of, allowed, count, seed=0, max_tracks=3,
 
 def _template_ids(labels_path, split_paths):
     """`{video id: template id}` from SSv2's labels and split files."""
+    return _labels(labels_path, split_paths)[0]
+
+
+def _labels(labels_path, split_paths):
+    """`({video id: template id}, {video id: placeholders})`.
+
+    The placeholders name the objects the template's `[something]` slots
+    stand for, in order, which is how a PDDL argument reaches a track.
+    """
     with open(labels_path) as f:
         label_id = json.load(f)
-    out = {}
+    tmpl, holders = {}, {}
     for path in split_paths:
         with open(path) as f:
             for row in json.load(f):
                 text = row["template"].replace("[", "").replace("]", "")
                 if text in label_id:
-                    out[str(row["id"])] = label_id[text]
-    return out
+                    tmpl[str(row["id"])] = label_id[text]
+                holders[str(row["id"])] = row.get("placeholders") or []
+    return tmpl, holders
 
 
 def _decode(webm, frames_dir):
@@ -154,11 +260,25 @@ def main(argv=None):
     ap.add_argument("--max-tracks", type=int, default=3)
     ap.add_argument("--min-frames", type=int, default=30)
     ap.add_argument("--ids-out", required=True)
+    ap.add_argument("--domain",
+                    help="data/video/something_else/raw/twentybn_domain.pddl."
+                         " Without it relation_instances stays empty, which "
+                         "is what every clip held until 2026-10-11.")
     args = ap.parse_args(argv)
 
     with open(args.templates) as f:
         allowed = set(line.strip() for line in f if line.strip())
-    template_of = _template_ids(args.labels, args.splits)
+    template_of, placeholders_of = _labels(args.labels, args.splits)
+    # The domain states the relations. Without it the converter writes the
+    # boxes alone, which is what it did until 2026-10-11.
+    domain_actions, domain_preds, action_of_template = {}, {}, {}
+    if args.domain:
+        from tools.video.pddl_domain import parse_domain, template_ids
+        with open(args.domain) as f:
+            domain_text = f.read()
+        domain_preds, domain_actions = parse_domain(args.domain)
+        action_of_template = dict((v, k) for k, v
+                                  in template_ids(domain_text).items())
     records, reasons = {}, {}
     for path in args.boxes:
         with open(path) as f:
@@ -197,8 +317,14 @@ def main(argv=None):
             dropped[video] = ("annotated frame %d but the video decodes to %d"
                               % (last, count))
             continue
+        doc = clip_json(video, records[video], width, height)
+        act = action_of_template.get(str(template_of.get(video)))
+        if act:
+            doc["relation_instances"] = relation_instances(
+                doc, placeholders_of.get(video) or [], act,
+                domain_actions, domain_preds)
         with open(os.path.join(ann_dir, video + ".json"), "w") as f:
-            json.dump(clip_json(video, records[video], width, height), f)
+            json.dump(doc, f)
         kept.append(video)
     with open(args.ids_out, "w") as f:
         f.write("\n".join(kept) + "\n")

@@ -115,3 +115,24 @@ def flipping_template_ids(path):
     moved = flips(actions, predicates, binary_only=True)
     return sorted((ids[a] for a, names in moved.items()
                    if names and a in ids), key=int)
+
+
+def binary_args(actions, action, name):
+    """`{(a, b)}`: the argument pairs `name` is used with in `action`.
+
+    Both halves are read, because a flip names the predicate in the
+    precondition and in the effect, and either may carry the arguments. An
+    argument is a placeholder such as `?a` or a constant such as `hand`,
+    which the domain declares at `(:constants hand - object)`. The converter
+    binds a placeholder by position and `hand` to the hand track.
+    """
+    if action not in actions:
+        return set()
+    out = set()
+    for half in actions[action]:
+        for m in re.finditer(r"\(\s*%s\s+([^()]*)\)" % re.escape(name), half):
+            parts = m.group(1).split()
+            if len(parts) == 2:
+                out.add((parts[0], parts[1]))
+    return out
+

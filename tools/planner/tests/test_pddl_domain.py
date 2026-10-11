@@ -186,5 +186,33 @@ if __name__ == "__main__":
     unittest.main()
 
 
+class BinaryArgs(unittest.TestCase):
+    """The argument pairs a flipped predicate is used with, so the converter
+    knows which tracks the relation joins. Added 2026-10-11, plan A2."""
+
+    def setUp(self):
+        self.path = _domain_file()
+        self.predicates, self.actions = se.parse_domain(self.path)
+
+    def tearDown(self):
+        os.unlink(self.path)
+
+    def test_the_argument_pair_of_a_two_placeholder_predicate(self):
+        self.assertEqual(
+            se.binary_args(self.actions, "move-together", "nextto"),
+            {("?a", "?b")})
+
+    def test_a_predicate_the_action_does_not_name_gives_nothing(self):
+        self.assertEqual(
+            se.binary_args(self.actions, "break-it", "nextto"), set())
+
+    def test_the_effect_and_the_precondition_are_both_read(self):
+        self.assertEqual(se.binary_args(self.actions, "hold-still", "on"),
+                         {("?a", "?b")})
+
+    def test_an_unknown_action_gives_nothing(self):
+        self.assertEqual(se.binary_args(self.actions, "no-such", "on"), set())
+
+
 if __name__ == "__main__":
     unittest.main()
