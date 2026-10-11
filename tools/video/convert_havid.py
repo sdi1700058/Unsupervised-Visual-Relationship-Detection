@@ -223,6 +223,37 @@ def role_clip_id(video, start, hand):
     return "%s_pt%06d_%s" % (video, start, hand)
 
 
+# A key action of Figure 9 of arXiv 2307.05721v1, as the state it leaves
+# behind. `place`, `insert`, `screw`, `rotate` and `slide` are the five the
+# paper's ontology calls the ones that change the assembly.
+KEY_VERB_RELATION = {"p": "placed", "i": "inserted", "s": "screwed",
+                     "r": "rotated", "l": "slid"}
+
+
+def relation_instances(verb, n_tracks, size):
+    """This project's rule over one HA-ViD clip, in the VidVRD field.
+
+    A key action with a target object reads as a relation between the moved
+    object and the target, TRUE WHEN THE ACTION ENDS.
+    `workbench/tools/havid_relations.py` states the rule and marks it T3,
+    this project's own, because HA-ViD ships no relation of its own.
+
+    A clip is exactly one primitive task: `end = min(end, start + size - 1,
+    n - 1)` below clamps the clip to the segment, so the action ends on the
+    clip's LAST frame. The relation therefore holds over that one frame and
+    the clip offers one transition where it changes. That is thin, and it is
+    what the rule gives. `role_clip_json` fixes tid 0 as the hand, 1 as the
+    moved object and 2 as the target, so the arguments need no lookup.
+
+    Plan notes/plans/2026-10-10-relations-and-boxes.md, A3.
+    """
+    name = KEY_VERB_RELATION.get(verb)
+    if name is None or n_tracks < 3 or size < 1:
+        return []
+    return [{"predicate": name, "subject_tid": 1, "object_tid": 2,
+             "begin_fid": size - 1, "end_fid": size}]
+
+
 def role_clip_json(clip, boxes, start, size, width, height, scale, tracks):
     """The VidVRD-format document of the three role tracks: tid 0 is the
     hand, 1 the moved object and 2 the target object."""
@@ -303,10 +334,12 @@ def _role_clips(args, video, boxes, n, frames_root, ann_dir, height, scale,
                 if not os.path.lexists(dst):
                     os.symlink(os.path.join("..", "_video", video,
                                             "%06d.jpg" % (start + k)), dst)
+            doc = role_clip_json(clip, boxes, start, size,
+                                 args.width, height, scale, tracks)
+            doc["relation_instances"] = relation_instances(
+                _verb, len(doc["subject/objects"]), size)
             with open(os.path.join(ann_dir, clip + ".json"), "w") as f:
-                json.dump(role_clip_json(clip, boxes, start, size,
-                                         args.width, height, scale, tracks),
-                          f)
+                json.dump(doc, f)
             kept.append(clip)
     return kept
 

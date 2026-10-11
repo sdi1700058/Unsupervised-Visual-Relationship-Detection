@@ -177,5 +177,48 @@ class Roles(unittest.TestCase):
         self.assertEqual(ch.role_clip_id("S25A05I01M0", 30, "rh"),
                          "S25A05I01M0_pt000030_rh")
 
+class RelationInstances(unittest.TestCase):
+    """This project's rule over HA-ViD's action codes, in the VidVRD field.
+
+    Plan notes/plans/2026-10-10-relations-and-boxes.md A3. HA-ViD ships no
+    relation. It labels each primitive task with a code such as `ibacb`,
+    insert ball into cylinder base, and this project reads a key action with
+    a target as a relation between the moved object and the target, true
+    when the action ends. The rule is this project's, so the tier is T3, and
+    `workbench/tools/havid_relations.py` says so in its own header.
+
+    A clip IS one primitive task: `tools/video/convert_havid.py:283` clamps
+    the clip to the segment, so the action ends on the clip's last frame and
+    the relation holds there and nowhere else. One instance per clip.
+    """
+
+    def test_a_key_verb_with_a_target_gives_one_instance_on_the_last_frame(self):
+        got = ch.relation_instances("i", 3, 10)
+        self.assertEqual(got, [{"predicate": "inserted", "subject_tid": 1,
+                                "object_tid": 2, "begin_fid": 9,
+                                "end_fid": 10}])
+
+    def test_every_key_verb_has_a_name(self):
+        for verb, name in (("i", "inserted"), ("s", "screwed"),
+                           ("p", "placed"), ("r", "rotated"),
+                           ("l", "slid")):
+            self.assertEqual(ch.relation_instances(verb, 3, 4)[0]["predicate"],
+                             name)
+
+    def test_a_verb_that_is_not_a_key_action_gives_nothing(self):
+        self.assertEqual(ch.relation_instances("g", 3, 10), [])
+
+    def test_a_clip_without_a_target_track_gives_nothing(self):
+        self.assertEqual(ch.relation_instances("i", 2, 10), [])
+
+    def test_a_clip_of_one_frame_still_places_the_instance(self):
+        self.assertEqual(ch.relation_instances("i", 3, 1),
+                         [{"predicate": "inserted", "subject_tid": 1,
+                           "object_tid": 2, "begin_fid": 0, "end_fid": 1}])
+
+    def test_a_clip_of_no_frames_gives_nothing(self):
+        self.assertEqual(ch.relation_instances("i", 3, 0), [])
+
+
 if __name__ == "__main__":
     unittest.main()
