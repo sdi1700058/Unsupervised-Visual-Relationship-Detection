@@ -8,6 +8,15 @@
 #       --flipping-templates workbench/sh/rung_ids/se-flip-templates.txt
 #
 #   sbatch sh/convert_something_else.sbatch
+#
+# ONLY     a file of clip ids. The conversion takes exactly these, and
+#          --count and --seed are ignored. A SEED DOES NOT MAKE THIS
+#          REPEATABLE: a check added on 2026-10-03, which refuses a clip
+#          listing one frame twice, moved the usable pool from 37,000 to
+#          36,759, and the seeded sample of the new pool shared NOT ONE clip
+#          with the old one, measured on job 47390003. Any rerun that has to
+#          land on the clips a run already trained on passes them here.
+# IDS_OUT  where the chosen ids go, default the 250-clip list.
 #SBATCH --job-name=convert-se
 #SBATCH --partition=normal
 #SBATCH --time=06:00:00
@@ -34,4 +43,5 @@ RAW=data/video/something_else/raw
     --out data/video/something_else/vidvrd_format \
     --count 250 --seed 0 \
     --domain "${RAW}/twentybn_domain.pddl" \
-    --ids-out workbench/sh/rung_ids/se-250clips.txt
+    ${ONLY:+--only "${ONLY}"} \
+    --ids-out "${IDS_OUT:-workbench/sh/rung_ids/se-250clips.txt}"

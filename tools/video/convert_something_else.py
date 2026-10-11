@@ -213,8 +213,20 @@ def why_not(frames, max_tracks=3, min_frames=30):
 
 
 def choose(records, template_of, allowed, count, seed=0, max_tracks=3,
-           min_frames=30):
-    """`count` usable clips whose template is allowed, drawn by `seed`."""
+           min_frames=30, only=None):
+    """`count` usable clips whose template is allowed, drawn by `seed`.
+
+    `only` names the clips instead, and then the seed, the count and the
+    filters are not consulted. **A seed does not make this repeatable.** The
+    clips of `workbench/sh/rung_ids/se-f6.txt` were drawn under the code of
+    2026-10-03, and a check added that day, which refuses a clip listing one
+    frame twice, moved the usable pool from 37,000 to 36,759. The seeded
+    sample of the smaller pool shares NOT ONE clip with the older one,
+    measured 2026-10-11 on job 47390003. Any rerun that has to land on the
+    same clips passes them with `only`.
+    """
+    if only is not None:
+        return sorted(v for v in only if v in records)
     pool = sorted(v for v, frames in records.items()
                   if template_of.get(v) in allowed
                   and why_not(frames, max_tracks, min_frames) is None)
@@ -274,6 +286,14 @@ def main(argv=None):
     ap.add_argument("--max-tracks", type=int, default=3)
     ap.add_argument("--min-frames", type=int, default=30)
     ap.add_argument("--ids-out", required=True)
+    ap.add_argument("--only",
+                    help="a file of clip ids, one per line. The conversion "
+                         "takes exactly these and ignores --count and "
+                         "--seed. A seed does not make this repeatable: the "
+                         "usable pool moved from 37,000 to 36,759 when a "
+                         "check was added on 2026-10-03, and the seeded "
+                         "sample of the new pool shared no clip with the "
+                         "old one.")
     ap.add_argument("--domain",
                     help="data/video/something_else/raw/twentybn_domain.pddl."
                          " Without it relation_instances stays empty, which "
@@ -311,8 +331,12 @@ def main(argv=None):
         del part
         print("read %s: %d usable clips so far" % (path, len(records)))
     print("refused, by reason: %s" % json.dumps(reasons, sort_keys=True))
+    only = None
+    if args.only:
+        with open(args.only) as f:
+            only = [line.strip() for line in f if line.strip()]
     chosen = choose(records, template_of, allowed, args.count, args.seed,
-                    args.max_tracks, args.min_frames)
+                    args.max_tracks, args.min_frames, only=only)
     print("chose %d of %d usable clips, seed %d"
           % (len(chosen), len(records), args.seed))
 

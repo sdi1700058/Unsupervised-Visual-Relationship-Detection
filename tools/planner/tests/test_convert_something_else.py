@@ -252,5 +252,40 @@ class RelationInstances(unittest.TestCase):
             doc, ["cup", "table"], "put-on", self.DOMAIN, self.PREDICATES), [])
 
 
+class ChooseOnly(unittest.TestCase):
+    """An explicit list of clips, so a conversion can be repeated.
+
+    The clips of `se-f6.txt` were chosen by `choose` under the code of
+    2026-10-03. A check added that day, which refuses a clip listing one
+    frame twice, changed the usable pool from 37,000 to 36,759, and the
+    seeded sample of a changed pool shares NOT ONE clip with the old one:
+    measured 2026-10-11 on job 47390003. A seed does not make a conversion
+    repeatable when the pool moves, so the list does.
+    """
+
+    def _records(self, names):
+        frame = [{"name": "%s/0001.jpg", "labels": []}]
+        return dict((n, frame) for n in names)
+
+    def test_only_keeps_the_named_clips_in_sorted_order(self):
+        got = cse.choose(self._records(["a", "b", "c"]), {}, set(), 10,
+                         only=["c", "a"])
+        self.assertEqual(got, ["a", "c"])
+
+    def test_only_ignores_a_name_that_is_not_in_the_records(self):
+        got = cse.choose(self._records(["a"]), {}, set(), 10,
+                         only=["a", "missing"])
+        self.assertEqual(got, ["a"])
+
+    def test_only_overrides_the_count(self):
+        got = cse.choose(self._records(["a", "b", "c"]), {}, set(), 1,
+                         only=["a", "b", "c"])
+        self.assertEqual(got, ["a", "b", "c"])
+
+    def test_without_only_the_template_filter_still_applies(self):
+        got = cse.choose(self._records(["a"]), {"a": "9"}, set(["8"]), 10)
+        self.assertEqual(got, [])
+
+
 if __name__ == "__main__":
     unittest.main()
