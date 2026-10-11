@@ -305,5 +305,42 @@ class RelationInstances(unittest.TestCase):
         self.assertEqual(len(got), 2)
 
 
+class TiesAreBroken(unittest.TestCase):
+    """A tie in the role counts must not be settled by the hash seed.
+
+    `collections.Counter.most_common` returns equal counts in insertion
+    order, and the insertion order of these counters follows a set of
+    instance names, which Python orders by hash. An adversary ran one real
+    clip under three values of PYTHONHASHSEED on 2026-10-11 and got three
+    different target objects: banana_10, cereals_2 and knife_6, all four
+    candidates touching the moved object in 80 of 80 frames. Two of the 199
+    role clips have such a tie. The name settles it now, so a conversion
+    repeats.
+    """
+
+    def _frames(self, n, extra_names):
+        objs = [{"instance_name": x} for x in
+                ["RightHand_4", "cup_2"] + extra_names]
+        rels = [{"subject_index": 0, "relation_name": "contact",
+                 "object_index": 1}]
+        # every extra object touches the moved object in every frame
+        for k in range(len(extra_names)):
+            rels.append({"subject_index": 1, "relation_name": "contact",
+                         "object_index": 2 + k})
+        return [objs] * n, [rels] * n
+
+    def test_a_tie_on_the_target_goes_to_the_first_name(self):
+        objs, rels = self._frames(10, ["zebra_9", "apple_3"])
+        self.assertEqual(
+            ck.kit_role_tracks(objs, rels, 0, 9, "RightHand")[2], "apple_3")
+
+    def test_the_tie_does_not_depend_on_the_order_of_the_objects(self):
+        o1, r1 = self._frames(10, ["zebra_9", "apple_3"])
+        o2, r2 = self._frames(10, ["apple_3", "zebra_9"])
+        a = ck.kit_role_tracks(o1, r1, 0, 9, "RightHand")
+        b = ck.kit_role_tracks(o2, r2, 0, 9, "RightHand")
+        self.assertEqual(a[2], b[2])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -316,6 +316,20 @@ def _touch_counts(frames3d, relations, start, end, who):
     return counts
 
 
+def _top(counter):
+    """The most common key, and the FIRST NAME when counts tie.
+
+    `Counter.most_common` returns equal counts in insertion order, and these
+    counters are filled from a set of instance names, which Python orders by
+    hash. An adversary ran one real clip under three values of
+    PYTHONHASHSEED on 2026-10-11 and got three different target objects,
+    `banana_10`, `cereals_2` and `knife_6`, all four candidates touching the
+    moved object in 80 of 80 frames. Two of the 199 role clips hold such a
+    tie. The name settles it, so the conversion repeats.
+    """
+    return min(counter, key=lambda k: (-counter[k], k))
+
+
 def kit_role_tracks(frames3d, relations, start, end, hand_prefix,
                     min_share=0.5):
     """`(hand, moved, target)` instances of one action, or None.
@@ -329,18 +343,18 @@ def kit_role_tracks(frames3d, relations, start, end, hand_prefix,
                                 if o["instance_name"].startswith(hand_prefix))
     if not hands:
         return None
-    hand = hands.most_common(1)[0][0]
+    hand = _top(hands)
     moved = _touch_counts(frames3d, relations, start, end,
                           lambda x: x == hand)
-    if not moved or moved.most_common(1)[0][1] < min_share * n:
+    if not moved or moved[_top(moved)] < min_share * n:
         return None
-    m = moved.most_common(1)[0][0]
+    m = _top(moved)
     target = _touch_counts(frames3d, relations, start, end,
                            lambda x: x == m)
     target.pop(m, None)
-    if not target or target.most_common(1)[0][1] < 0.2 * n:
+    if not target or target[_top(target)] < 0.2 * n:
         return None
-    return (hand, m, target.most_common(1)[0][0])
+    return (hand, m, _top(target))
 
 
 def _load(path):
