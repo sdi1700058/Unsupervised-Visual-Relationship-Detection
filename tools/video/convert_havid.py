@@ -35,6 +35,7 @@ import math
 import os
 import subprocess
 import sys
+from tools.video import ids_out
 
 
 def spans(rows):
@@ -351,6 +352,9 @@ def main(argv=None):
     ap.add_argument("--frame-rates", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--ids-out", required=True)
+    ap.add_argument("--force-ids-out", action="store_true",
+                    help="overwrite an existing ids list. Two tracked\n"
+                         "lists were lost without this, OPEN-ISSUES I28")
     ap.add_argument("--view", default="M0")
     ap.add_argument("--size", type=int, default=150)
     ap.add_argument("--per-video", type=int, default=2)
@@ -433,7 +437,8 @@ def main(argv=None):
             with open(os.path.join(ann_dir, clip + ".json"), "w") as f:
                 json.dump(doc, f)
             kept.append(clip)
-    with open(args.ids_out, "w") as f:
+    with ids_out.open_ids_out(args.ids_out,
+                              args.force_ids_out) as f:
         f.write("\n".join(sorted(kept)) + "\n")
     print("wrote %d clips from %d videos, dropped %d videos: %s"
           % (len(kept), len(boxes) - len(dropped), len(dropped),

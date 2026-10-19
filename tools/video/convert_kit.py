@@ -33,6 +33,7 @@ import json
 import math
 import os
 import sys
+from tools.video import ids_out
 
 
 def _px(value, limit):
@@ -99,6 +100,9 @@ def main(argv=None):
                     help="subject:task:take, for example 1:task_5_k_cereals:0")
     ap.add_argument("--out", required=True)
     ap.add_argument("--ids-out", required=True)
+    ap.add_argument("--force-ids-out", action="store_true",
+                    help="overwrite an existing ids list. Two tracked\n"
+                         "lists were lost without this, OPEN-ISSUES I28")
     ap.add_argument("--size", type=int, default=150)
     args = ap.parse_args(argv)
 
@@ -149,7 +153,8 @@ def main(argv=None):
                 json.dump(clip_json(clip, frames, start, args.size, width,
                                     height), handle)
             kept.append(clip)
-    with open(args.ids_out, "w") as handle:
+    with ids_out.open_ids_out(args.ids_out,
+                              args.force_ids_out) as handle:
         handle.write("\n".join(sorted(kept)) + "\n")
     print("wrote %d clips, %d duplicate boxes refused, dropped takes: %s"
           % (len(kept), counts["duplicates"], json.dumps(dropped)))

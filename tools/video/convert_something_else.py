@@ -42,6 +42,7 @@ import os
 import random
 import subprocess
 import sys
+from tools.video import ids_out
 
 
 def frame_index(name):
@@ -286,6 +287,9 @@ def main(argv=None):
     ap.add_argument("--max-tracks", type=int, default=3)
     ap.add_argument("--min-frames", type=int, default=30)
     ap.add_argument("--ids-out", required=True)
+    ap.add_argument("--force-ids-out", action="store_true",
+                    help="overwrite an existing ids list. Two tracked\n"
+                         "lists were lost without this, OPEN-ISSUES I28")
     ap.add_argument("--only",
                     help="a file of clip ids, one per line. The conversion "
                          "takes exactly these and ignores --count and "
@@ -364,7 +368,8 @@ def main(argv=None):
         with open(os.path.join(ann_dir, video + ".json"), "w") as f:
             json.dump(doc, f)
         kept.append(video)
-    with open(args.ids_out, "w") as f:
+    with ids_out.open_ids_out(args.ids_out,
+                              args.force_ids_out) as f:
         f.write("\n".join(kept) + "\n")
     print("wrote %d clips to %s, dropped %d: %s"
           % (len(kept), ann_dir, len(dropped), json.dumps(dropped)))
