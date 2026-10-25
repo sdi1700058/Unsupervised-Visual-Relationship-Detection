@@ -600,3 +600,31 @@ class TestRunRefusals(unittest.TestCase):
         self.addCleanup(shutil.rmtree, tmp)
         with self.assertRaises(SystemExit):
             te.main(["--out", tmp, "--tables"])
+
+
+# ------------------------------------------------------------- figures
+
+def _have_matplotlib():
+    try:
+        import matplotlib  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+@NEED_BOTH
+@unittest.skipUnless(_have_matplotlib(), "no matplotlib")
+class TestFigures(unittest.TestCase):
+
+    def test_the_figures_are_written_as_png(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        out = os.path.join(tmp, "out")
+        spec = _toy_rung(tmp)
+        te.run_dataset(spec, out, te.pinned_evaluator(te.OFFICIAL))
+        paths = te.figures(out, os.path.join(tmp, "fig"))
+        self.assertEqual([os.path.basename(p) for p in paths],
+                         ["triplet-map-ladder.png", "triplet-clip-ap.png"])
+        for path in paths:
+            with open(path, "rb") as f:
+                self.assertEqual(f.read(8), b"\x89PNG\r\n\x1a\n")

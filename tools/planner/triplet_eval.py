@@ -954,6 +954,114 @@ def markdown_tables(out_dir):
     return "\n".join(out)
 
 
+# ------------------------------------------------------------- figures
+
+COLORS = {"perfect": "#52514e", "frequency": "#2a78d6", "ridge": "#eb6834",
+          "onetoone": "#1baf7a"}
+MARKERS = {"perfect": "D", "frequency": "s", "ridge": "o", "onetoone": "^"}
+NAMES = {"perfect": "perfect, cut 200", "frequency": "frequency, no vision",
+         "ridge": "probe, ridge readout", "onetoone": "probe, one-to-one map"}
+
+
+def _frame(ax, ylabel):
+    ax.set_ylabel(ylabel, fontsize=9)
+    ax.grid(axis="y", color="#e4e3df", linewidth=0.8)
+    ax.set_axisbelow(True)
+    for side in ("top", "right"):
+        ax.spines[side].set_visible(False)
+    ax.tick_params(labelsize=8)
+
+
+def figures(out_dir, fig_dir):
+    """Draw the PNG figures of report part C.5 and return their paths.
+
+    1. mAP of each rung on its test clips, in ladder order, one mark for
+       each predictor.
+    2. AP of each test clip for frequency and the two probe routes, one
+       panel for each rung.
+    3. VRD beside the published ladder, on the 0 to 100 scale.
+    """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    metrics = load_metrics(out_dir)
+    names = list(metrics)
+    if not os.path.isdir(fig_dir):
+        os.makedirs(fig_dir)
+    paths = []
+
+    fig, ax = plt.subplots(figsize=(7.0, 4.0), dpi=150)
+    for k, predictor in enumerate(PREDICTORS):
+        xs = [i + (k - 1.5) * 0.14 for i in range(len(names))]
+        ys = [_row(metrics[n], "test", predictor)["official"]["mAP"]
+              for n in names]
+        ax.plot(xs, ys, linestyle="none", marker=MARKERS[predictor],
+                markersize=8, color=COLORS[predictor], label=NAMES[predictor])
+    ax.set_xticks(range(len(names)))
+    ax.set_xticklabels([LABELS[n] for n in names])
+    ax.set_ylim(-0.03, 1.05)
+    _frame(ax, "triplet mAP, test clips")
+    ax.set_title("Official evaluator, top 200, true box tracks", fontsize=10)
+    ax.legend(frameon=False, fontsize=8, loc="center left",
+              bbox_to_anchor=(1.0, 0.5))
+    fig.tight_layout()
+    paths.append(os.path.join(fig_dir, "triplet-map-ladder.png"))
+    fig.savefig(paths[-1])
+    plt.close(fig)
+
+    shown = ("frequency", "ridge", "onetoone")
+    fig, axes = plt.subplots(1, len(names), figsize=(2.3 * len(names), 3.4),
+                             dpi=150, sharey=True, squeeze=False)
+    for ax, name in zip(axes[0], names):
+        for k, predictor in enumerate(shown):
+            aps = sorted(_row(metrics[name], "test",
+                              predictor)["clip_ap"].values())
+            ax.plot([k] * len(aps), aps, linestyle="none",
+                    marker=MARKERS[predictor], markersize=8,
+                    color=COLORS[predictor], alpha=0.75)
+        ax.set_xticks(range(len(shown)))
+        ax.set_xticklabels(["freq", "ridge", "1:1"])
+        ax.set_xlim(-0.6, len(shown) - 0.4)
+        ax.set_ylim(-0.03, 1.05)
+        n_clips = _row(metrics[name], "test", "ridge")["n_clips"]
+        ax.set_title("%s, %d clips" % (LABELS[name], n_clips), fontsize=9)
+        _frame(ax, "AP of one test clip" if ax is axes[0][0] else "")
+    fig.tight_layout()
+    paths.append(os.path.join(fig_dir, "triplet-clip-ap.png"))
+    fig.savefig(paths[-1])
+    plt.close(fig)
+
+    if "vidvrd" in metrics:
+        fig, ax = plt.subplots(figsize=(6.4, 3.8), dpi=150)
+        for label, value in PUBLISHED:
+            ax.axhline(value, color="#9a9893", linewidth=1.0,
+                       linestyle="--")
+            ax.text(len(PREDICTORS) - 0.45, value + 1.0,
+                    "%s %.2f" % (label, value), fontsize=7,
+                    color="#52514e", ha="right")
+        for k, predictor in enumerate(PREDICTORS):
+            y = 100.0 * _row(metrics["vidvrd"], "test",
+                             predictor)["official"]["mAP"]
+            ax.plot([k], [y], linestyle="none", marker=MARKERS[predictor],
+                    markersize=9, color=COLORS[predictor])
+            ax.text(k + 0.12, y, "%.2f" % y, fontsize=7, color="#0b0b0b",
+                    va="center")
+        ax.set_xticks(range(len(PREDICTORS)))
+        ax.set_xticklabels(["perfect", "frequency", "ridge", "1:1"])
+        ax.set_xlim(-0.5, len(PREDICTORS) - 0.4)
+        ax.set_ylim(0, 105)
+        _frame(ax, "mAP, 0 to 100")
+        ax.set_title("VRD: 7 test clips from the VidVRD train split.\n"
+                     "The published rows use the 200 official test clips.",
+                     fontsize=8)
+        fig.tight_layout()
+        paths.append(os.path.join(fig_dir, "triplet-vidvrd-ladder.png"))
+        fig.savefig(paths[-1])
+        plt.close(fig)
+    return paths
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--dataset", choices=LADDER,
@@ -962,7 +1070,13 @@ def main(argv=None):
                     help="the directory of the prediction and metrics files")
     ap.add_argument("--tables", action="store_true",
                     help="print tables C.1 to C.3 from the metrics in --out")
+    ap.add_argument("--figures", metavar="DIR",
+                    help="draw the PNG figures from the metrics in --out")
     args = ap.parse_args(argv)
+    if args.figures:
+        for path in figures(args.out, args.figures):
+            print("wrote %s" % path)
+        return 0
     if args.tables:
         print(markdown_tables(args.out))
         return 0
