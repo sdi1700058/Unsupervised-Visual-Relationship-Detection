@@ -183,3 +183,154 @@ class TestEvaluatorLoading(unittest.TestCase):
         spec = dict(te.OFFICIAL, dir="no_such_clone")
         with self.assertRaises(SystemExit):
             te.load_evaluator(spec)
+
+
+# ------------------------------------------------- toy rung: data on disk
+
+def _doc(video_id, n_frames=10, relations=((0, 1, "on", 2, 6),)):
+    """A clip in the VidVRD form: a big hand (tid 0) and a small cup (tid 1).
+
+    The hand has the larger area, so the slot map puts it in slot 0.
+    """
+    hand = dict(zip(("xmin", "ymin", "xmax", "ymax"), HAND))
+    cup = dict(zip(("xmin", "ymin", "xmax", "ymax"), CUP))
+    return {
+        "video_id": video_id, "width": 640, "height": 360,
+        "subject/objects": [{"tid": 0, "category": "hand"},
+                            {"tid": 1, "category": "cup"}],
+        "trajectories": [[{"tid": 0, "bbox": dict(hand)},
+                          {"tid": 1, "bbox": dict(cup)}]
+                         for _ in range(n_frames)],
+        "relation_instances": [
+            {"subject_tid": s, "object_tid": o, "predicate": p,
+             "begin_fid": b, "end_fid": e}
+            for s, o, p, b, e in relations],
+    }
+
+
+def _rows(n_frames=10, on_frames=range(2, 6)):
+    """Export rows of one toy clip: U = 2 units, P = 2 predicates.
+
+    Unit 0 binds slots (0, 1) and switches predicate 0 on at `on_frames`.
+    Unit 1 binds slots (1, 0) and never switches a bit on.
+    """
+    latents = np.zeros((n_frames, 4), dtype=np.int8)
+    for t in on_frames:
+        latents[t, 0] = 1
+    bindings = np.zeros((n_frames, 2, 2), dtype=np.int32)
+    bindings[:, 0] = (0, 1)
+    bindings[:, 1] = (1, 0)
+    boxes = np.zeros((n_frames, 3, 4), dtype=np.float32)
+    boxes[:, 0] = te.letterbox(HAND, 640, 360)
+    boxes[:, 1] = te.letterbox(CUP, 640, 360)
+    return latents, bindings, boxes
+
+
+def _toy_rung(root, train=("t1", "t2", "t3"), val=("v1",), test=("s1",)):
+    """Write a toy export, truth directory and split file. Return the spec."""
+    truth = os.path.join(root, "truth")
+    os.makedirs(truth)
+    clips = list(train) + list(val) + list(test)
+    ids, lat, bind, box = [], [], [], []
+    for clip in clips:
+        with open(os.path.join(truth, clip + ".json"), "w") as f:
+            json.dump(_doc(clip), f)
+        latents, bindings, boxes = _rows()
+        ids += ["%s/%06d" % (clip, t) for t in range(len(latents))]
+        lat.append(latents)
+        bind.append(bindings)
+        box.append(boxes)
+    order = np.random.RandomState(0).permutation(len(ids))
+    export = os.path.join(root, "toy_latents.npz")
+    np.savez(export, latents=np.vstack(lat)[order],
+             bindings=np.vstack(bind)[order], gt_boxes=np.vstack(box)[order],
+             frame_ids=np.array(ids)[order], U=2, A=2, P=2, n_bits=4,
+             model_name="toy")
+    split = os.path.join(root, "loaded_videos.json")
+    with open(split, "w") as f:
+        json.dump({"video_ids": clips, "split_info": {
+            "clips": {"train": len(train), "val": len(val),
+                      "test": len(test)},
+            "val_clips": list(val), "test_clips": list(test)}}, f)
+    return {"name": "se", "export": export, "truth": truth, "split": split}
+
+
+# ------------------------------------------- truth reader and predictors
+
+class TestCopiedTruthAndPredictors(unittest.TestCase):
+
+    def test_the_triplet_uses_category_names(self):
+        insts = te.relation_instances(_doc("a"))
+        self.assertEqual(insts[0]["triplet"], ("hand", "on", "cup"))
+        self.assertEqual(insts[0]["duration"], (2, 6))
+        self.assertEqual(len(insts[0]["sub_traj"]), 4)
+
+    def test_an_instance_with_a_missing_box_drops(self):
+        doc = _doc("a")
+        doc["trajectories"][3] = doc["trajectories"][3][:1]
+        self.assertEqual(te.relation_instances(doc), [])
+
+    def test_perfect_returns_the_truth_with_score_one(self):
+        insts = te.relation_instances(_doc("a"))
+        pred = te.perfect_predictions(insts)
+        self.assertEqual(pred[0]["score"], 1.0)
+        self.assertEqual(pred[0]["triplet"], insts[0]["triplet"])
+
+    def test_frequency_ranks_the_predicates_of_the_train_clips(self):
+        prior = te.TripletPrior()
+        prior.count(_doc("a", relations=((0, 1, "on", 0, 2),
+                                         (0, 1, "on", 4, 6),
+                                         (0, 1, "in", 0, 2))))
+        pred = te.frequency_predictions(_doc("b"), prior, top_k=10)
+        hand_first = [p for p in pred if p["triplet"][0] == "hand"]
+        self.assertEqual([p["triplet"][1] for p in hand_first], ["on", "in"])
+        self.assertEqual(hand_first[0]["score"], 2.0)
+        self.assertEqual(hand_first[0]["duration"], (0, 10))
+
+
+# ----------------------------------------------- split, export and slots
+
+class TestSplitExportSlots(unittest.TestCase):
+
+    def setUp(self):
+        self.tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, self.tmp)
+        self.spec = _toy_rung(self.tmp)
+
+    def test_the_train_clips_are_the_rest_of_video_ids(self):
+        split = te.read_split(self.spec["split"])
+        self.assertEqual(split, {"train": ["t1", "t2", "t3"],
+                                 "val": ["v1"], "test": ["s1"]})
+
+    def test_a_train_count_that_disagrees_stops_the_run(self):
+        with open(self.spec["split"]) as f:
+            doc = json.load(f)
+        doc["split_info"]["clips"]["train"] = 2
+        with open(self.spec["split"], "w") as f:
+            json.dump(doc, f)
+        with self.assertRaises(SystemExit):
+            te.read_split(self.spec["split"])
+
+    def test_the_export_is_cut_into_clips_in_frame_order(self):
+        export = te.read_export(self.spec["export"])
+        self.assertEqual(export["P"], 2)
+        self.assertEqual(sorted(export["clips"]),
+                         ["s1", "t1", "t2", "t3", "v1"])
+        clip = export["clips"]["s1"]
+        self.assertEqual(clip["frames"].tolist(), list(range(10)))
+        self.assertEqual(clip["latents"][:, 0].tolist(),
+                         [0, 0, 1, 1, 1, 1, 0, 0, 0, 0])
+
+    def test_the_larger_track_takes_slot_zero(self):
+        self.assertEqual(te.track_of_slot(_doc("a")), {0: 0, 1: 1})
+
+    def test_letterbox_of_a_full_640_by_360_frame(self):
+        # s = 0.46875 and the bars are 15.625 high: hand arithmetic.
+        self.assertEqual(te.letterbox((0, 0, 639, 359), 640, 360),
+                         (0, 16, 299, 184))
+
+    def test_the_slot_check_finds_a_moved_box(self):
+        clip = te.read_export(self.spec["export"])["clips"]["s1"]
+        self.assertEqual(te.slot_box_mismatches(_doc("s1"), clip), (20, 0))
+        clip["gt_boxes"][4, 1] += 5
+        self.assertEqual(te.slot_box_mismatches(_doc("s1"), clip), (20, 1))
