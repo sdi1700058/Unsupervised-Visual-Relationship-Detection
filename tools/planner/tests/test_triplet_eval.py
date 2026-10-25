@@ -334,3 +334,155 @@ class TestSplitExportSlots(unittest.TestCase):
         self.assertEqual(te.slot_box_mismatches(_doc("s1"), clip), (20, 0))
         clip["gt_boxes"][4, 1] += 5
         self.assertEqual(te.slot_box_mismatches(_doc("s1"), clip), (20, 1))
+
+
+# ------------------------------------------------------------ the probe
+
+class TestRelationCounts(unittest.TestCase):
+
+    def test_counts_follow_bindings_and_bits(self):
+        # U = 3, P = 2. Units 0 and 1 bind (0, 1) with predicate 0 on.
+        # Unit 2 binds (1, 0) with predicate 1 on.
+        latents = np.array([[1, 0, 1, 0, 0, 1]])
+        bindings = np.array([[[0, 1], [0, 1], [1, 0]]])
+        F = te.relation_counts(latents, bindings, P=2)
+        self.assertEqual(F.shape, (1, 3, 3, 2))
+        self.assertEqual(F[0, 0, 1].tolist(), [2.0, 0.0])
+        self.assertEqual(F[0, 1, 0].tolist(), [0.0, 1.0])
+        self.assertEqual(F.sum(), 3.0)
+
+
+class TestProbeRows(unittest.TestCase):
+
+    def setUp(self):
+        latents, bindings, boxes = _rows()
+        self.clip = {"frames": np.arange(10), "latents": latents,
+                     "bindings": bindings, "gt_boxes": boxes}
+
+    def test_one_row_for_each_frame_and_ordered_pair(self):
+        keys, X, Y = te.probe_rows(_doc("a"), self.clip, 2, ["in", "on"])
+        self.assertEqual(len(keys), 20)
+        self.assertEqual(keys[0], (0, 0, 1))
+        self.assertEqual(keys[1], (0, 1, 0))
+        self.assertEqual(X.shape, (20, 2))
+        self.assertEqual(Y.shape, (20, 2))
+
+    def test_targets_mark_the_true_frames_of_the_pair(self):
+        keys, X, Y = te.probe_rows(_doc("a"), self.clip, 2, ["in", "on"])
+        on = [keys[i] for i in range(len(keys)) if Y[i, 1] == 1]
+        self.assertEqual(on, [(t, 0, 1) for t in range(2, 6)])
+        self.assertEqual(Y[:, 0].sum(), 0)
+
+    def test_a_frame_where_one_track_has_no_box_has_no_row(self):
+        doc = _doc("a")
+        doc["trajectories"][7] = doc["trajectories"][7][:1]
+        keys, _, _ = te.probe_rows(doc, self.clip, 2)
+        self.assertEqual(len(keys), 18)
+        self.assertNotIn(7, [k[0] for k in keys])
+
+
+class TestReadouts(unittest.TestCase):
+
+    def test_one_to_one_names_the_predicate_by_its_agreement(self):
+        X = np.array([[1, 0], [1, 0], [1, 0], [0, 0]])
+        Y = np.array([[0, 1], [0, 1], [1, 0], [0, 0]])
+        names, agreement = te.one_to_one(X, Y)
+        self.assertEqual(names.tolist(), [1, -1])
+        self.assertAlmostEqual(agreement[0], 2.0 / 3.0)
+        self.assertEqual(agreement[1], 0.0)
+
+    def test_one_to_one_breaks_a_tie_by_vocabulary_order(self):
+        names, _ = te.one_to_one(np.array([[1], [1]]),
+                                 np.array([[0, 1], [1, 0]]))
+        self.assertEqual(names.tolist(), [0])
+
+    def test_one_to_one_scores_take_the_best_agreement(self):
+        scores, thresholds = te.one_to_one_scores(
+            np.array([[1, 1], [0, 1], [0, 0]]), np.array([1, 1]),
+            np.array([0.4, 0.7]), 2)
+        self.assertEqual(scores.tolist(), [[0, 0.7], [0, 0.7], [0, 0]])
+        self.assertTrue(np.all(thresholds > 0))
+
+    def test_the_ridge_threshold_matches_the_train_prevalence(self):
+        X = np.array([[0.0], [0.0], [1.0], [1.0], [0.0], [1.0]])
+        Y = np.array([[0.0], [0.0], [1.0], [1.0], [0.0], [0.0]])
+        scores, thresholds = te.ridge_readout(X, Y, np.array([[1.0], [0.0]]))
+        train = te.ridge_probe_multi(X, Y, X)
+        self.assertAlmostEqual(thresholds[0], np.sort(train[:, 0])[-2], 8)
+        self.assertGreaterEqual(scores[0, 0], thresholds[0])
+        self.assertLess(scores[1, 0], thresholds[0])
+
+    def test_ridge_scores_are_rounded_to_nine_decimals(self):
+        X = np.random.RandomState(0).rand(50, 3)
+        Y = (X[:, :1] > 0.5).astype(float)
+        scores, thresholds = te.ridge_readout(X, Y, X[:5])
+        self.assertTrue(np.array_equal(scores, np.round(scores, 9)))
+        self.assertEqual(thresholds[0], np.round(thresholds[0], 9))
+
+    def test_a_name_with_no_train_row_is_never_on(self):
+        _, thresholds = te.ridge_readout(np.ones((3, 1)), np.zeros((3, 1)),
+                                         np.ones((1, 1)))
+        self.assertTrue(np.isinf(thresholds[0]))
+
+
+class TestFramesToInstances(unittest.TestCase):
+
+    def test_consecutive_frames_give_one_instance(self):
+        keys = [(t, 0, 1) for t in range(10)]
+        scores = np.zeros((10, 1))
+        scores[2:6, 0] = [0.2, 0.4, 0.6, 0.8]
+        out = te.frames_to_instances(_doc("a"), keys, scores, [0.1], ["on"])
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]["triplet"], ("hand", "on", "cup"))
+        self.assertEqual(out[0]["duration"], (2, 6))
+        self.assertAlmostEqual(out[0]["score"], 0.5)
+        self.assertEqual(out[0]["sub_traj"], [HAND] * 4)
+        self.assertEqual(out[0]["obj_traj"], [CUP] * 4)
+
+    def test_a_gap_gives_two_instances_high_score_first(self):
+        keys = [(t, 0, 1) for t in range(10)]
+        scores = np.zeros((10, 1))
+        scores[[1, 2, 6], 0] = [0.3, 0.3, 0.9]
+        out = te.frames_to_instances(_doc("a"), keys, scores, [0.1], ["on"])
+        self.assertEqual([o["duration"] for o in out], [(6, 7), (1, 3)])
+
+    def test_the_cap_keeps_the_best_instances(self):
+        keys = [(t, 0, 1) for t in range(10)]
+        scores = np.zeros((10, 1))
+        scores[[0, 2, 4, 6], 0] = [0.1, 0.4, 0.3, 0.2]
+        out = te.frames_to_instances(_doc("a"), keys, scores, [0.05], ["on"],
+                                     max_per_video=2)
+        self.assertEqual([o["duration"] for o in out], [(2, 3), (4, 5)])
+
+
+class TestProbePredictions(unittest.TestCase):
+
+    def setUp(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        spec = _toy_rung(tmp)
+        self.split = te.read_split(spec["split"])
+        self.export = te.read_export(spec["export"])
+        self.docs = dict((c, _doc(c)) for c in self.export["clips"])
+
+    def test_both_routes_recover_the_true_instance(self):
+        for route in ("ridge", "onetoone"):
+            pred, diag = te.probe_predictions(self.docs, self.export,
+                                              self.split, ["on"], route)
+            self.assertEqual(sorted(pred), ["s1", "v1"])
+            self.assertEqual(len(pred["s1"]), 1, route)
+            self.assertEqual(pred["s1"][0]["triplet"], ("hand", "on", "cup"))
+            self.assertEqual(pred["s1"][0]["duration"], (2, 6))
+            self.assertEqual(diag["train_rows"], 60)
+            self.assertEqual(diag["train_positives"], {"on": 12})
+
+    def test_the_one_to_one_map_is_in_the_diagnostics(self):
+        _, diag = te.probe_predictions(self.docs, self.export, self.split,
+                                       ["on"], "onetoone")
+        self.assertEqual(diag["map"], {"0": "on", "1": None})
+        self.assertEqual(diag["agreement"]["0"], 1.0)
+
+    def test_an_unknown_route_is_refused(self):
+        with self.assertRaises(ValueError):
+            te.probe_predictions(self.docs, self.export, self.split, ["on"],
+                                 "vlm")

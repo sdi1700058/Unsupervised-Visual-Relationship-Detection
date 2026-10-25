@@ -482,3 +482,225 @@ def slot_box_mismatches(doc, clip):
             checked += 1
             off += int(np.abs(want - got).max() > 1)
     return checked, off
+
+
+# ------------------------------------------------------------ the probe
+
+def relation_counts(latents, bindings, P, num_slots=NUM_SLOTS):
+    """`F[r, a, b, p]`: units of row r that bind slots (a, b) with bit (u, p) on.
+
+    The model relation set of the thesis model, section A.4, as counts. A
+    bit is on when it rounds to 1, as in `export_latents.relations_of_state`.
+    Returns an array of shape (rows, num_slots, num_slots, P).
+    """
+    z = np.round(np.asarray(latents, dtype=np.float64))
+    z = z.reshape(len(z), -1, P) > 0
+    b = np.asarray(bindings)
+    out = np.zeros((len(z), num_slots, num_slots, P))
+    for sa in range(num_slots):
+        for sb in range(num_slots):
+            unit = (b[:, :, 0] == sa) & (b[:, :, 1] == sb)
+            out[:, sa, sb, :] = (z & unit[:, :, None]).sum(axis=1)
+    return out
+
+
+def probe_rows(doc, clip, P, vocabulary=None):
+    """The rows of the readouts for one clip.
+
+    One row for each frame t of the export and each ordered pair of two
+    different slots whose tracks both have a box at t. Returns
+    `(keys, X, Y)`. `keys[i]` is `(t, subject tid, object tid)`. `X[i]`
+    holds the P relation counts of the pair. `Y[i, v]` is 1 when the truth
+    holds name `vocabulary[v]` on the pair at t. `Y` is None when
+    `vocabulary` is None.
+    """
+    track = track_of_slot(doc)
+    frames = _boxes_per_frame(doc)
+    counts = relation_counts(clip["latents"], clip["bindings"], P)
+    keys, rows = [], []
+    for i, t in enumerate(clip["frames"]):
+        t = int(t)
+        if t >= len(frames):
+            continue
+        for sa in sorted(track):
+            for sb in sorted(track):
+                if sa == sb:
+                    continue
+                if track[sa] not in frames[t] or track[sb] not in frames[t]:
+                    continue
+                keys.append((t, track[sa], track[sb]))
+                rows.append(counts[i, sa, sb])
+    X = np.array(rows, dtype=np.float64).reshape(len(keys), P)
+    if vocabulary is None:
+        return keys, X, None
+    column = dict((name, v) for v, name in enumerate(vocabulary))
+    where = dict((key, i) for i, key in enumerate(keys))
+    Y = np.zeros((len(keys), len(vocabulary)))
+    for rel in doc.get("relation_instances", []):
+        v = column.get(rel["predicate"])
+        if v is None:
+            continue
+        for t in range(int(rel["begin_fid"]), int(rel["end_fid"])):
+            i = where.get((t, rel["subject_tid"], rel["object_tid"]))
+            if i is not None:
+                Y[i, v] = 1.0
+    return keys, X, Y
+
+
+def ridge_readout(X_train, Y_train, X_eval, alpha=RIDGE_ALPHA):
+    """`(scores, thresholds)` of the ridge readout.
+
+    `predicate_probe.ridge_probe_multi` fits on the train rows and scores
+    the train rows and the eval rows. The threshold of name v is the k-th
+    largest train score of v, where k is the count of train rows that hold
+    v. So on the train clips the readout switches name v on at least as
+    often as the truth holds it. A name with no train row gets an infinite
+    threshold, so it is never on.
+
+    The scores are rounded to 9 decimals. Without the rounding, the BLAS
+    thread count moves the last bits, and a frame whose score equals a
+    threshold can flip. Measured on KIT on 2026-10-25: 4 instances changed
+    between 8 threads and 1 thread.
+    """
+    X_train = np.asarray(X_train, dtype=np.float64)
+    X_eval = np.asarray(X_eval, dtype=np.float64).reshape(-1, X_train.shape[1])
+    both = np.round(ridge_probe_multi(
+        X_train, Y_train, np.vstack([X_train, X_eval]), alpha=alpha), 9)
+    train, scores = both[:len(X_train)], both[len(X_train):]
+    thresholds = np.full(Y_train.shape[1], np.inf)
+    for v in range(Y_train.shape[1]):
+        k = int(np.asarray(Y_train)[:, v].sum())
+        if k > 0:
+            thresholds[v] = np.sort(train[:, v])[::-1][k - 1]
+    return scores, thresholds
+
+
+def one_to_one(X_train, Y_train):
+    """`(names, agreement)`: one name for each FOSAE predicate.
+
+    `names[p]` is the name that holds on the most train rows on which p
+    holds. A tie goes to the first name in vocabulary order. `agreement[p]`
+    is the share of the rows of p that hold `names[p]`. A predicate that
+    never meets a true name gets -1 and agreement 0.
+    """
+    on = (np.asarray(X_train) > 0).astype(np.float64)
+    together = on.T.dot(np.asarray(Y_train, dtype=np.float64))
+    names = np.full(on.shape[1], -1, dtype=int)
+    agreement = np.zeros(on.shape[1])
+    for p in range(on.shape[1]):
+        if together[p].max() > 0:
+            names[p] = int(np.argmax(together[p]))
+            agreement[p] = together[p, names[p]] / on[:, p].sum()
+    return names, agreement
+
+
+def one_to_one_scores(X_eval, names, agreement, n_names):
+    """`(scores, thresholds)` of the one-to-one map on the eval rows.
+
+    The score of name v on a row is the largest agreement of a predicate
+    that holds on the row and carries name v, and 0 when there is none. A
+    name is on when its score is above 0.
+    """
+    X_eval = np.asarray(X_eval)
+    scores = np.zeros((len(X_eval), n_names))
+    for p, v in enumerate(names):
+        if v < 0:
+            continue
+        hold = X_eval[:, p] > 0
+        scores[hold, v] = np.maximum(scores[hold, v], agreement[p])
+    return scores, np.full(n_names, 1e-12)
+
+
+def frames_to_instances(doc, keys, scores, thresholds, vocabulary,
+                        max_per_video=TOP_RETURNS):
+    """The named relations of each frame, joined into relation instances.
+
+    Name v is on for row i when `scores[i, v] >= thresholds[v]`. A run is a
+    maximal set of consecutive frames t, t+1, ... on which one name is on
+    for one track pair. One run gives one instance [t_b, t_e) with the true
+    boxes of the two tracks on those frames. Its score is the mean of its
+    frame scores. The best `max_per_video` instances stay, high score first.
+    """
+    category = dict((so["tid"], so["category"])
+                    for so in doc.get("subject/objects", []))
+    frames = _boxes_per_frame(doc)
+    scores = np.asarray(scores)
+    on = scores >= np.asarray(thresholds)[None, :]
+    cells = defaultdict(list)
+    for i, v in zip(*np.nonzero(on)):
+        t, s_tid, o_tid = keys[i]
+        cells[(s_tid, o_tid, int(v))].append((t, float(scores[i, v])))
+    out = []
+    for key in sorted(cells, key=lambda k: (str(k[0]), str(k[1]), k[2])):
+        s_tid, o_tid, v = key
+        points = sorted(cells[key])
+        start = 0
+        for j in range(1, len(points) + 1):
+            if j < len(points) and points[j][0] == points[j - 1][0] + 1:
+                continue
+            run = points[start:j]
+            begin, end = run[0][0], run[-1][0] + 1
+            out.append({
+                "triplet": (category[s_tid], vocabulary[v], category[o_tid]),
+                "duration": (begin, end),
+                "sub_traj": [frames[t][s_tid] for t in range(begin, end)],
+                "obj_traj": [frames[t][o_tid] for t in range(begin, end)],
+                "score": float(np.mean([p[1] for p in run])),
+            })
+            start = j
+    out.sort(key=lambda r: (-r["score"], r["triplet"], r["duration"]))
+    return out[:max_per_video]
+
+
+def probe_predictions(docs, export, split, vocabulary, route,
+                      alpha=RIDGE_ALPHA):
+    """`(predictions by clip, diagnostics)` of one naming route.
+
+    `route` is `ridge` or `onetoone`. The readout fits on the rows of the
+    train clips. It predicts on the test clips and the validation clips.
+    """
+    P = export["P"]
+    X_parts, Y_parts = [], []
+    for clip in split["train"]:
+        _, X, Y = probe_rows(docs[clip], export["clips"][clip], P, vocabulary)
+        X_parts.append(X)
+        Y_parts.append(Y)
+    X_train = np.vstack(X_parts)
+    Y_train = np.vstack(Y_parts)
+    held = split["test"] + split["val"]
+    rows = dict((clip, probe_rows(docs[clip], export["clips"][clip], P))
+                for clip in held)
+    X_eval = np.vstack([rows[c][1] for c in held] + [np.zeros((0, P))])
+    diagnostics = {
+        "route": route,
+        "train_rows": int(len(X_train)),
+        "train_positives": dict((name, int(Y_train[:, v].sum()))
+                                for v, name in enumerate(vocabulary)),
+    }
+    if route == "ridge":
+        scores, thresholds = ridge_readout(X_train, Y_train, X_eval, alpha)
+        diagnostics["alpha"] = alpha
+        diagnostics["thresholds"] = dict(
+            (name, float(thresholds[v]) if np.isfinite(thresholds[v])
+             else None)
+            for v, name in enumerate(vocabulary))
+    elif route == "onetoone":
+        names, agreement = one_to_one(X_train, Y_train)
+        scores, thresholds = one_to_one_scores(X_eval, names, agreement,
+                                               len(vocabulary))
+        diagnostics["map"] = dict(
+            (str(p), vocabulary[v] if v >= 0 else None)
+            for p, v in enumerate(names))
+        diagnostics["agreement"] = dict(
+            (str(p), float(a)) for p, a in enumerate(agreement))
+    else:
+        raise ValueError("unknown route %r" % (route,))
+    predictions = {}
+    lo = 0
+    for clip in held:
+        keys = rows[clip][0]
+        hi = lo + len(keys)
+        predictions[clip] = frames_to_instances(
+            docs[clip], keys, scores[lo:hi], thresholds, vocabulary)
+        lo = hi
+    return predictions, diagnostics
