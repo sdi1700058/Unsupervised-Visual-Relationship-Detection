@@ -704,3 +704,290 @@ def probe_predictions(docs, export, split, vocabulary, route,
             docs[clip], keys, scores[lo:hi], thresholds, vocabulary)
         lo = hi
     return predictions, diagnostics
+
+
+# ------------------------------------------------------ files and the run
+
+def _jsonable(pred):
+    """One prediction in the official form, with plain JSON types."""
+    return {"triplet": [str(x) for x in pred["triplet"]],
+            "score": float(pred["score"]),
+            "duration": [int(pred["duration"][0]), int(pred["duration"][1])],
+            "sub_traj": [list(box) for box in pred["sub_traj"]],
+            "obj_traj": [list(box) for box in pred["obj_traj"]]}
+
+
+def write_predictions(path, predictions, details):
+    """Write one prediction file in the official JSON form and read it back.
+
+    The form is the one of `docs/mm21-gdc/assets/submission-task1.json` in
+    the official clone. The return value is the `results` part as read
+    from disk, so the evaluator scores the file and not a copy in memory.
+    """
+    payload = {"version": "VERSION 1.0",
+               "results": dict((vid, [_jsonable(p) for p in preds])
+                               for vid, preds in sorted(predictions.items())),
+               "external_data": {"used": False, "details": details}}
+    with open(path, "w") as f:
+        json.dump(payload, f)
+    with open(path) as f:
+        return json.load(f)["results"]
+
+
+def _rel(path):
+    """A path relative to the repository root, for the metrics file."""
+    return os.path.relpath(os.path.abspath(path), ROOT)
+
+
+def run_dataset(spec, out_dir, official, crosscheck=None):
+    """Score the four predictors on one dataset and write the files.
+
+    `spec` holds `name`, `export`, `truth` and `split`. `official` and
+    `crosscheck` are `(evaluate, record)` pairs from `pinned_evaluator`.
+    Writes `predictions_<name>_<predictor>.json` and `metrics_<name>.json`
+    into `out_dir`, and returns the metrics.
+    """
+    name = spec["name"]
+    split = read_split(spec["split"])
+    export = read_export(spec["export"])
+    clips = split["train"] + split["val"] + split["test"]
+    if set(export["clips"]) != set(clips):
+        raise SystemExit("%s: the export clips and the split clips differ"
+                         % name)
+    docs = {}
+    for clip in clips:
+        with open(os.path.join(spec["truth"], clip + ".json")) as f:
+            docs[clip] = json.load(f)
+    held = split["test"] + split["val"]
+    truth = dict((clip, relation_instances(docs[clip])) for clip in held)
+    dropped = sum(len(docs[c].get("relation_instances", [])) - len(truth[c])
+                  for c in held)
+
+    prior = TripletPrior()
+    for clip in split["train"]:
+        prior.count(docs[clip])
+    vocabulary = sorted(prior.overall)
+    if not vocabulary:
+        raise SystemExit("%s: the train clips hold no relation" % name)
+
+    predictions = {
+        "perfect": dict((c, perfect_predictions(truth[c])) for c in held),
+        "frequency": dict(
+            (c, frequency_predictions(docs[c], prior, TOP_K, TOP_RETURNS))
+            for c in held),
+    }
+    probe = {}
+    for route in ("ridge", "onetoone"):
+        predictions[route], probe[route] = probe_predictions(
+            docs, export, split, vocabulary, route)
+
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+    files = {}
+    for predictor in PREDICTORS:
+        path = os.path.join(out_dir,
+                            "predictions_%s_%s.json" % (name, predictor))
+        files[predictor] = write_predictions(
+            path, predictions[predictor],
+            "%s predictor on true box tracks, export %s"
+            % (predictor, _rel(spec["export"])))
+
+    evaluate = official[0]
+    rows = []
+    self_check = {}
+    for clipset in CLIPSETS:
+        members = split["test"] if clipset == "test" else held
+        gt = dict((c, truth[c]) for c in members)
+        scored = [c for c in members if gt[c]]
+        if not scored:
+            raise SystemExit("%s %s: no clip holds a true instance"
+                             % (name, clipset))
+        uncut = score(evaluate, gt, files["perfect"], top_returns=None)
+        expected = float(np.mean([min(1.0, float(TOP_RETURNS) / len(gt[c]))
+                                  for c in scored]))
+        self_check[clipset] = {
+            "perfect_uncut_mAP": uncut["mAP"],
+            "perfect_cut_expected": round(expected, 4),
+            "clips_over_200": sum(1 for c in scored
+                                  if len(gt[c]) > TOP_RETURNS),
+            "pass": uncut["mAP"] == 1.0,
+        }
+        for predictor in PREDICTORS:
+            pred = dict((c, files[predictor].get(c, [])) for c in members)
+            row = {"clips": clipset, "predictor": predictor,
+                   "n_clips": len(scored),
+                   "n_instances": sum(len(gt[c]) for c in members),
+                   "official": score(evaluate, gt, pred,
+                                     top_returns=TOP_RETURNS),
+                   "clip_ap": clip_aps(evaluate, gt, pred,
+                                       top_returns=TOP_RETURNS)}
+            if crosscheck is not None:
+                try:
+                    row["crosscheck"] = score(crosscheck[0], gt, pred)
+                except (IndexError, ValueError) as exc:
+                    row["crosscheck"] = {"error": "%s: %s"
+                                         % (type(exc).__name__, exc)}
+            rows.append(row)
+
+    checked = off = 0
+    for clip in clips:
+        n_checked, n_off = slot_box_mismatches(docs[clip],
+                                               export["clips"][clip])
+        checked += n_checked
+        off += n_off
+    stub = getattr(sys.modules.get("tqdm"), "__file__", None) is None
+    metrics = {
+        "dataset": name,
+        "export": _rel(spec["export"]),
+        "model_name": export["model_name"],
+        "truth": _rel(spec["truth"]),
+        "split": _rel(spec["split"]),
+        "evaluator": official[1],
+        "crosscheck": crosscheck[1] if crosscheck is not None else None,
+        "tqdm": "stub" if stub else "package",
+        "parameters": {"top_returns": TOP_RETURNS, "viou_threshold": 0.5,
+                       "top_k": TOP_K, "num_slots": NUM_SLOTS,
+                       "ridge_alpha": RIDGE_ALPHA},
+        "clips": dict((k, len(v)) for k, v in split.items()),
+        "test_clips": split["test"],
+        "val_clips": split["val"],
+        "vocabulary": vocabulary,
+        "truth_dropped": dropped,
+        "slot_boxes": {"checked": checked, "off_by_more_than_1px": off},
+        "self_check": self_check,
+        "probe": probe,
+        "rows": rows,
+    }
+    with open(os.path.join(out_dir, "metrics_%s.json" % name), "w") as f:
+        json.dump(metrics, f, indent=1, sort_keys=True)
+    return metrics
+
+
+# ------------------------------------------------------- report tables
+
+def load_metrics(out_dir):
+    """`{dataset: metrics}` of every metrics file in `out_dir`, ladder order."""
+    found = {}
+    for name in LADDER:
+        path = os.path.join(out_dir, "metrics_%s.json" % name)
+        if os.path.exists(path):
+            with open(path) as f:
+                found[name] = json.load(f)
+    if not found:
+        raise SystemExit("no metrics_<dataset>.json in %s" % out_dir)
+    return found
+
+
+def _row(metrics, clipset, predictor):
+    return [r for r in metrics["rows"]
+            if r["clips"] == clipset and r["predictor"] == predictor][0]
+
+
+def markdown_tables(out_dir):
+    """Tables C.1 to C.3 of the report and the reading rules, applied."""
+    metrics = load_metrics(out_dir)
+    keys = ("mAP", "R@50", "R@100", "P@1", "P@5", "P@10")
+    out = ["**C.1 Self-check.**", "",
+           "| dataset | clips | perfect, no cut | perfect, cut 200 "
+           "| expected with cut | clips over 200 |",
+           "|---|---|---|---|---|---|"]
+    for name, m in metrics.items():
+        for clipset in CLIPSETS:
+            check = m["self_check"][clipset]
+            out.append("| %s | %s | %.4f | %.4f | %.4f | %d |" % (
+                LABELS[name], clipset, check["perfect_uncut_mAP"],
+                _row(m, clipset, "perfect")["official"]["mAP"],
+                check["perfect_cut_expected"], check["clips_over_200"]))
+    out += ["", "**C.2 Triplet mAP, official.**", "",
+            "| dataset | clips | predictor | " + " | ".join(keys)
+            + " | scored clips | instances |",
+            "|---|---|---|" + "---|" * len(keys) + "---|---|"]
+    for clipset in CLIPSETS:
+        for name, m in metrics.items():
+            for predictor in PREDICTORS:
+                r = _row(m, clipset, predictor)
+                out.append("| %s | %s | %s | %s | %d | %d |" % (
+                    LABELS[name], clipset, predictor,
+                    " | ".join("%.4f" % r["official"][k] for k in keys),
+                    r["n_clips"], r["n_instances"]))
+    out += ["", "**C.3 Cross-check.** xdshang 1b4de17 minus NExTplusplus "
+            "b556513, on the same files. The code of the two differs in two "
+            "points only: xdshang has no cut at 200, and it does not round "
+            "to 4 decimals (A1:26-36). A row with more than 200 predictions "
+            "in a clip can differ for the first reason.", "",
+            "| dataset | clips | predictor | " + " | ".join(keys) + " |",
+            "|---|---|---|" + "---|" * len(keys)]
+    for clipset in CLIPSETS:
+        for name, m in metrics.items():
+            for predictor in PREDICTORS:
+                r = _row(m, clipset, predictor)
+                cross = r.get("crosscheck") or {"error": "not run"}
+                if "error" in cross:
+                    cells = " | ".join([cross["error"]] + [""] * 5)
+                else:
+                    cells = " | ".join(
+                        "%+.4f" % (cross[k] - r["official"][k]) for k in keys)
+                out.append("| %s | %s | %s | %s |" % (
+                    LABELS[name], clipset, predictor, cells))
+    out += ["", "**Reading, by the rules fixed before the run.** Test "
+            "clips, official numbers.", ""]
+    for name, m in metrics.items():
+        label = LABELS[name]
+        check = m["self_check"]["test"]
+        if not check["pass"]:
+            out.append("- %s: perfect with no cut gives %.4f. The harness is "
+                       "broken, and no other %s number counts."
+                       % (label, check["perfect_uncut_mAP"], label))
+            continue
+        floor = _row(m, "test", "frequency")["official"]["mAP"]
+        for route in ("ridge", "onetoone"):
+            got = _row(m, "test", route)["official"]["mAP"]
+            if got <= floor:
+                out.append("- %s, %s: mAP %.4f, at or below frequency %.4f. "
+                           "The latent adds nothing that this metric can "
+                           "see." % (label, route, got, floor))
+            else:
+                out.append("- %s, %s: mAP %.4f, above frequency %.4f. The "
+                           "latent carries relation information that this "
+                           "metric can see, with true box tracks."
+                           % (label, route, got, floor))
+    return "\n".join(out)
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--dataset", choices=LADDER,
+                    help="the rung to score")
+    ap.add_argument("--out", required=True,
+                    help="the directory of the prediction and metrics files")
+    ap.add_argument("--tables", action="store_true",
+                    help="print tables C.1 to C.3 from the metrics in --out")
+    args = ap.parse_args(argv)
+    if args.tables:
+        print(markdown_tables(args.out))
+        return 0
+    if not args.dataset:
+        ap.error("--dataset is necessary to score a rung")
+    official = pinned_evaluator(OFFICIAL)
+    crosscheck = pinned_evaluator(CROSSCHECK)
+    metrics = run_dataset(dataset_spec(args.dataset), args.out, official,
+                          crosscheck)
+    for row in metrics["rows"]:
+        o = row["official"]
+        print("%-4s %-8s %-10s mAP %.4f  R@50 %.4f  R@100 %.4f  P@1 %.4f  "
+              "P@5 %.4f  P@10 %.4f  clips %d  instances %d" % (
+                  LABELS[args.dataset], row["clips"], row["predictor"],
+                  o["mAP"], o["R@50"], o["R@100"], o["P@1"], o["P@5"],
+                  o["P@10"], row["n_clips"], row["n_instances"]))
+    print("slot boxes off by more than 1 px: %d of %d"
+          % (metrics["slot_boxes"]["off_by_more_than_1px"],
+             metrics["slot_boxes"]["checked"]))
+    if not all(c["pass"] for c in metrics["self_check"].values()):
+        print("SELF-CHECK FAILED: perfect with no cut is not 1.0. The "
+              "harness is broken. Report nothing else.", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

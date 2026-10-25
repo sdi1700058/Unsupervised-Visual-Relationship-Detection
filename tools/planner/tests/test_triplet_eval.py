@@ -486,3 +486,117 @@ class TestProbePredictions(unittest.TestCase):
         with self.assertRaises(ValueError):
             te.probe_predictions(self.docs, self.export, self.split, ["on"],
                                  "vlm")
+
+
+# ------------------------------------------------------- the whole run
+
+@NEED_BOTH
+class TestRunDataset(unittest.TestCase):
+    """The toy rung end to end, through both evaluator clones."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp()
+        cls.spec = _toy_rung(cls.tmp)
+        cls.out = os.path.join(cls.tmp, "out")
+        cls.metrics = te.run_dataset(cls.spec, cls.out,
+                                     te.pinned_evaluator(te.OFFICIAL),
+                                     te.pinned_evaluator(te.CROSSCHECK))
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp)
+
+    def row(self, clipset, predictor):
+        return te._row(self.metrics, clipset, predictor)
+
+    def test_the_self_check_passes(self):
+        for clipset in te.CLIPSETS:
+            check = self.metrics["self_check"][clipset]
+            self.assertTrue(check["pass"])
+            self.assertEqual(check["perfect_uncut_mAP"], 1.0)
+            self.assertEqual(check["perfect_cut_expected"], 1.0)
+            self.assertEqual(check["clips_over_200"], 0)
+
+    def test_perfect_and_both_probes_find_the_one_instance(self):
+        for predictor in ("perfect", "ridge", "onetoone"):
+            self.assertEqual(self.row("test", predictor)["official"]["mAP"],
+                             1.0, predictor)
+
+    def test_frequency_misses_on_time_and_ties_on_names(self):
+        # Frequency covers frames [0, 10) and the truth [2, 6): vIoU 0.4.
+        # Both orders of the pair get "on" with count 3. The tie goes to
+        # ("cup", "on", "hand") by name, which is false, so P@1 = 0 and
+        # P@5 = 1 / 2.
+        got = self.row("test", "frequency")["official"]
+        self.assertEqual(got["mAP"], 0.0)
+        self.assertEqual(got["P@1"], 0.0)
+        self.assertEqual(got["P@5"], 0.5)
+
+    def test_the_cross_check_agrees_with_the_official_numbers(self):
+        for predictor in te.PREDICTORS:
+            row = self.row("test", predictor)
+            self.assertEqual(row["crosscheck"], row["official"], predictor)
+
+    def test_the_second_row_holds_test_and_validation_clips(self):
+        self.assertEqual(self.row("test", "perfect")["n_clips"], 1)
+        self.assertEqual(self.row("testval", "perfect")["n_clips"], 2)
+        self.assertEqual(self.row("testval", "perfect")["clip_ap"],
+                         {"s1": 1.0, "v1": 1.0})
+
+    def test_the_prediction_files_have_the_official_form(self):
+        for predictor in te.PREDICTORS:
+            path = os.path.join(self.out,
+                                "predictions_se_%s.json" % predictor)
+            with open(path) as f:
+                doc = json.load(f)
+            self.assertEqual(doc["version"], "VERSION 1.0")
+            self.assertEqual(sorted(doc["results"]), ["s1", "v1"])
+            self.assertFalse(doc["external_data"]["used"])
+
+    def test_the_metrics_file_records_the_run(self):
+        with open(os.path.join(self.out, "metrics_se.json")) as f:
+            m = json.load(f)
+        self.assertEqual(m["clips"], {"train": 3, "val": 1, "test": 1})
+        self.assertEqual(m["evaluator"]["commit"], te.OFFICIAL["commit"])
+        self.assertEqual(m["crosscheck"]["commit"], te.CROSSCHECK["commit"])
+        self.assertEqual(m["slot_boxes"],
+                         {"checked": 100, "off_by_more_than_1px": 0})
+        self.assertEqual(m["truth_dropped"], 0)
+        self.assertEqual(m["vocabulary"], ["on"])
+        self.assertIn(m["tqdm"], ("stub", "package"))
+        self.assertEqual(len(m["rows"]), 8)
+
+    def test_the_tables_hold_every_row(self):
+        text = te.markdown_tables(self.out)
+        self.assertIn("| SE | test | 1.0000 | 1.0000 | 1.0000 | 0 |", text)
+        self.assertIn("| SE | test | ridge | 1.0000 |", text)
+        self.assertIn("| SE | testval | frequency | +0.0000 |", text)
+        self.assertIn("- SE, ridge: mAP 1.0000, above frequency 0.0000.",
+                      text)
+
+
+class TestRunRefusals(unittest.TestCase):
+
+    def test_an_export_that_disagrees_with_the_split_stops_the_run(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        spec = _toy_rung(tmp)
+        with open(spec["split"]) as f:
+            doc = json.load(f)
+        doc["video_ids"].append("t4")
+        doc["split_info"]["clips"]["train"] = 4
+        with open(spec["split"], "w") as f:
+            json.dump(doc, f)
+        with self.assertRaises(SystemExit):
+            te.run_dataset(spec, os.path.join(tmp, "out"), (None, {}))
+
+    def test_the_command_line_needs_a_dataset_to_score(self):
+        with self.assertRaises(SystemExit):
+            te.main(["--out", tempfile.gettempdir()])
+
+    def test_tables_without_metrics_stop(self):
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp)
+        with self.assertRaises(SystemExit):
+            te.main(["--out", tmp, "--tables"])
