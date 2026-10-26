@@ -1,8 +1,6 @@
-from . import trace
 from . import plot
 from . import mnist
 from . import tuning
-from . import timer
 from . import noise
 from . import paths
 
@@ -49,10 +47,7 @@ def puzzle_module(directory):
     if not directory.endswith("/"):
         directory = directory + "/"
     args = directory.split("/")[-2].split("_")
-    if args[0] == "hanoi":
-        p = importlib.import_module('latplan.puzzles.hanoi')
-    else:
-        p = importlib.import_module('latplan.puzzles.{}_{}'.format(args[0],args[1]))
+    p = importlib.import_module('latplan.puzzles.{}_{}'.format(args[0],args[1]))
     p.setup()
     return p
 

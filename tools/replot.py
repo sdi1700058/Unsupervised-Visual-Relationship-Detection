@@ -43,17 +43,13 @@ from strips import bboxes_to_onehot, plot_autoencoding_image, show_summary
 
 
 def _auto_domain(model_dir):
-    if "actiongenome" in model_dir: return "actiongenome"
     if "vidvrd" in model_dir or "video-" in model_dir: return "vidvrd"
     if "blocks" in model_dir: return "blocks"
     return "puzzle"
 
 
 def _load_video(model_dir, domain, num):
-    if domain == "vidvrd":
-        from latplan.puzzles.puzzle_vidvrd import build_dataset
-    else:
-        from latplan.domains.video.actiongenome import build_dataset
+    from latplan.puzzles.puzzle_vidvrd import build_dataset
     from latplan.puzzles.puzzle_labeled_objects import PICSIZE
     from latplan.util.cache import load_cached
 
@@ -165,7 +161,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument("model_dir")
     p.add_argument("--num",   type=int, default=200, help="sample size for replot (subset before preprocess)")
-    p.add_argument("--domain", default=None, choices=[None, "vidvrd", "actiongenome", "blocks", "puzzle"])
+    p.add_argument("--domain", default=None, choices=[None, "vidvrd", "blocks", "puzzle"])
     p.add_argument("--type",  default="mnist")
     p.add_argument("--width", type=int, default=3)
     p.add_argument("--height", type=int, default=3)
@@ -177,7 +173,7 @@ def main():
     print(f"[replot] domain={args.domain}  model_dir={args.model_dir}")
 
     n_train = None
-    if args.domain in ("vidvrd", "actiongenome"):
+    if args.domain == "vidvrd":
         states, plotmode, n_train = _load_video(args.model_dir, args.domain,
                                                 args.num)
     elif args.domain == "blocks":

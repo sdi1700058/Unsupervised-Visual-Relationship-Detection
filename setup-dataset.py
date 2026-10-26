@@ -57,31 +57,6 @@ def puzzle(type='mnist',width=3,height=3,limit=None):
     print(f"Dataset saved to {path}")
     _save_and_symlink(path, filename)
 
-def hanoi(disks=7,towers=4,limit=None):
-    filename = "-".join(map(str,["hanoi",disks,towers]))+".npz"
-    path = os.path.join(DATA_DIR, filename)
-    import latplan.puzzles.hanoi as p
-    p.setup()
-    pres = p.generate_random_configs(disks,towers, limit)
-    np.random.shuffle(pres)
-    sucs = [ random.choice(p.successors(c1,disks,towers)) for c1 in pres ]
-    np.savez_compressed(path,pres=pres,sucs=sucs)
-    print(f"Dataset saved to {path}")
-    _save_and_symlink(path, filename)
-
-def lightsout(type='digital',size=4,limit=None):
-    filename = "-".join(map(str,["lightsout",type,size]))+".npz"
-    path = os.path.join(DATA_DIR, filename)
-    import importlib
-    p = importlib.import_module('latplan.puzzles.lightsout_{}'.format(type))
-    p.setup()
-    pres = p.generate_random_configs(size, limit)
-    np.random.shuffle(pres)
-    sucs = [ random.choice(p.successors(c1)) for c1 in pres ]
-    np.savez_compressed(path,pres=pres,sucs=sucs)
-    print(f"Dataset saved to {path}")
-    _save_and_symlink(path, filename)
-
 def blocksworld(track="blocks-5-3"):
     """Download blocksworld dataset from the latplan-fosae GitHub releases.
 
@@ -214,7 +189,7 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
                     max_videos, out_name, max_objects, fill_annotations=False,
                     patch_size=None, annotations_dir=None, frames_dir=None,
                     augment=None, augment_copies=1):
-    """Common path for video_ag / video_vidvrd bakers.
+    """Common path for video bakers (video_vidvrd).
 
     Calls the loader's build_dataset(...) with video_id_filter set, then
     writes the raw-array npz at the overfit/ keyspace.
@@ -287,31 +262,6 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
     return out_path
 
 
-def video_ag(category=None, video_id=None, fps="native",
-             max_videos=None, out_name=None, max_objects=10,
-             fill_annotations=False, patch_size=None,
-             annotations_dir=None, frames_dir=None,
-             augment=None, augment_copies=1):
-    """Bake an ActionGenome overfit npz for one video / category subset.
-
-    augment / augment_copies : the two flags `_parse_video_args` defines for
-        both subcommands. They used to be absent here while main() passed them
-        unconditionally, so every `video_ag` invocation died with
-        `TypeError: video_ag() got an unexpected keyword argument 'augment'`
-        before it reached the loader.
-    """
-    if category is None:
-        raise SystemExit("video_ag: --category is required (e.g. chair, table, food)")
-    from latplan.domains.video import actiongenome as _ag
-    if fill_annotations:
-        print("[bake] note: --fill-annotations has no effect on ActionGenome (AG frame_list is dense already)")
-    return _bake_video_npz(_ag, "actiongenome", category, video_id, fps,
-                           max_videos, out_name, max_objects,
-                           fill_annotations=False, patch_size=patch_size,
-                           annotations_dir=annotations_dir, frames_dir=frames_dir,
-                           augment=augment, augment_copies=augment_copies)
-
-
 def _parse_category(category):
     """Normalise the CLI category into what build_dataset expects.
 
@@ -369,7 +319,7 @@ def video_vidvrd(category=None, video_id=None, fps=3,
 def _parse_video_args(argv):
     """Lightweight argparse for the two video subcommands. Returns kwargs dict."""
     import argparse
-    p = argparse.ArgumentParser(prog="setup-dataset.py video_ag|video_vidvrd")
+    p = argparse.ArgumentParser(prog="setup-dataset.py video_vidvrd")
     p.add_argument("category",
                    help="Primary category (e.g. chair, bicycle). Accepts a "
                         "comma-separated group ('dog,cat,bird') or 'all' for "
@@ -434,24 +384,13 @@ def main():
         print()
         print("Tasks:")
         print("  puzzle <type> <width> <height> [limit]")
-        print("    type: mnist, digital, mandrill, spider, lenna")
+        print("    type: mnist")
         print("    Example: python setup-dataset.py puzzle mnist 3 3 5000")
-        print()
-        print("  hanoi <disks> <towers> [limit]")
-        print("    Example: python setup-dataset.py hanoi 7 4 5000")
-        print()
-        print("  lightsout <type> <size> [limit]")
-        print("    type: digital, twisted")
-        print("    Example: python setup-dataset.py lightsout digital 4 5000")
         print()
         print("  blocksworld [track]")
         print("    track: blocks-5-3 (default), blocks-4-4")
         print("    Downloads from GitHub releases if not present locally.")
         print("    Example: python setup-dataset.py blocksworld blocks-5-3")
-        print()
-        print("  video_ag <category> [--video-id ID] [--fps native] [--max-videos N] [--max-objects N] [--out-name STR]")
-        print("    Bake an ActionGenome overfit npz at data/npz/video/actiongenome/overfit/.")
-        print("    Example: python setup-dataset.py video_ag chair --video-id 001YG.mp4")
         print()
         print("  video_vidvrd <category> [--video-id ID] [--fps 3] [--max-videos N] [--max-objects N] [--out-name STR]")
         print("    Bake a VidVRD overfit npz at data/npz/video/vidvrd/overfit/.")
@@ -469,9 +408,9 @@ def main():
             list_datasets()
             return
 
-        # Video subcommands use argparse (named flags); puzzle/blocks/hanoi/
-        # lightsout keep the legacy positional `eval` dispatch.
-        if task in ("video_ag", "video_vidvrd"):
+        # Video subcommands use argparse (named flags); puzzle/blocks keep
+        # the legacy positional `eval` dispatch.
+        if task == "video_vidvrd":
             ns = _parse_video_args(sys.argv)
             kw = dict(category=ns.category, video_id=ns.video_id,
                       max_videos=ns.max_videos, max_objects=ns.max_objects,
