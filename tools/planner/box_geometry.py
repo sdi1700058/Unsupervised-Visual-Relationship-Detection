@@ -30,14 +30,13 @@ mined action set would be far larger than the real transition structure.
 The output is an ordinary export, so `plan_video.py`, `harness.py` and all
 three planning methods consume it unchanged:
 
-    python3 tools/planner/oracle.py data/npz/.../dog-....npz \\
+    python3 tools/planner/box_geometry.py data/npz/.../dog-....npz \\
         --out eval/exports/oracle-dog.npz --bins 8
 
     python3 tools/planner/plan_video.py eval/exports/oracle-dog.npz \\
         --method pddl --init 0 --goal 4
 """
 
-import argparse
 import sys
 
 import numpy as np
@@ -293,7 +292,7 @@ def load_canvas_scaler():
     except ImportError as exc:
         raise SystemExit(
             "reading VidVRD annotations needs numpy and pillow, and one is "
-            "missing (%s). The rest of oracle.py needs only numpy." % exc)
+            "missing (%s). The rest of box_geometry.py needs only numpy." % exc)
     return (module._scale_bbox_to_canvas, module.CANVAS_W, module.CANVAS_H)
 
 
