@@ -23,8 +23,9 @@ matters for fidelity. The last two steps do not:
   redundant: Fast Downward guarantees the plan fits the domain, and we
   wrote the add and delete sets, so replaying them is exact.
 
-The lisp binaries live under /home/panoslat/Dev/Thesis/FOSAE/latplan and
-stay read-only (SPEC C14). install_roswell.sh builds them.
+The lisp binaries live under `UPSTREAM_LATPLAN` or `../latplan`
+(see `upstream_bridge.py`) and stay read-only (SPEC C14).
+install_roswell.sh builds them.
 """
 
 import os
