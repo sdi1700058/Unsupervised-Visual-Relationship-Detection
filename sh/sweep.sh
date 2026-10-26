@@ -14,8 +14,7 @@
 #
 # Measured 2026-09-18, before the leaking fixtures were repaired: 8119
 # directories and 44 MB in .claude/tmp, and one run of the private suite added
-# 9 more. tools/verify.py layer 2 attributes a result by a diff of the tree, so
-# a directory that no unit wrote is a false positive that it must discount.
+# 9 more.
 #
 # The boundary is the workspace, which is $SCRATCH/panos. The account belongs
 # to the author's brother, and notes/docs/SANDBOX.md gives the reason. This

@@ -5,7 +5,7 @@
 # WHY A JOB AND NOT A SHELL. The spatial relations are ONE JSON PER FRAME, so
 # the zip holds roughly 220,000 small files. A login-node unzip had written 53
 # of 540 takes in eight minutes and was hammering the Lustre metadata server,
-# which /etc/claude-code/CLAUDE.md forbids by name.
+# which Sherlock's rules (/etc/agents/AGENTS.md) forbid.
 #
 #SBATCH --partition=normal
 #SBATCH --time=04:00:00

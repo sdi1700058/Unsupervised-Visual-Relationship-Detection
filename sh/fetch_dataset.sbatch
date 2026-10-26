@@ -6,10 +6,10 @@
 #   sbatch --job-name=dl-vidvrd sh/fetch_dataset.sbatch vidvrd
 #
 # WHY A JOB AND NOT A LOGIN-NODE LOOP. Two reasons, and both are measured.
-# The cluster policy in /etc/claude-code/CLAUDE.md forbids heavy work on the
-# login node, and 29 GB over eight archives is heavy. And `curl` is DENIED to
-# the session by managed settings, while a compute node runs an ordinary
-# shell, so the job can fetch what the session cannot.
+# Sherlock's own rules (/etc/agents/AGENTS.md) forbid heavy work on the
+# login node, and 29 GB over eight archives is heavy. And `curl` is blocked
+# in the interactive shell, while a compute node runs an ordinary shell, so
+# the job can fetch what the login node cannot.
 #
 # EVERY DATASET HERE IS ON A HOST THAT NEEDS NO NEW PERMISSION. huggingface.co
 # already serves VidOR and VidVRD in full, video included. That was measured on
