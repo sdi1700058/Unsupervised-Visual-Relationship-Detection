@@ -90,3 +90,6 @@ data/video/videonet/frames_*
 /sh/statusline.sh
 /sh/fetch.sh
 /sh/README.md
+
+# Archived untracked files, see workbench/ARCHIVE.md
+/_attic/
