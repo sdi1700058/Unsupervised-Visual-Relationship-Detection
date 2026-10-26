@@ -9,7 +9,7 @@
 # shifts every argument left and the run dies on `import latplan.puzzles.puzzle_3`.
 # The three Nones matter for the same reason: a bare `... mnist 3 3 100` sets
 # U=100, not num_examples=100, and trains a 100-unit model on the full set.
-# workbench/sh/submit.sh:89 composes the same command the same way.
+# workbench/sh/submit.sh:140 composes the same command the same way.
 
 set -eo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
