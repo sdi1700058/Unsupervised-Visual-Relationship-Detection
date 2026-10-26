@@ -7,14 +7,12 @@ __pycache__/
 .eggs/
 dist/
 build/
-.idea
 .idea/
 
 # OS / IDE
 .DS_Store
 Thumbs.db
 .vscode/
-.idea/
 
 # MY IGNORES
 out/*
@@ -58,16 +56,14 @@ data/video/videonet/frames_*
 .bashrc
 .gitconfig
 .gitmodules
-.idea/
 .mcp.json
 .profile
 .ripgreprc
 .zprofile
 .zshrc
-.idea/
 .venv-local/
 # Also without the slash: on the cluster this is a SYMLINK to `venv`, created so
-# the hardcoded `.venv-local/bin/python` in sh/gate.sh resolves there too, and a
+# the hardcoded `.venv-local/bin/python` path resolves there too, and a
 # directory-only pattern does not match a symlink.
 .venv-local
 
