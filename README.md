@@ -63,10 +63,6 @@ repository.
 
 ## Datasets
 
-```bash
-bash sh/dataset.sh list                  # which stage each dataset reached
-```
-
 Each dataset moves through download, prepare, screen, oracle, and verify
 stages. `sh/` holds the Slurm job for each stage that needs a compute node
 rather than a login node.
