@@ -7,10 +7,11 @@ from the annotations instead of from a trained model, so a method can be run on
 perfect input and on learned input and the two compared. That is what a "paired
 combination" means -- one dataset, one method, both sources.
 
-**Why this one exists beside `oracle.py`.** `oracle.py` builds the state from
-ground-truth **boxes**, which answers "can a classical planner do frame
-interpolation from a binary state at all". That is a ceiling on the planner and
-it says nothing about relations.
+**Why this one exists beside `deprecated/position_oracle.py`.**
+`deprecated/position_oracle.py` builds the state from ground-truth **boxes**,
+which answers "can a classical planner do frame interpolation from a binary
+state at all". That is a ceiling on the planner and it says nothing about
+relations. It is not an upper bound in box space either (THESIS-MODEL H.8).
 
 The thesis asks whether FOSAE's **relations** are plannable. Until 2026-09-07
 ground-truth relations had never been fed to a planner anywhere in this
