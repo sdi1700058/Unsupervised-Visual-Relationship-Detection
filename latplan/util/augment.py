@@ -26,7 +26,13 @@ import numpy as np
 
 
 def _clip_boxes(boxes, width, height):
-    """Keep boxes inside the canvas and non-degenerate."""
+    """Keep boxes inside the canvas and non-degenerate.
+
+    Clipping alone is not enough: a box translated or rescaled past the
+    canvas edge clips to a zero-width or zero-height sliver that is not
+    all-zero, so `_padding_mask` would still count it as a real slot. Such a
+    box is zeroed outright so it reads as padding instead.
+    """
     boxes = boxes.copy()
     boxes[..., 0] = np.clip(boxes[..., 0], 0, width - 1)
     boxes[..., 2] = np.clip(boxes[..., 2], 0, width - 1)
@@ -37,7 +43,10 @@ def _clip_boxes(boxes, width, height):
     x2 = np.maximum(boxes[..., 0], boxes[..., 2])
     y1 = np.minimum(boxes[..., 1], boxes[..., 3])
     y2 = np.maximum(boxes[..., 1], boxes[..., 3])
-    return np.stack([x1, y1, x2, y2], axis=-1)
+    out = np.stack([x1, y1, x2, y2], axis=-1)
+    degenerate = (x2 <= x1) | (y2 <= y1)
+    out[degenerate] = 0
+    return out
 
 
 def _padding_mask(boxes):
