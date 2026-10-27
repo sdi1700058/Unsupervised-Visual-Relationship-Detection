@@ -16,7 +16,7 @@ propositions become true and these become false*. The quantifier is the whole
 point. It is what lets a classical planner chain operators it never saw
 chained, and it is the only reason search is possible at all. Asai and Muise
 build that quantifier into the architecture in the Cube-Space AutoEncoder
-(entry `A6` in `notes/docs/RELATED_WORK.md`): each action becomes a constant
+(entry `A6` in `notes/thesis/RELATED_WORK.md`): each action becomes a constant
 vector added in latent space, so the same action shifts the same bits wherever
 it fires.
 

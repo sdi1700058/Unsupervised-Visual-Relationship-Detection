@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A clip list must record how it was made. SPEC V37.
 
-`eval/vidvrd_winnable_clips.txt` is 88 bare ids with no header. Nothing in it
+`eval/datasets/clips/vidvrd_winnable_clips.txt` is 88 bare ids with no header. Nothing in it
 says which window screened it, and the current screen reproduces no window
 exactly -- w=12 gives 69, w=16 gives 86, w=20 gives 99, and the closest shares
 80 of the 88. The provenance is unrecoverable, and every planner number in the
@@ -69,7 +69,7 @@ class TestProvenanceHeader(unittest.TestCase):
             self.assertEqual(clip_list_window(p), 16)
 
     def test_a_list_with_no_header_reports_unknown(self):
-        """Which is the state eval/vidvrd_winnable_clips.txt is in."""
+        """Which is the state eval/datasets/clips/vidvrd_winnable_clips.txt is in."""
         from screen_vidvrd import clip_list_window
 
         with tempfile.TemporaryDirectory() as tmp:

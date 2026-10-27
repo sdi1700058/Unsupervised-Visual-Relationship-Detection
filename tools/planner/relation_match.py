@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The relation-matching metric the supervisors sketched on 2026-09-15.
 
-THE RECORD, `notes/docs/SUPERVISOR.md` section 4, quoted and not paraphrased:
+THE RECORD, `notes/thesis/SUPERVISOR.md` section 4, quoted and not paraphrased:
 
     Πώς αντιστοιχίζουμε σχέσεις;(σχέση ομοιότητας η οποία μεγιστοποιείται
     οταν όλα τα αντικειμενα που συμμετέχουν στην r συμμετέχουν επίσης στην

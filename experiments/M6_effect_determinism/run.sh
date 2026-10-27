@@ -28,20 +28,20 @@ mkdir -p "$EXPORTS" "$OUT"
 # stated rather than silent, because the two sets are not the same dataset.
 # ---------------------------------------------------------------------------
 vidvrd_clips() {
-    if [ -f eval/vidvrd_winnable_clips.txt ]; then
-        grep -v '^#' eval/vidvrd_winnable_clips.txt | grep -v '^$' | head -n "$CLIPS"
+    if [ -f eval/datasets/clips/vidvrd_winnable_clips.txt ]; then
+        grep -v '^#' eval/datasets/clips/vidvrd_winnable_clips.txt | grep -v '^$' | head -n "$CLIPS"
     else
-        echo "no eval/vidvrd_winnable_clips.txt: using the first clips in name order" >&2
+        echo "no eval/datasets/clips/vidvrd_winnable_clips.txt: using the first clips in name order" >&2
         ls data/video/vidvrd/annotations/train | sed 's/\.json$//' | head -n "$CLIPS"
     fi
 }
 
 vidor_clips() {
-    if [ -f eval/vidor_winnable_w16.txt ]; then
-        grep -v '^#' eval/vidor_winnable_w16.txt | grep -v '^$' \
+    if [ -f eval/datasets/clips/vidor_winnable_w16.txt ]; then
+        grep -v '^#' eval/datasets/clips/vidor_winnable_w16.txt | grep -v '^$' \
             | sed 's#^#training/#' | head -n "$CLIPS"
     else
-        echo "no eval/vidor_winnable_w16.txt: using the first clips in name order" >&2
+        echo "no eval/datasets/clips/vidor_winnable_w16.txt: using the first clips in name order" >&2
         (cd data/video/vidor/annotations && ls validation/*/*.json \
             | sed 's/\.json$//' | head -n "$CLIPS")
     fi

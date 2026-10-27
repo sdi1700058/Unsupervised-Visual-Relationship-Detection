@@ -308,7 +308,7 @@ def window_crossover(per_object, width, height, window=8):
 def provenance_header(window, n, filters):
     """A comment header saying how a clip list was produced. `SPEC.md` V37.
 
-    `eval/vidvrd_winnable_clips.txt` is 88 bare ids with no header, and the
+    `eval/datasets/clips/vidvrd_winnable_clips.txt` is 88 bare ids with no header, and the
     current screen reproduces no window exactly -- w=12 gives 69, w=16 gives
     86, w=20 gives 99, and the closest shares 80 of the 88. Its provenance is
     unrecoverable, and every planner number in the project was scored at

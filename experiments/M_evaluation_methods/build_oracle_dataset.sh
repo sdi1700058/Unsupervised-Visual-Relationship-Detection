@@ -7,7 +7,7 @@
 # Any dataset whose annotations read through tools/planner/deprecated/position_oracle.py works, not
 # only VidVRD. VidOR uses the identical format, so:
 #
-#   CLIPS_FILE=eval/vidor_winnable_w16.txt \
+#   CLIPS_FILE=eval/datasets/clips/vidor_winnable_w16.txt \
 #   ANN_DIR=data/video/vidor/annotations/training \
 #   OUT_DIR=eval/probe/vidor N_CLIPS=25 \
 #     bash experiments/M_evaluation_methods/build_oracle_dataset.sh
@@ -24,7 +24,7 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_DIR}"
 
 N_CLIPS="${N_CLIPS:-20}"
-CLIPS_FILE="${CLIPS_FILE:-eval/vidvrd_winnable_clips.txt}"
+CLIPS_FILE="${CLIPS_FILE:-eval/datasets/clips/vidvrd_winnable_clips.txt}"
 ANN_DIR="${ANN_DIR:-data/video/vidvrd/annotations/train}"
 OUT_DIR="${OUT_DIR:-eval/probe/batch}"
 MEM_KB="${MEM_KB:-6000000}"

@@ -18,11 +18,19 @@ labels beyond reconstruction loss. The FOSAE paper is at
 - `tools/video/` — the dataset conversions: each dataset's raw annotations
   into the common VidVRD-style relation format.
 - `tools/planner/` — the classical planner and its evaluation, including
-  `triplet_eval.py` (triplet mAP against the official `ivtmetrics`-based
-  evaluator).
+  `triplet_eval.py` (triplet mAP with the official evaluator of
+  VidVRD-helper).
 - `sh/` — Slurm jobs for dataset download, unpack, and conversion.
 - `experiments/` — one directory per experiment, each with its own `README.md`
   and run script.
+- `strips.py` trains and evaluates a model (`strips.py <mode> <task> ...`),
+  `setup-dataset.py` bakes a dataset into `.npz`, `extract_fol.py` reads
+  predicates out of a trained model, and `config.py` / `config_cpu.py` set up
+  the Keras session.
+- `data/`, `out/`, `logs/`, `venv/` — datasets, model outputs, Slurm logs and
+  the Python 3.6 environment (`.venv-local` links to it). Not in git.
+- `_attic/` — files set aside during the 2026-10 cleanup, kept recoverable.
+  `workbench/ARCHIVE.md` lists every one and how to bring it back.
 
 This is the public half of a two-repository split. The private half
 (`workbench/`, a nested git repository, git-ignored here) holds the thesis

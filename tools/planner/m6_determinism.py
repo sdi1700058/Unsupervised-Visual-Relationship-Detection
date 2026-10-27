@@ -6,7 +6,7 @@ STRIPS operator says: in any state where the precondition holds, these
 propositions become true and these become false. The quantifier is the point.
 It is what lets a planner chain operators it never saw chained, and it is the
 only reason search works at all. The Cube-Space AutoEncoder (Asai and Muise
-2020, entry `A6` in `notes/docs/RELATED_WORK.md`) builds that quantifier into
+2020, entry `A6` in `notes/thesis/RELATED_WORK.md`) builds that quantifier into
 the architecture: an action becomes a constant vector added in latent space.
 
 FOSAE has no such prior, so `tools/planner/pddl/planner.py` mines operators

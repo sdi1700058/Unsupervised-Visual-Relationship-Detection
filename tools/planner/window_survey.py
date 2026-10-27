@@ -12,7 +12,7 @@ what window VidVRD needs rather than what one dog video needed.
 
     python3 tools/planner/window_survey.py                 # all train clips
     python3 tools/planner/window_survey.py --limit 100 --max-objects 5
-    python3 tools/planner/window_survey.py --csv eval/window_survey.csv
+    python3 tools/planner/window_survey.py --csv eval/datasets/clips/window_survey.csv
 
 Reads annotation JSON only — no extracted frames, no keras, no cluster. The
 canvas scaling comes from `puzzle_labeled_objects` (SPEC V5), so this needs the

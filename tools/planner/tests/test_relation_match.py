@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The relation-matching metric the supervisors sketched on 2026-09-15.
 
-THE RECORD, `notes/docs/SUPERVISOR.md` section 4, quoted rather than
+THE RECORD, `notes/thesis/SUPERVISOR.md` section 4, quoted rather than
 paraphrased:
 
     Πώς αντιστοιχίζουμε σχέσεις;(σχέση ομοιότητας η οποία μεγιστοποιείται
@@ -164,7 +164,7 @@ class TestTheRecordsMetric(unittest.TestCase):
 class TestS8TheMetricMustReturNAWrongAnswerOnPurpose(unittest.TestCase):
     """The gate. A metric never made to fail has not been tested.
 
-    `notes/docs/SUPERVISOR.md` section 4 asks for small worlds holding only
+    `notes/thesis/SUPERVISOR.md` section 4 asks for small worlds holding only
     the relation-extraction result, to see whether the metric answers as a
     reader would expect. These are those worlds, and the first one is the
     case where the record's own metric answers wrongly.
