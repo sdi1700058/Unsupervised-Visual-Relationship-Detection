@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Tests for the oracle export. numpy only — no keras, no data on disk."""
+"""Tests for `box_geometry.py` and the metrics it feeds. numpy only — no
+keras, no data on disk."""
 
 import os
 import shutil
@@ -291,12 +292,13 @@ def _has_pillow():
 
 @unittest.skipUnless(_has_pillow(), "needs pillow (present in .venv-local)")
 class TestSynthBboxContract(unittest.TestCase):
-    """The oracle must read what `tools/synth_bbox.py` writes.
+    """`boxes_from_vidvrd` must read what `tools/synth_bbox.py` writes.
 
-    That tool is the whole VideoNet path: MediaPipe hands plus Grounded-DINO
-    produce a VidVRD-schema JSON with no `relation_instances`, no `fps` and no
-    `frame_count`. If the oracle ever stops reading it, the auto-annotation
-    route dies silently and nobody finds out until a cluster cycle is spent.
+    That tool runs MediaPipe hands plus Grounded-DINO and produces a
+    VidVRD-schema JSON with no `relation_instances`, no `fps` and no
+    `frame_count`. If `boxes_from_vidvrd` ever stops reading a document with
+    those fields absent, the auto-annotation route dies silently and nobody
+    finds out until a cluster cycle is spent.
 
     Nothing here needs MediaPipe, a checkpoint or a download.
     """
@@ -362,7 +364,7 @@ class TestSynthBboxContract(unittest.TestCase):
         self.assertGreater(centre_x.min(), 0.0)
 
     def test_the_chain_reaches_a_scoreable_export(self):
-        """synth_bbox -> oracle -> M3, which is the VideoNet route."""
+        """synth_bbox -> boxes_from_vidvrd -> M3, the auto-annotation route."""
         from tools.planner.box_geometry import boxes_from_vidvrd, boxes_to_latents
         from tools.planner.plan_validity import motion_model, discrimination
 
