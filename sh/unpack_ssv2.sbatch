@@ -4,12 +4,9 @@
 #
 #   sbatch --job-name=ssv2-unpack sh/unpack_ssv2.sbatch
 #
-# WHY. The lock board reads Something-Else as ORACLE ARM only because SSv2
-# sits in twenty split gzip parts it cannot index. ssv2-list, Slurm 45566771,
-# listed 220,847 webm videos through tar -tz on 2026-09-27, which meets the
-# author's lock rule by count. An adversary found on 2026-10-01 that the tool
-# and the rule disagree here, so this closes the gap by measurement: the
-# videos land in data/video/ssv2/ext, where the board can count them.
+# WHY. sh/convert_something_else.sbatch (the C.4 unpack step) reads its webm
+# source from data/video/ssv2/ext; this script rebuilds that directory from
+# the raw gzip parts after a $SCRATCH purge removes it.
 #
 #SBATCH --partition=normal
 #SBATCH --time=03:00:00
