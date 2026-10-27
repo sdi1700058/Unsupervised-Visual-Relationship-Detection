@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Emit propositional STRIPS from the learned latents and call Fast Downward.
 
-The model writes actions.csv during training (latplan/model.py:1051): one row
-per observed transition, holding the pre-state bits followed by the successor
-bits. Distinct (add, delete) pairs from those rows become the action schema.
+The live path reads the operators from the export itself: `export.transitions()`
+returns the pre-state and successor bits for every consecutive pair of rows
+(all clips, all splits), and distinct (add, delete) pairs from those pairs
+become the action schema. `read_actions_csv` below is the older path, reading
+`actions.csv` as written by the model during training
+(latplan/model.py:1051); it is not called by `_solve` and is kept for
+one-off inspection of a training run's own action set, not for planning.
 
 The encoding is flat propositional. Each latent bit becomes one predicate,
 each distinct delta becomes one operator. Preconditions come from the bits
@@ -12,6 +16,10 @@ That keeps operators from firing where the model never saw them fire.
 
 This method skips the lisp toolchain that AMA3 needs, at the cost of drifting
 from the paper's own encoding.
+
+Fast Downward is not installed on Sherlock. Build it inside a job, not on a
+login node: `tools/planner/install_fd.sh` (DEPS_DIR defaults to
+$SCRATCH/panos/sgg-thesis/deps, inside the account's own tree).
 """
 
 import os
@@ -21,7 +29,11 @@ from pathlib import Path
 
 
 def read_actions_csv(path):
-    """Split actions.csv into the pre-state and successor blocks."""
+    """Split actions.csv into the pre-state and successor blocks.
+
+    Legacy path: `_solve` reads operators from `export.transitions()`, not
+    from here. Kept for inspecting a training run's own action set.
+    """
     import numpy as np
 
     data = np.loadtxt(str(path), dtype=np.int8)
