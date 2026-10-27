@@ -1,43 +1,35 @@
 #!/usr/bin/env python3
-"""Build a planner export whose latents are perfect by construction.
+"""A library for box quantisation and box reading.
 
-The evaluation has two halves that a single number cannot separate. When
-`mse_ratio` comes back bad we cannot tell whether FOSAE's relations are
-poor or whether a classical planner simply cannot do frame interpolation
-from a binary state at all. This answers the second half on its own:
-
-    Suppose FOSAE produced ideal relations. What would planning output?
-
-So we skip the encoder. The latents here are a lossless discretisation of
-the annotated bounding boxes — no learning, no reconstruction error beyond
-the quantisation step. Anything the planner fails to do on these latents,
-it would also fail to do on a perfect model, and no amount of training
-would fix it. The resulting `mse_ratio` is the **ceiling**: every trained
-model is measured against it rather than against zero.
+`deprecated/position_oracle.py` uses this module to build a planner export
+whose latents are perfect by construction: the evaluation has two halves
+that a single number cannot separate, and when `mse_ratio` comes back bad we
+cannot tell whether FOSAE's relations are poor or whether a classical
+planner simply cannot do frame interpolation from a binary state at all.
+Discretising the annotated bounding boxes losslessly -- no learning, no
+reconstruction error beyond the quantisation step -- answers the second half
+on its own: anything the planner fails to do on these latents, it would
+also fail to do on a perfect model. The resulting `mse_ratio` is the
+**ceiling**: every trained model is measured against it rather than
+against zero.
 
 The encoding is deliberately the same shape the real decoder emits. In
 `common/decode.py` the bbox block of a FOSAE feature vector is four
 one-hot runs — x1 over X bins, y1 over Y bins, then x2 and y2 — with
 X, Y = PICSIZE // 5, i.e. 60 and 40 on the 200x300 canvas. This module
-writes exactly that, so the oracle is an oracle *of the representation the
-model is actually trying to learn*, not of some easier one.
+writes exactly that, so the oracle built from it is an oracle *of the
+representation the model is actually trying to learn*, not of some easier
+one.
 
 One-hot rather than a binary or Gray code because Hamming distance has to
 mean something: moving one coordinate by one bin flips exactly two bits.
 A binary code would flip up to log2(bins) bits for the same motion and the
 mined action set would be far larger than the real transition structure.
 
-The output is an ordinary export, so `plan_video.py`, `harness.py` and all
-three planning methods consume it unchanged:
-
-    python3 tools/planner/box_geometry.py data/npz/.../dog-....npz \\
-        --out eval/exports/oracle-dog.npz --bins 8
-
-    python3 tools/planner/plan_video.py eval/exports/oracle-dog.npz \\
-        --method pddl --init 0 --goal 4
+This module has no command line of its own. `deprecated/position_oracle.py`
+writes an ordinary export from these functions, so `plan_video.py`,
+`harness.py` and all three planning methods consume it unchanged.
 """
-
-import sys
 
 import numpy as np
 
