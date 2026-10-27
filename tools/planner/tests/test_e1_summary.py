@@ -225,3 +225,30 @@ class TestOneWindowPerExport(unittest.TestCase):
         rows = [{"init": "0", "goal": "8", "mse_ratio": "0.5",
                  "reachability": "True", "beats_baseline": "True"}]
         self.assertEqual(e1_summary.summarise_rows(rows)["windows"], 1)
+
+
+class TestCommandLine(unittest.TestCase):
+    """`main` must take `--root` / `--out` and must not write without `--write`."""
+
+    def test_no_write_flag_prints_but_writes_nothing(self):
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, tmp, True)
+        code = e1_summary.main(["--root", tmp])
+        self.assertEqual(code, 0)
+        self.assertEqual(os.listdir(tmp), [])
+
+    def test_write_flag_writes_to_out(self):
+        import tempfile
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(__import__("shutil").rmtree, tmp, True)
+        out = os.path.join(tmp, "summary.md")
+        code = e1_summary.main(["--root", tmp, "--out", out, "--write"])
+        self.assertEqual(code, 0)
+        self.assertTrue(os.path.isfile(out))
+
+    def test_help_does_not_touch_the_filesystem(self):
+        existed_before = os.path.isdir("eval/planner")
+        with self.assertRaises(SystemExit):
+            e1_summary.main(["--help"])
+        self.assertEqual(os.path.isdir("eval/planner"), existed_before)

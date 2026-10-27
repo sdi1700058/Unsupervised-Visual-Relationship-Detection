@@ -28,6 +28,7 @@ Two rules come out of that, and they are what this module enforces:
 Python 3.6 clean, standard library only.
 """
 
+import argparse
 import csv
 import os
 import statistics as st
@@ -294,21 +295,37 @@ def render_svg(a, b):
     return "\n".join(parts)
 
 
-def main():
-    a, b = read("structured"), read("unstructured")
+def main(argv=None):
+    ap = argparse.ArgumentParser(
+        description="Summarise the structured/unstructured E1 arms.")
+    ap.add_argument("--root", default="eval/planner",
+                    help="directory holding E1-structured/ and "
+                         "E1-unstructured/ (default eval/planner)")
+    ap.add_argument("--out", default=None,
+                    help="where to write the .md (default <root>/E1_summary.md)")
+    ap.add_argument("--write", action="store_true",
+                    help="write the .md/.svg files; default only prints")
+    args = ap.parse_args(argv)
+
+    a, b = read("structured", root=args.root), read("unstructured", root=args.root)
     text = render(a, b)
-    if not os.path.isdir("eval/planner"):
-        os.makedirs("eval/planner")
-    out = "eval/planner/E1_summary.md"
+    print(text)
+    if not args.write:
+        return 0
+
+    out = args.out or os.path.join(args.root, "E1_summary.md")
+    out_dir = os.path.dirname(out) or "."
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
     with open(out, "w") as handle:
         handle.write(text)
-    print(text)
     print("wrote %s" % out)
     svg = render_svg(a, b)
     if svg:
-        with open("eval/planner/E1_summary.svg", "w") as handle:
+        svg_out = os.path.splitext(out)[0] + ".svg"
+        with open(svg_out, "w") as handle:
             handle.write(svg)
-        print("wrote eval/planner/E1_summary.svg")
+        print("wrote %s" % svg_out)
     return 0
 
 
