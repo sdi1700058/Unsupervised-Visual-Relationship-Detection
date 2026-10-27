@@ -76,7 +76,7 @@ def list_jobs(start, states=("COMPLETED",), user=None, debug=False,
     Never invents a row. See the module docstring for why that has to be said.
     """
     cmd = [sacct, "-X", "-P", "-n", "--format=JobID,State",
-           "-S", start, "-u", user or getpass.getuser()]
+           "-S", start, "-E", "now", "-u", user or getpass.getuser()]
     if states:
         cmd += ["--state", ",".join(states)]
     if debug:

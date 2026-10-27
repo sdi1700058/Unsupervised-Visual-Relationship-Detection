@@ -42,6 +42,23 @@ class TestNoFabrication(unittest.TestCase):
         source = inspect.getsource(list_runs.list_jobs)
         self.assertIn("sacct", source)
 
+    def test_the_sacct_cmd_bounds_the_window_with_dash_e(self):
+        """A start-only window (`-S`) keeps growing; `-E` bounds it."""
+        import subprocess
+        seen = {}
+        real_check_output = subprocess.check_output
+
+        def fake_check_output(cmd, **kwargs):
+            seen["cmd"] = cmd
+            return b"JobID|State\n"
+
+        subprocess.check_output = fake_check_output
+        try:
+            list_runs.list_jobs("2026-01-01")
+        finally:
+            subprocess.check_output = real_check_output
+        self.assertIn("-E", seen["cmd"])
+
 
 class TestHonestFailure(unittest.TestCase):
 
