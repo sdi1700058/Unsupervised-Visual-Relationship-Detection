@@ -24,7 +24,6 @@ import tensorflow as tf
 from .util.noise import gaussian, salt, pepper
 from .util.distances import *
 from .util.layers    import *
-from .util.perminv   import *
 from .util.tuning    import InvalidHyperparameterError
 from .util.plot      import plot_grid, squarify
 from .util           import ensure_list, NpEncoder
