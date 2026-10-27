@@ -13,14 +13,18 @@ scp without thought.
     python3 tools/planner/export_latents.py <model_dir> -o latents.npz
 
     # anywhere, no keras
-    python3 tools/planner/plan_video.py --latents latents.npz --method bfs
+    python3 tools/planner/plan_video.py latents.npz --method bfs
 
 Contents of the export:
 
-    latents        (n_frames, U*P) int8    encoded frames
-    gt_boxes       (n_frames, n_obj, 4)    annotated boxes, canvas pixels
-    decoded_boxes  (n_frames, n_obj, 4)    boxes the decoder gives for each
-                                           latent, so scoring needs no decoder
+    latents             (n_frames, U*P) int8    encoded frames
+    gt_boxes            (n_frames, n_obj, 4)    annotated boxes, canvas pixels
+    decoded_boxes       (n_frames, n_obj, 4)    boxes the decoder gives for each
+                                                latent, so scoring needs no decoder
+    bindings            (n_frames, U, A)        object FOSAE attended to, per
+                                                unit and argument slot
+    binding_confidence  (n_frames, U, A)        the attention mass behind
+                                                each binding above
     U, A, P, n_bits, model_name, frame_ids
 
 decoded_boxes is what makes the decoder unnecessary later. Any latent a plan
