@@ -36,8 +36,7 @@ ROOT = os.path.abspath(ROOT)
 # file was first written -- eleven tests in three other files went red.
 _STUBBED = ("latplan", "latplan.util", "latplan.puzzles", "latplan.domains",
             "latplan.domains.video", "latplan.util.paths",
-            "latplan.puzzles.puzzle_labeled_objects", "latplan.util.cache",
-            "latplan.domains.video.actiongenome")
+            "latplan.puzzles.puzzle_labeled_objects", "latplan.util.cache")
 
 
 class StubbedCase(unittest.TestCase):
@@ -103,70 +102,6 @@ class TestTheKeyItself(StubbedCase):
         """Stated in the docstring, so a pre-existing cache is still found."""
         self.assertTrue(self.cache.npz_cache_path(
             "video", "d", "cat", 30).endswith("cat-30fps.npz"))
-
-
-class TestWhatTheLoadersAskFor(StubbedCase):
-    """The defect was here: one loader passed them, the other did not."""
-
-    def setUp(self):
-        StubbedCase.setUp(self)
-        self.asked = []
-
-    def _watch(self, module):
-        """Record the key each loader composes, without touching the disk."""
-        real = module.npz_cache_path
-
-        def spy(*args, **kwargs):
-            self.asked.append(kwargs)
-            return real(*args, **kwargs)
-
-        module.npz_cache_path = spy
-
-    def _build(self, module, **kwargs):
-        """Call `build_dataset` far enough to compose the key.
-
-        The annotations do not exist, so it raises or returns empty once past
-        the cache block. Either is fine: the key has been composed by then.
-        """
-        self.asked = []
-        try:
-            module.build_dataset(annotations_dir=os.path.join(ROOT, "nope"),
-                                 frames_dir=os.path.join(ROOT, "nope"),
-                                 category_filter="cat", **kwargs)
-        except Exception:
-            pass
-        return self.asked
-
-    def _actiongenome(self):
-        return _from_file(
-            "latplan.domains.video.actiongenome",
-            os.path.join(ROOT, "latplan", "domains", "video",
-                         "actiongenome.py"))
-
-    def test_action_genome_names_the_patch_size_and_the_object_count(self):
-        """The bug, stated as the behaviour it broke.
-
-        Without these in the key, a bake at patch 8 reads back the patch-32
-        arrays written by an earlier bake.
-        """
-        ag = self._actiongenome()
-        self._watch(ag)
-        asked = self._build(ag, patch_size=8, num_objs=3)
-        self.assertTrue(asked, "build_dataset never composed a cache key")
-        self.assertEqual(asked[0].get("patch_size"), 8)
-        self.assertEqual(asked[0].get("num_objs"), 3)
-
-    def test_action_genome_gets_a_different_file_for_a_different_patch(self):
-        ag = self._actiongenome()
-        self._watch(ag)
-        small = self._build(ag, patch_size=8, num_objs=3)
-        large = self._build(ag, patch_size=32, num_objs=3)
-        cache = sys.modules["latplan.util.cache"]
-        self.assertNotEqual(
-            cache.npz_cache_path("video", "actiongenome", "cat", "native",
-                                 **small[0]),
-            cache.npz_cache_path("video", "actiongenome", "cat", "native",
-                                 **large[0]))
 
 
 if __name__ == "__main__":

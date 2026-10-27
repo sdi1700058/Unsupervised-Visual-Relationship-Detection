@@ -31,7 +31,6 @@ tests in three other files red.
 import importlib.util
 import json
 import os
-import pickle
 import shutil
 import sys
 import tempfile
@@ -44,7 +43,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
 _STUBBED = ("latplan", "latplan.util", "latplan.puzzles", "latplan.domains",
             "latplan.domains.video", "latplan.util.paths",
             "latplan.puzzles.puzzle_labeled_objects", "latplan.util.cache",
-            "latplan.util.adjacency", "latplan.domains.video.actiongenome",
+            "latplan.util.adjacency",
             "latplan.puzzles.puzzle_vidvrd", "PIL", "PIL.Image")
 
 
@@ -339,120 +338,6 @@ class TestVidVRDCacheKey(VidVRDCase):
     def test_the_default_keeps_the_name_an_existing_cache_already_has(self):
         self.assertTrue(
             self._cache_path_for(False).endswith("frisbee-3fps-mo3-p4.npz"))
-
-
-# --------------------------------------------------------------------------
-# Action Genome
-# --------------------------------------------------------------------------
-
-class ActionGenomeCase(LoaderCase):
-    """AG has no track id. The class name is the key, and that is checked."""
-
-    VIDEO = "001YG.mp4"
-
-    def build_ag(self, per_frame, person_frames=None):
-        """`per_frame`: list of list of (class, side). Frame n is `00000n.png`."""
-        ann_dir = os.path.join(self.tmp, "ag", "annotations")
-        frm_dir = os.path.join(self.tmp, "ag", "frames", self.VIDEO)
-        os.makedirs(ann_dir)
-        os.makedirs(frm_dir)
-        obj, per, keys = {}, {}, []
-        for n, objs in enumerate(per_frame):
-            key = "%s/%06d.png" % (self.VIDEO, n)
-            keys.append(key)
-            obj[key] = [{"class": cls,
-                         "bbox": (0, 0, side, side),
-                         "visible": True,
-                         "metadata": {"tag": "%s/%s/%06d" % (self.VIDEO, cls, n),
-                                      "set": "train"}}
-                        for cls, side in objs]
-            if person_frames is None or n in person_frames:
-                per[key] = {"bbox": [[0, 0, 50, 50]]}
-            else:
-                per[key] = {"bbox": []}
-            open(os.path.join(frm_dir, "%06d.png" % n), "w").close()
-        with open(os.path.join(ann_dir, "object_bbox_and_relationship.pkl"), "wb") as f:
-            pickle.dump(obj, f)
-        with open(os.path.join(ann_dir, "person_bbox.pkl"), "wb") as f:
-            pickle.dump(per, f)
-        with open(os.path.join(ann_dir, "frame_list.txt"), "w") as f:
-            f.write("\n".join(keys) + "\n")
-        return ann_dir, os.path.join(self.tmp, "ag", "frames")
-
-    def loader(self):
-        return _from_file("latplan.domains.video.actiongenome",
-                          os.path.join(ROOT, "latplan", "domains", "video",
-                                       "actiongenome.py"))
-
-    def load(self, per_frame, **kwargs):
-        ann_dir, frm_dir = self.build_ag(per_frame)
-        mod = self.loader()
-        _, _, names, _ = mod.build_dataset(annotations_dir=ann_dir,
-                                           frames_dir=frm_dir,
-                                           num_objs=3, patch_size=4, **kwargs)
-        return mod, names
-
-    def table_leaves(self):
-        return [[("table", 90), ("cup/glass/bottle", 20)],
-                [("cup/glass/bottle", 20)],
-                [("table", 90), ("cup/glass/bottle", 20)]]
-
-
-class TestActionGenomeDefaultIsUnchanged(ActionGenomeCase):
-
-    def test_person_first_then_area_order(self):
-        _, names = self.load(self.table_leaves())
-        self.assertEqual(names[0], ["person", "table", "cup/glass/bottle"])
-
-    def test_a_departure_shifts_the_rest_up(self):
-        _, names = self.load(self.table_leaves())
-        self.assertEqual(names[1], ["person", "cup/glass/bottle", "pad_2"])
-
-
-class TestActionGenomeStrictPinsByClass(ActionGenomeCase):
-
-    def test_a_departure_leaves_a_hole(self):
-        self.strict()
-        _, names = self.load(self.table_leaves())
-        self.assertEqual(names[1], ["person", "pad_1", "cup/glass/bottle"])
-
-    def test_the_class_keeps_its_slot_in_every_frame(self):
-        self.strict()
-        _, names = self.load(self.table_leaves())
-        for row in names:
-            self.assertEqual(row[2], "cup/glass/bottle")
-
-    def test_person_is_still_slot_zero(self):
-        self.strict()
-        _, names = self.load(self.table_leaves())
-        for row in names:
-            self.assertEqual(row[0], "person")
-
-    def test_the_record_says_the_key_was_the_class_not_a_track_id(self):
-        """AG ships no instance id; claiming otherwise would be a fabrication."""
-        self.strict()
-        mod, _ = self.load(self.table_leaves())
-        self.assertEqual(mod.last_load_metadata["slots"]["id_source"], "class")
-
-    def test_the_counts_sit_beside_dropped(self):
-        self.strict()
-        mod, _ = self.load(self.table_leaves())
-        self.assertIn("slots", mod.last_load_metadata)
-        self.assertIn("dropped", mod.last_load_metadata)
-
-
-class TestActionGenomeVacantPersonSlot(ActionGenomeCase):
-    """Slot 0 is only person's when person is there."""
-
-    def test_a_frame_without_a_person_leaves_slot_zero_padded(self):
-        self.strict()
-        ann_dir, frm_dir = self.build_ag(self.table_leaves(), person_frames=[0, 2])
-        mod = self.loader()
-        _, _, names, _ = mod.build_dataset(annotations_dir=ann_dir,
-                                           frames_dir=frm_dir,
-                                           num_objs=3, patch_size=4)
-        self.assertEqual(names[1][0], "pad_0")
-        self.assertEqual(names[1][2], "cup/glass/bottle")
 
 
 if __name__ == "__main__":

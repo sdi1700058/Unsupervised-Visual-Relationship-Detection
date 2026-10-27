@@ -283,7 +283,7 @@ def _apply_env_overrides(parameters, *, knobs=tuple(_ENV_KNOBS)):
     """Honor env knobs that override default hyperparameters in `parameters`.
 
     Keeps the env-knob set in one place so every domain entrypoint
-    (puzzle/blocksworld/labeled_objects/vidvrd/actiongenome) honors the same
+    (puzzle/blocksworld/labeled_objects/vidvrd) honors the same
     overrides without duplicating boilerplate. See `_ENV_KNOBS` for the
     env-var to parameters-key mapping and the cast applied to each.
 
@@ -476,8 +476,8 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
     parameters['lr']                             = [0.0001]
     # After the four lines above, not before them. `lr` is one of the env
     # knobs, so calling this first meant LR=... was read and then silently
-    # overwritten by 0.0001 on every labeled_objects run. vidvrd() and
-    # actiongenome() already order it this way.
+    # overwritten by 0.0001 on every labeled_objects run. vidvrd() already
+    # orders it this way.
     _apply_env_overrides(parameters)
     if batch_size is not None:
         default_parameters["batch_size"] = batch_size
