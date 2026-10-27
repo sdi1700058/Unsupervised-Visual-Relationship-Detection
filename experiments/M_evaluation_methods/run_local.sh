@@ -16,6 +16,8 @@ set -eo pipefail
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "${PROJECT_DIR}"
 
+PY=.venv-local/bin/python; [ -x "$PY" ] || PY=python3
+
 ANN_DIR="${ANN_DIR:-data/video/vidvrd/annotations/train}"
 OUT="${OUT:-eval/M_methods}"
 MEM_KB="${MEM_KB:-8000000}"
@@ -60,7 +62,7 @@ echo "M1  does the latent encode the relations?"
 echo "=========================================="
 if (( ${#ANNS[@]} >= 2 )); then
     ( ulimit -v "${MEM_KB}"
-      python3 tools/planner/predicate_probe.py "${EXPORTS[@]}" \
+      "$PY" tools/planner/predicate_probe.py "${EXPORTS[@]}" \
           --annotation "${ANNS[@]}" --out-dir "${OUT}/M1" )
 else
     echo "SKIP: M1 needs at least two clips with annotations. Within one clip"
@@ -73,7 +75,7 @@ echo "M2  a rule, or memorised objects?"
 echo "=========================================="
 if (( ${#ANNS[@]} >= 3 )); then
     ( ulimit -v "${MEM_KB}"
-      python3 tools/planner/compositional.py "${EXPORTS[@]}" \
+      "$PY" tools/planner/compositional.py "${EXPORTS[@]}" \
           --annotations "${ANN_DIR}" --hold-out "${HOLD_OUT}" \
           --out-dir "${OUT}/M2" ) || echo "  (M2 could not form a split)"
 else
@@ -85,7 +87,7 @@ echo "=========================================="
 echo "M3  is the plan admissible, with no truth?"
 echo "=========================================="
 ( ulimit -v "${MEM_KB}"
-  python3 tools/planner/plan_validity.py "${EXPORTS[@]}" --out-dir "${OUT}/M3" )
+  "$PY" tools/planner/plan_validity.py "${EXPORTS[@]}" --out-dir "${OUT}/M3" )
 
 cat <<NOTE
 
