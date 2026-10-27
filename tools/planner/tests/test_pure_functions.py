@@ -32,7 +32,7 @@ class TestWindows(unittest.TestCase):
     def test_window_covers_the_frames_between_the_endpoints(self):
         from tools.planner.common.windows import make_windows
 
-        windows = make_windows(n_frames=10, k=5, stride=1)
+        windows = make_windows(n_frames=10, window_frames=5, stride=1)
         self.assertEqual(len(windows), 6)
 
         first = windows[0]
@@ -44,8 +44,8 @@ class TestWindows(unittest.TestCase):
     def test_stride_thins_the_windows(self):
         from tools.planner.common.windows import make_windows
 
-        dense = make_windows(n_frames=20, k=5, stride=1)
-        sparse = make_windows(n_frames=20, k=5, stride=4)
+        dense = make_windows(n_frames=20, window_frames=5, stride=1)
+        sparse = make_windows(n_frames=20, window_frames=5, stride=4)
         self.assertGreater(len(dense), len(sparse))
         # A window starting at 16 would need frame 20, past the last index.
         self.assertEqual([w["init"] for w in sparse], [0, 4, 8, 12])
@@ -53,9 +53,9 @@ class TestWindows(unittest.TestCase):
     def test_window_smaller_than_three_frames_is_rejected(self):
         from tools.planner.common.windows import make_windows
 
-        # k=2 leaves nothing between the endpoints, so there is nothing to score.
+        # window_frames=2 leaves nothing between the endpoints to score.
         with self.assertRaises(ValueError):
-            make_windows(n_frames=10, k=2)
+            make_windows(n_frames=10, window_frames=2)
 
     def test_trace_of_the_right_length_passes_through_untouched(self):
         from tools.planner.common.windows import extract_intermediate_states

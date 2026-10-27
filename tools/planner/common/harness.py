@@ -24,11 +24,12 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
 
     `length_mode` decides what the method is asked for:
 
-    - `max` asks for the shortest plan of at most k-1 actions. This is the
-      default because a trained encoder maps runs of consecutive frames to one
-      code, so most windows hold fewer than k-1 real transitions.
-    - `exact` asks for exactly k-1 actions. Right for the oracle export, whose
-      encoding changes on every frame by construction.
+    - `max` asks for the shortest plan of at most window_frames-1 actions.
+      This is the default because a trained encoder maps runs of consecutive
+      frames to one code, so most windows hold fewer than window_frames-1
+      real transitions.
+    - `exact` asks for exactly window_frames-1 actions. Right for the oracle
+      export, whose encoding changes on every frame by construction.
     - `free` removes the constraint. Kept for comparison only; an unbounded
       search over a wide latent is expensive and can exhaust memory.
     """
@@ -82,9 +83,10 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
           f"in {wall:.2f}s")
 
     # How many of the window's frame steps actually move the latent. When this
-    # is below k-1 the encoder has merged frames, and a k-1-step plan cannot
-    # exist except by padding. Recorded so a short plan is readable as a
-    # property of the model rather than a failure of the search.
+    # is below window_frames-1 the encoder has merged frames, and a
+    # window_frames-1-step plan cannot exist except by padding. Recorded so a
+    # short plan is readable as a property of the model rather than a failure
+    # of the search.
     span = z_all[init_idx:goal_idx + 1]
     moving_steps = int((span[1:] ^ span[:-1]).any(axis=1).sum())
 
@@ -115,9 +117,6 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
         # baseline spans 1575x across screened clips where the quantisation
         # floor spans 1.9x, so mse_ratio reports the clip and floor_ratio
         # reports the representation (SPEC V38).
-        #
-        # Imported here rather than at module scope: oracle.py can reach for
-        # the loader, and the loader pulls TensorFlow.
         try:
             from tools.planner.box_geometry import (
                 DEFAULT_BINS_X, DEFAULT_BINS_Y, round_trip_error)

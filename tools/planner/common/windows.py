@@ -4,38 +4,40 @@
 SPEC.md §C17 (revised 2026-08-03). The evaluation task is frame interpolation
 by classical planning:
 
-    Given frame f_i (init) and frame f_{i+k-1} (goal), the planner must
-    reconstruct the k-2 intermediate frames f_{i+1} ... f_{i+k-2}.
+    Given frame f_i (init) and frame f_{i+window_frames-1} (goal), the planner
+    must reconstruct the window_frames-2 intermediate frames
+    f_{i+1} ... f_{i+window_frames-2}.
 
 Why this task and not `frame 0 -> frame N`:
 
 - Horizon. A 135-frame video needs a 134-step plan for the whole clip.
   Fast Downward does not solve that on a 800-bit propositional state space.
-  A window of k=5 needs a 4-step plan. That is seconds of CPU.
-- Sample count. One video gives `N - k + 1` windows, not 1 sample. A
-  135-frame clip at k=5 gives 131 windows. This gives statistical power.
-- Plan length. The number of transitions between k frames is exactly k-1.
-  The plan length target is therefore known, and a length mismatch is
-  itself a measurable failure mode.
-- Metric clarity. The bbox error is measured on the k-2 intermediate
-  frames only. The planner receives the endpoints, so scoring them is
-  free credit.
+  A window of window_frames=5 needs a 4-step plan. That is seconds of CPU.
+- Sample count. One video gives `N - window_frames + 1` windows, not 1
+  sample. A 135-frame clip at window_frames=5 gives 131 windows. This gives
+  statistical power.
+- Plan length. The number of transitions between window_frames frames is
+  exactly window_frames-1. The plan length target is therefore known, and a
+  length mismatch is itself a measurable failure mode.
+- Metric clarity. The bbox error is measured on the window_frames-2
+  intermediate frames only. The planner receives the endpoints, so scoring
+  them is free credit.
 
 The window stride is a knob. `stride=1` gives maximum samples with heavy
-overlap. `stride=k-1` gives disjoint windows.
+overlap. `stride=window_frames-1` gives disjoint windows.
 """
 
 
-def make_windows(n_frames, k, stride=1, max_windows=None):
+def make_windows(n_frames, window_frames, stride=1, max_windows=None):
     """Return the list of (init_idx, goal_idx, intermediate_indices) tuples.
 
     Parameters
     ----------
-    n_frames    : int   number of frames in the video.
-    k           : int   window size in frames. Must be >= 3 (need at least
-                        one intermediate frame to score).
-    stride      : int   step between window starts.
-    max_windows : int   optional cap (useful for smoke runs).
+    n_frames      : int   number of frames in the video.
+    window_frames : int   window size in frames. Must be >= 3 (need at least
+                          one intermediate frame to score).
+    stride        : int   step between window starts.
+    max_windows   : int   optional cap (useful for smoke runs).
 
     Returns
     -------
@@ -43,23 +45,26 @@ def make_windows(n_frames, k, stride=1, max_windows=None):
         'init'          int  index of the init frame
         'goal'          int  index of the goal frame
         'intermediate'  list[int] indices of the frames to reconstruct
-        'plan_length'   int  expected plan length = k - 1
+        'plan_length'   int  expected plan length = window_frames - 1
     """
-    if k < 3:
-        raise ValueError(f"k must be >= 3 to have an intermediate frame; got {k}")
-    if n_frames < k:
-        raise ValueError(f"n_frames {n_frames} < window size {k}")
+    if window_frames < 3:
+        raise ValueError(
+            f"window_frames must be >= 3 to have an intermediate frame; "
+            f"got {window_frames}")
+    if n_frames < window_frames:
+        raise ValueError(
+            f"n_frames {n_frames} < window size {window_frames}")
     if stride < 1:
         raise ValueError(f"stride must be >= 1; got {stride}")
 
     windows = []
-    for i in range(0, n_frames - k + 1, stride):
-        goal = i + k - 1
+    for i in range(0, n_frames - window_frames + 1, stride):
+        goal = i + window_frames - 1
         windows.append({
             "init": i,
             "goal": goal,
             "intermediate": list(range(i + 1, goal)),
-            "plan_length": k - 1,
+            "plan_length": window_frames - 1,
         })
         if max_windows is not None and len(windows) >= max_windows:
             break
@@ -79,7 +84,8 @@ def extract_intermediate_states(plan_trace, expected_count):
     Parameters
     ----------
     plan_trace     : np.ndarray (L+1, U*P)
-    expected_count : int  number of intermediate frames to reconstruct (k-2)
+    expected_count : int  number of intermediate frames to reconstruct
+                          (window_frames-2)
 
     Returns
     -------

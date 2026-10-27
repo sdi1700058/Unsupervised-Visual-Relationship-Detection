@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Score a plan against the real video frames.
 
-The planner receives frame i and frame i+k-1. It must reconstruct the k-2
-frames in between. We decode each intermediate latent to bounding boxes and
-measure how far they sit from the annotated boxes.
+The planner receives frame i and frame i+window_frames-1. It must reconstruct
+the window_frames-2 frames in between. We decode each intermediate latent to
+bounding boxes and measure how far they sit from the annotated boxes.
 
 A raw error number means nothing on its own, so every run also scores the
 linear-interpolation baseline: draw a straight line from the init boxes to

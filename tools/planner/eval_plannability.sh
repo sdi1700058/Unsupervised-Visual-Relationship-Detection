@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Score planner exports on the frame interpolation task.
 #
-# Slides a window of K frames across each export. For every window the planner
-# gets the first and last frame and has to reconstruct the K-2 frames between
-# them. One CSV row per (export, method, window).
+# Slides a window of window_frames frames across each export. For every
+# window the planner gets the first and last frame and has to reconstruct
+# the window_frames-2 frames between them. One CSV row per (export, method,
+# window).
 #
 # Needs numpy alone. Make the exports first, where the model lives:
 #
@@ -18,8 +19,9 @@
 #   --stride S        gap between window starts. Default: K-1 (no overlap).
 #   --max-windows N   cap per export. Useful for a quick look. Default: all.
 #   --budget SECONDS  planner time limit per window. Default: 60.
-#   --length-mode M   max (shortest plan within k-1 actions, the default),
-#                     exact (exactly k-1), or free (unbounded). Trained models
+#   --length-mode M   max (shortest plan within window_frames-1 actions, the
+#                     default), exact (exactly window_frames-1), or free
+#                     (unbounded). Trained models
 #                     merge frames into one latent, so exact is usually
 #                     unsatisfiable for them; the oracle export wants exact.
 #   --name NAME       output directory name. Default: taken from the input.
@@ -106,9 +108,9 @@ sys.path.insert(0, ".")
 from tools.planner.common.export import load
 from tools.planner.common.windows import make_windows
 
-export, k, stride, cap = sys.argv[1:5]
+export, window_frames, stride, cap = sys.argv[1:5]
 n_frames = len(load(export))
-for w in make_windows(n_frames, int(k), int(stride), int(cap) if cap else None):
+for w in make_windows(n_frames, int(window_frames), int(stride), int(cap) if cap else None):
     print(w["init"], w["goal"])
 PY
 )" || { echo "  cannot build windows for ${STEM}, skipping" >&2; continue; }

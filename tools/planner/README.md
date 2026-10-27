@@ -3,8 +3,9 @@
 Does FOSAE learn relations a classical planner can use?
 
 The test is frame interpolation. Give the planner frame *i* and frame
-*i+k-1* from a real video. It must reconstruct the *k-2* frames between them.
-Score = how far the reconstructed bounding boxes sit from the real ones.
+*i+window_frames-1* from a real video. It must reconstruct the
+*window_frames-2* frames between them. Score = how far the reconstructed
+bounding boxes sit from the real ones.
 
 Reconstruction loss says the model can encode a frame. This says the model
 learned how frames *follow* each other.
@@ -15,8 +16,9 @@ A 135-frame clip needs a 134-step plan. Fast Downward does not solve that
 over an 800-bit state space. A window of 5 frames needs a 4-step plan, which
 takes seconds.
 
-The window also pays off in sample count. One clip gives `N - k + 1` windows,
-not one data point. A 135-frame clip at `k=5` gives 131 scored windows.
+The window also pays off in sample count. One clip gives `N - window_frames +
+1` windows, not one data point. A 135-frame clip at `window_frames=5` gives
+131 scored windows.
 
 ## The baseline matters more than the raw error
 
@@ -130,7 +132,7 @@ Every window in one or more exports:
 | Column | Meaning |
 |---|---|
 | `reachability` | the planner returned a plan |
-| `plan_length` vs `expected_length` | a plan should take `k-1` steps to cross `k` frames |
+| `plan_length` vs `expected_length` | a plan should take `window_frames-1` steps to cross `window_frames` frames |
 | `bbox_mse` | error on the reconstructed frames, squared pixels |
 | `baseline_mse` | the same error for the straight line |
 | `mse_ratio` | **the headline number, below 1 is a win** |
@@ -146,5 +148,5 @@ order means the plan wandered.
 
     python3 -m unittest tools/planner/tests/test_pure_functions.py
 
-38 tests on synthetic exports, including full runs through the harness.
+109 tests on synthetic exports, including full runs through the harness.
 No model, no GPU, no lisp, no scipy.

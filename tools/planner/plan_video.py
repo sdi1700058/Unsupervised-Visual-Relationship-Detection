@@ -2,8 +2,9 @@
 """Run a classical planner over FOSAE latents and score the result.
 
 The evaluation task is frame interpolation. Give the planner frame i as the
-initial state and frame i+k-1 as the goal. The planner must reconstruct the
-k-2 frames between them. Score = bbox deviation from the real frames.
+initial state and frame i+window_frames-1 as the goal. The planner must
+reconstruct the window_frames-2 frames between them. Score = bbox deviation
+from the real frames.
 
 Three planner methods share the same encode/decode/score path:
 
@@ -54,8 +55,9 @@ def main(argv=None):
                     help="how to pair decoded object slots with annotations")
     ap.add_argument("--length-mode", choices=("max", "exact", "free"),
                     default="max",
-                    help="ask for the shortest plan within k-1 actions (max), "
-                         "exactly k-1 (exact), or an unbounded search (free)")
+                    help="ask for the shortest plan within window_frames-1 "
+                         "actions (max), exactly window_frames-1 (exact), "
+                         "or an unbounded search (free)")
     ap.add_argument("--plan-only", action="store_true",
                     help="stop after the plan; skip scoring")
     ap.add_argument("--out-dir", type=Path,
