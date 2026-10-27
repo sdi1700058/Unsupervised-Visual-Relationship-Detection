@@ -17,8 +17,10 @@
 
 set -euo pipefail
 
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FORCE="${FORCE:-0}"
-ROSWELL_HOME="${HOME}/.roswell"
+ROSWELL_HOME="${ROSWELL_HOME:-${SCRATCH:+${SCRATCH}/panos/sgg-thesis/deps/roswell}}"
+ROSWELL_HOME="${ROSWELL_HOME:-${HOME}/.roswell}"
 ROSWELL_BIN="${ROSWELL_HOME}/bin/ros"
 
 log() { echo "[install_roswell] $*" >&2; }
@@ -105,7 +107,7 @@ if [[ "${SKIP_ROS_PKGS:-0}" != "1" ]]; then
 fi
 
 # --- 8. Build upstream latplan lisp/*.bin from *.ros ---
-UPSTREAM_LATPLAN="${UPSTREAM_LATPLAN:-/home/panoslat/Dev/Thesis/FOSAE/latplan}"
+UPSTREAM_LATPLAN="${UPSTREAM_LATPLAN:-${PROJECT_DIR}/../latplan}"
 if [[ -d "${UPSTREAM_LATPLAN}/lisp" && "${SKIP_LISP_BUILD:-0}" != "1" ]]; then
     log "building upstream lisp/*.bin via ${UPSTREAM_LATPLAN}/lisp/Makefile"
     (cd "${UPSTREAM_LATPLAN}/lisp" && make) || {
