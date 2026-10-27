@@ -2,7 +2,7 @@
 """KIT Bimanual into the VidVRD format the FOSAE training builder reads.
 
 WHY. The author locked KIT Bimanual as medium-1 on 2026-10-03. No training
-builder reads it: `latplan/puzzles/puzzle_vidvrd.py` reads VidVRD's format,
+builder reads it: `model/puzzles/puzzle_vidvrd.py` reads VidVRD's format,
 through `--annotations-dir` and `--frames-dir`. Plan
 `notes/plans/2026-10-03-train-the-rungs.md`, steps 2.1 to 2.3.
 

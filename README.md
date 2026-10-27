@@ -13,19 +13,19 @@ labels beyond reconstruction loss. The FOSAE paper is at
 
 ## Layout
 
-- `latplan/` — the model (encoder, decoder, training loop), forked from
+- `model/` — the model (encoder, decoder, training loop), forked from
   upstream.
 - `tools/video/` — the dataset conversions: each dataset's raw annotations
   into the common VidVRD-style relation format.
-- `tools/planner/` — the classical planner and its evaluation, including
+- `planner/` — the classical planner and its evaluation, including
   `triplet_eval.py` (triplet mAP with the official evaluator of
   VidVRD-helper).
 - `sh/` — Slurm jobs for dataset download, unpack, and conversion.
 - `experiments/` — one directory per experiment, each with its own `README.md`
   and run script.
-- `strips.py` trains and evaluates a model (`strips.py <mode> <task> ...`),
-  `setup-dataset.py` bakes a dataset into `.npz`, `extract_fol.py` reads
-  predicates out of a trained model, and `config.py` / `config_cpu.py` set up
+- `model/train/strips.py` trains and evaluates a model (`model/train/strips.py <mode> <task> ...`),
+  `tools/setup-dataset.py` bakes a dataset into `.npz`, `model/train/extract_fol.py` reads
+  predicates out of a trained model, and `model/config.py` / `model/config_cpu.py` set up
   the Keras session.
 - `data/`, `out/`, `logs/`, `venv/` — datasets, model outputs, Slurm logs and
   the Python 3.6 environment (`.venv-local` links to it). Not in git.
@@ -50,19 +50,19 @@ environment pinned to match the cluster's `python/3.6.1` module (TensorFlow
 1.15 needs it). `.venv-local/bin/python` is what every command below uses.
 
 Fast Downward and Roswell, needed by the planner, install separately: see
-`tools/planner/install_fd.sh` and `tools/planner/install_roswell.sh`.
+`planner/install_fd.sh` and `planner/install_roswell.sh`.
 
 ## Tests
 
 ```bash
 export TMPDIR=/scratch/users/konkotsa/panos/sgg-thesis/.claude/tmp
-.venv-local/bin/python -m unittest discover -s tools/planner/tests
+.venv-local/bin/python -m unittest discover -s tests
 ```
 
 ## Triplet mAP
 
 ```bash
-.venv-local/bin/python tools/planner/triplet_eval.py --dataset se --out workbench/eval/triplet/<date>/
+.venv-local/bin/python planner/triplet_eval.py --dataset se --out workbench/eval/triplet/<date>/
 ```
 
 `--dataset` selects which converted dataset to score; `--out` is a directory

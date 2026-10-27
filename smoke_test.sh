@@ -2,9 +2,9 @@
 # smoke_test.sh — Verify FOSAE install: package import, config, path utils.
 # Usage: bash smoke_test.sh
 # For a full training check:
-#   python3 strips.py learn puzzle FirstOrderAE mnist 3 3 None None None 100
+#   python3 model/train/strips.py learn puzzle FirstOrderAE mnist 3 3 None None None 100
 #
-# The AECLASS comes FIRST. strips.py::main dispatches positionally into
+# The AECLASS comes FIRST. model/train/strips.py::main dispatches positionally into
 # puzzle(aeclass, type, width, height, U, A, P, num_examples), so dropping it
 # shifts every argument left and the run dies on `import latplan.puzzles.puzzle_3`.
 # The three Nones matter for the same reason: a bare `... mnist 3 3 100` sets

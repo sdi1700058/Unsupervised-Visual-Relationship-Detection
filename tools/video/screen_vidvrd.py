@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Rank VidVRD clips by how much of their annotation is real.
 
-VidVRD does not annotate every frame. `setup-dataset.py --fill-annotations`
+VidVRD does not annotate every frame. `tools/setup-dataset.py --fill-annotations`
 carries the last annotated box forward into the gaps, which makes those
 transitions **identical on both sides**: the boxes do not move because there
 was nothing to move them. A model trained on that data spends a large fraction
@@ -241,11 +241,11 @@ def window_crossover(per_object, width, height, window=8):
 
     Everything is in the video's own pixels, with the decoder's 60x40 grid
     mapped onto them, so one bin here is one bin there. The floor comes from
-    `tools/planner/oracle.py`, which needs numpy alone.
+    `planner/oracle.py`, which needs numpy alone.
     """
     import numpy as np
 
-    from tools.planner.box_geometry import (
+    from planner.box_geometry import (
         DEFAULT_BINS_X, DEFAULT_BINS_Y, round_trip_error)
 
     frames = sorted({f for track in per_object.values() for f in track})

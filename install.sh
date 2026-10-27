@@ -2,8 +2,8 @@
 set -e
 
 # Fast Downward and Roswell, the planner's two external dependencies, install
-# separately: see tools/planner/install_fd.sh and
-# tools/planner/install_roswell.sh. Neither needs sudo.
+# separately: see planner/install_fd.sh and
+# planner/install_roswell.sh. Neither needs sudo.
 
 conda env create -f environment.yml
 # --no-deps, matching workbench/sh/sherlock_setup.sh. environment.yml has

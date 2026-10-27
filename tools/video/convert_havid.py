@@ -3,7 +3,7 @@
 
 WHY. The author locked HA-ViD as medium-2 on 2026-10-03, and it is the first
 medium rung to train because its videos are unpacked and its boxes carry a
-track id. No training builder reads it: `latplan/puzzles/puzzle_vidvrd.py`
+track id. No training builder reads it: `model/puzzles/puzzle_vidvrd.py`
 reads VidVRD's format, through `--annotations-dir` and `--frames-dir`. Plan
 `notes/plans/2026-10-03-train-the-rungs.md`, steps 1.3a to 1.3c.
 

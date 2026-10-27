@@ -1,0 +1,761 @@
+#!/usr/bin/env python3
+
+from model import config
+import numpy as np
+import numpy.random as random
+import model
+import model.model
+from model.util        import curry
+from model.util.tuning import *
+from model.util.noise  import gaussian
+
+import keras.backend as K
+import tensorflow as tf
+
+import os
+import os.path
+
+float_formatter = lambda x: "%.5f" % x
+import sys
+np.set_printoptions(formatter={'float_kind':float_formatter})
+
+mode     = 'learn'
+sae_path = ""
+
+from keras.optimizers import Adam
+from keras_adabound   import AdaBound
+from keras_radam      import RAdam
+
+import keras.optimizers
+
+setattr(keras.optimizers,"radam", RAdam)
+setattr(keras.optimizers,"adabound", AdaBound)
+
+# ── Canonical directories ──────────────────────────────────────────────
+from model.util.paths import (
+    PROJECT_ROOT, DATA_DIR, OUT_DIR,
+    find_dataset as _find_dataset,
+    resolved_out_dir as _resolved_out_dir,
+)
+os.makedirs(OUT_DIR, exist_ok=True)
+
+# default values
+default_parameters = {
+    'epoch'           : int(os.environ.get("EPOCH", 1000)),
+    'batch_size'      : 1000,
+    'optimizer'       : "radam",
+    'max_temperature' : 5.0,
+    'min_temperature' : 0.7,
+    'N'               : None,
+    'M'               : 2,
+    'train_gumbel'    : True,    # if true, noise is added during training
+    'train_softmax'   : True,    # if true, latent output is continuous
+    'test_gumbel'     : False,   # if true, noise is added during testing
+    'test_softmax'    : False,   # if true, latent output is continuous
+    'dropout_z'       : False,
+}
+# Active `parameters` block. Two modes — toggle by uncommenting only ONE block:
+#
+#   (1) Single trial, one value per knob (default; used with LIMIT=1). This is
+#       the upstream grid narrowed to one point and then hand-tuned. Five of
+#       the values below carry a "was X" comment, and X is what the grid in
+#       (2) starts from: dropout, noise, zerosuppress, zerosuppress_delay and
+#       max_temperature are this project's picks rather than the paper's, and
+#       none of them has a measurement recorded beside it. The file this block
+#       once cited as the known-working source, old_working_strips.py, is
+#       gitignored and absent from the repository, so a reader with a clone
+#       cannot check that claim. Treat (1) as a working default, not as a
+#       reproduction of Asai 2019 §6.
+#   (2) Full upstream grid (commented below). Use with LIMIT=300 INIT_POP=20
+#       POPULATION=10 to reproduce the paper's full grid search.
+#
+# Override individual knobs via CLI args (U,A,P) in puzzle()/blocksworld() —
+# locals() loop replaces the matching keys regardless of which block is active.
+
+# ── (1) FIXED single-trial — paper baseline ────────────────────────────────
+parameters = {
+    'beta'       :[0.0],
+    'lr'         :[0.001],
+    'U'          :[40],
+    'P'          :[20],
+    'A'          :[2],
+    'layer'      :[200],
+    'dropout'    :[0.05],      # was 0.3 — overfit OK
+    'noise'      :[0.05],      # was 0.2 — overfit OK
+    'zerosuppress'       :[0.05],   # was 0.0 — try user's idea
+    'zerosuppress_delay' :[0.05],   # was 0.1 — kick in earlier
+    'preencoder_dimention':[50],
+    'preencoder_layers':[0],
+    'preencoder_l1':[0.0],
+    'preencoder_delay':[0.1],       # 0.1 default — earlystop fires @ epoch 200; previous 0.9 caused ZeroDivisionError in LinearEarlyStopping (epoch_end - epoch_start = 0)
+    'max_temperature':[1.0],        # was default 5.0. The schedule now runs 1.0 -> min_temperature 0.7, i.e. almost flat. It does NOT make the latent near-discrete: the MIN_TEMPERATURE note in _apply_env_overrides says 0.7 never gets near-discrete, and 1.0 is above 0.7. An untested guess at the cause of non-learning.
+    'preencoder_output_activation':[("relu","MSE")],
+    'loss':["BCE"],
+    'eval':["MSE"],
+}
+
+# ── (2) FULL upstream search grid — uncomment + comment block (1) above ───
+# parameters = {
+#     'beta'       :[-0.3,-0.1,0.0,0.1,0.3],
+#     'lr'         :[0.1,0.01,0.001,0.0001],
+#     'U'          :[20,40,80],
+#     'A'          :[2,3,4],
+#     'P'          :[10,20,40,80,160,320],
+#     'layer'      :[50,100,400,1000],
+#     'dropout'    :[0.3,0.4,0.5],
+#     'noise'      :[0.1,0.2,0.4],
+#     'zerosuppress'       :[0.0,0.05,0.1,0.2,0.5],
+#     'zerosuppress_delay' :[0.05,0.1,0.2,0.3,0.5],
+#     'preencoder_dimention':[10,25,50,100,200,400],
+#     'preencoder_layers':[0,1,2],
+#     'preencoder_l1':[0.0, 0.00001, 0.0001, 0.001, 0.01],
+#     'preencoder_delay':[0.05,0.1,0.2,0.3,0.5],
+#     'preencoder_output_activation':[("relu","MSE"),("linear","MSE"),("sigmoid","MSE"),("sigmoid","BCE")],
+#     'loss':["BCE"],
+#     'eval':["MSE"],
+# }
+
+def select(data,num):
+    return data[random.randint(0,data.shape[0],num)]
+
+def plot_autoencoding_image(ae,test,train,plotmode):
+    if 'plot' not in mode:
+        return
+    # simple_genetic_search returns None when grid_search.log already has limit-many
+    # entries (short-circuit). Saved model is on disk at trial_t<N>/net0.h5 — skip
+    # auto-plot here and instruct user to invoke `tools/analysis/replot.py` against the
+    # saved model_dir manually. Avoids crashing the whole pipeline post-train.
+    if ae is None:
+        print("[plot_autoencoding_image] ae is None (likely a search short-circuit). "
+              "Saved model(s) live under trial_t*/ in the output dir. "
+              "Run `python3 tools/analysis/replot.py <model_dir> --domain puzzle/blocks/...` "
+              "to render reconstructions manually.")
+        return
+
+    test_plot = test[:6]
+    train_plot = train[:6]
+    
+    from model.puzzles import shuffle_objects
+    shuffled_test_plot = shuffle_objects(test[:6])
+    shuffled_train_plot = shuffle_objects(train[:6])
+
+    ae.plot(test_plot,ae.local("autoencoding_test.png"),verbose                     = True)
+    ae.plot(train_plot,ae.local("autoencoding_train.png"),verbose                   = True)
+    ae.plot(shuffled_test_plot,ae.local("autoencoding_test_shuffled.png"),verbose   = True)
+    ae.plot(shuffled_train_plot,ae.local("autoencoding_train_shuffled.png"),verbose = True)
+
+    ae.plot_render(test_plot,ae.local("render_test.png"),verbose                     = True,mode=plotmode)
+    ae.plot_render(train_plot,ae.local("render_train.png"),verbose                   = True,mode=plotmode)
+    ae.plot_render(shuffled_test_plot,ae.local("render_test_shuffled.png"),verbose   = True,mode=plotmode)
+    ae.plot_render(shuffled_train_plot,ae.local("render_train_shuffled.png"),verbose = True,mode=plotmode)
+
+    ae.plot_pos_neg(test[:30],ae.local("booleans_test.png"),verbose=True,mode=plotmode)
+    ae.plot_pn_decisiontree(test,ae.local("test"),verbose=True,mode=plotmode)
+    return
+
+def dump_all_actions(ae,configs,trans_fn,name="all_actions.csv",repeat=1):
+    if 'dump' not in mode:
+        return
+    l = len(configs)
+    batch = 5000
+    loop = (l // batch) + 1
+    print(ae.local(name))
+    with open(ae.local(name), 'wb') as f:
+        for i in range(repeat):
+            for begin in range(0,loop*batch,batch):
+                end = begin + batch
+                print((begin,end,len(configs)))
+                transitions = trans_fn(configs[begin:end])
+                pre, suc = transitions[0], transitions[1]
+                pre_b = ae.encode(pre,batch_size=1000).round().astype(int)
+                suc_b = ae.encode(suc,batch_size=1000).round().astype(int)
+                actions = np.concatenate((pre_b,suc_b), axis=1)
+                np.savetxt(f,actions,"%d")
+
+def dump_actions(ae,transitions,name="actions.csv",repeat=1):
+    if 'dump' not in mode:
+        return
+    print(ae.local(name))
+    pre, suc = transitions[0], transitions[1]
+    if ae.parameters["test_gumbel"]:
+        pre = np.repeat(pre,axis=0,repeats=10)
+        suc = np.repeat(suc,axis=0,repeats=10)
+    pre = ae.encode(pre,batch_size=1000)
+    suc = ae.encode(suc,batch_size=1000)
+    ae.dump_actions(pre,suc,batch_size=1000)
+
+def dump_all_states(ae,configs,states_fn,name="all_states.csv",repeat=1):
+    if 'dump' not in mode:
+        return
+    l = len(configs)
+    batch = 5000
+    loop = (l // batch) + 1
+    print(ae.local(name))
+    with open(ae.local(name), 'wb') as f:
+        for i in range(repeat):
+            for begin in range(0,loop*batch,batch):
+                end = begin + batch
+                print((begin,end,len(configs)))
+                states = states_fn(configs[begin:end])
+                states_b = ae.encode(states,batch_size=1000).round().astype(int)
+                np.savetxt(f,states_b,"%d")
+
+def dump_states(ae,states,name="states.csv",repeat=1):
+    if 'dump' not in mode:
+        return
+    print(ae.local(name))
+    with open(ae.local(name), 'wb') as f:
+        for i in range(repeat):
+            np.savetxt(f,ae.encode(states,batch_size=1000).round().astype(int),"%d")
+
+################################################################
+
+def run(path,train,val,parameters,train_out=None,val_out=None,):
+    if 'learn' in mode:
+        if train_out is None:
+            train_out = train
+        if val_out is None:
+            val_out = val
+        ae, _, _ = simple_genetic_search(
+            curry(nn_task, model.model.get(default_parameters["aeclass"]),
+                  path,
+                  train, train_out, val, val_out), # noise data is used for tuning metric
+            default_parameters,
+            parameters,
+            path,
+            limit=int(os.environ.get("LIMIT", 1)),
+            initial_population=int(os.environ.get("INIT_POP", 20)),
+            population=int(os.environ.get("POPULATION", 10)),
+            report_best= lambda net: net.save(),
+        )
+        if ae is None:
+            # With LIMIT=1 the search never records a best trial, because it
+            # updates the best only while len(open_list) < limit
+            # (model/util/tuning.py). The trained network saved itself to
+            # `path` at the end of train(), so it loads from there. Found
+            # 2026-10-06; every run before only printed this error.
+            print("ERROR: Model was not returned by simple_genetic_search; "
+                  "loading the network that train() saved to", path)
+            ae = model.model.load(path)
+        else:
+            ae.save()
+    elif 'reproduce' in mode:   # reproduce the best result from the grid search log
+        if train_out is None:
+            train_out = train
+        if val_out is None:
+            val_out = val
+        ae, _, _ = reproduce(
+            curry(nn_task, model.model.get(default_parameters["aeclass"]),
+                  path,
+                  train, train_out, val, val_out), # noise data is used for tuning metric
+            default_parameters,
+            parameters,
+            path,
+            limit=int(os.environ.get("LIMIT", 1)),
+            report_best= lambda net: net.save(),
+        )
+        ae.save()
+    else:
+        ae = model.model.load(path)
+    return ae
+
+def show_summary(ae,train,test):
+    if 'summary' in mode:
+        ae.summary()
+        ae.report(train, test_data=test, train_data_to=train, test_data_to=test)
+
+################################################################
+
+_ENV_KNOBS = {
+    "ZEROSUPPRESS":       ("zerosuppress",       float),
+    "ZEROSUPPRESS_DELAY": ("zerosuppress_delay", float),
+    "MAX_TEMPERATURE":    ("max_temperature",    float),
+    "MIN_TEMPERATURE":    ("min_temperature",    float),
+    "DROPOUT":            ("dropout",            float),
+    "NOISE":              ("noise",              float),
+    "LR":                 ("lr",                 float),
+    "LAYER":              ("layer",              int),
+    "BETA":               ("beta",               float),
+}
+
+
+def _apply_env_overrides(parameters, *, knobs=tuple(_ENV_KNOBS)):
+    """Honor env knobs that override default hyperparameters in `parameters`.
+
+    Keeps the env-knob set in one place so every domain entrypoint
+    (puzzle/blocksworld/labeled_objects/vidvrd) honors the same
+    overrides without duplicating boilerplate. See `_ENV_KNOBS` for the
+    env-var to parameters-key mapping and the cast applied to each.
+
+    Two of these decide whether the latent collapses:
+
+    MIN_TEMPERATURE is the floor the Gumbel temperature anneals down to.
+    The default 0.7 never gets near-discrete, so the decoder learns to read
+    fractional codes and rounding at test time destroys the reconstruction —
+    which looks like a uniform autoencoding_test.png rather than a grid.
+
+    LAYER is the width of the dense stack feeding the attention. 200 was
+    picked for MNIST puzzles; an object vector of a few thousand features
+    has to squeeze through it before any predicate is formed.
+    """
+    for k in knobs:
+        if k in os.environ:
+            key, cast = _ENV_KNOBS[k]
+            parameters[key] = [cast(os.environ[k])]
+
+
+def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=None,num_examples=6500,comment=None):
+    for name, value in locals().items():
+        if value is not None:
+            parameters[name] = [value]
+    default_parameters["aeclass"] = aeclass
+
+    # recording metadata
+    default_parameters["activation"]   = "self.puzzle_activation"
+    parameters["preencoder_dimension"] = [0] # disable object embedding
+    parameters["preencoder_layers"]    = [0.0] # disable object embedding
+    parameters["preencoder_l1"]        = [0.0] # disable object embedding
+
+    _apply_env_overrides(parameters)
+
+    import importlib
+    p = importlib.import_module('model.puzzles.puzzle_{}'.format(type))
+    p.setup()
+    path = _find_dataset("-".join(map(str,["puzzle",type,width,height]))+".npz")
+    with np.load(path) as data:
+        pre_configs = data['pres'][:num_examples]
+        suc_configs = data['sucs'][:num_examples]
+
+    configs = pre_configs
+    objects = p.to_objects(configs, width, height, False)
+    train = objects[:int(len(objects)*0.9)]
+    val   = objects[int(len(objects)*0.9):int(len(objects)*0.95)]
+    test  = objects[int(len(objects)*0.95):]
+
+    # SPEC C15: out/<domain>/<category>/<run_tag>/ — submit.sh may pre-compose
+    # the per-job dir into JOB_OUT_DIR; else we compose via paths.helpers.
+    _U  = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A  = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P  = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    _ae = parameters.get('aeclass', [aeclass])[0]
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "puzzle", parameters, _ae, _U, _A, _P,
+        type=type, width=width, height=height)
+    os.makedirs(out_path, exist_ok=True)
+    ae = run(out_path, train, val, parameters)
+    show_summary(ae, train, test)
+    plot_autoencoding_image(ae,test,train,"puzzle")
+
+    dump_states (ae,objects)
+    dump_actions(ae,p.object_transitions(width, height, configs=configs, one_per_state=True))
+
+def bboxes_to_onehot(bboxes,X,Y):
+    batch, objs = bboxes.shape[0:2]
+
+    bboxes_grid = bboxes // 5
+    x1 = bboxes_grid[:,:,0].flatten()
+    y1 = bboxes_grid[:,:,1].flatten()
+    x2 = bboxes_grid[:,:,2].flatten()
+    y2 = bboxes_grid[:,:,3].flatten()
+    x1o = np.eye(X)[x1].reshape((batch,objs,X))
+    y1o = np.eye(Y)[y1].reshape((batch,objs,Y))
+    x2o = np.eye(X)[x2].reshape((batch,objs,X))
+    y2o = np.eye(Y)[y2].reshape((batch,objs,Y))
+    bboxes_onehot = np.concatenate((x1o,y1o,x2o,y2o),axis=-1)
+    del x1,y1,x2,y2,x1o,y1o,x2o,y2o
+    return bboxes_onehot
+
+def blocksworld(aeclass="FirstOrderAE",track="blocks-5-3",U=None,A=None,P=None,num_examples=6500,comment=None):
+    for name, value in locals().items():
+        if value is not None:
+            parameters[name] = [value]
+    default_parameters["aeclass"] = aeclass
+    _apply_env_overrides(parameters)
+
+    with np.load(_find_dataset(track+".npz")) as data:
+        images = data['images'].astype(np.float32) / 256
+        bboxes = data['bboxes']
+        all_transitions_idx = data['transitions']
+
+        picsize = data['picsize']
+        patchsize = images.shape[2:]
+        picsize_grid = (picsize // 5).astype(int)
+        Y,X = picsize_grid[0], picsize_grid[1] # mind the axes!
+        num_transitions = len(all_transitions_idx) // 2
+        num_states, num_objs = bboxes.shape[0:2]
+        num_examples = min(num_examples, num_transitions)
+        print("loaded")
+
+    default_parameters["picsize_grid"] = list(map(int,picsize_grid))
+    default_parameters["picsize"]      = list(map(int,picsize))
+    default_parameters["activation"]   = "self.blocks_activation"
+
+    from model.puzzles.util import preprocess
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes,X,Y)
+    all_states = np.concatenate((       images.reshape       ((num_states, num_objs,-1)),
+                                        bboxes_onehot.reshape((num_states, num_objs,-1))),
+                                axis=-1)
+    del images, bboxes_onehot
+
+    all_transitions_idx = all_transitions_idx.reshape((num_transitions, 2))
+    random.shuffle(all_transitions_idx)
+    transitions_idx = all_transitions_idx[:num_examples]
+    transitions = all_states[transitions_idx.flatten()].reshape((num_examples, 2, num_objs, -1))
+    states = transitions.reshape((num_examples*2, num_objs, -1))
+
+    if num_states < 100:
+        train = all_states
+        val   = all_states
+        test  = all_states
+    else:
+        train = states[:int(len(states)*0.9)]
+        val   = states[int(len(states)*0.9):int(len(states)*0.95)]
+        test  = states[int(len(states)*0.95):]
+
+    print("checkpoint")
+
+    _U  = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A  = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P  = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    _ae = parameters.get('aeclass', [aeclass])[0]
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "blocks", parameters, _ae, _U, _A, _P, track=track)
+    os.makedirs(out_path, exist_ok=True)
+    ae = run(out_path, train, val, parameters)
+    show_summary(ae, train, test)
+
+    plot_autoencoding_image(ae,test,train,"blocks")
+
+    dump_states      (ae,states)
+    dump_actions     (ae,transitions)
+    dump_states      (ae,all_states,"all_states.csv")
+    dump_all_actions (ae,all_transitions_idx,
+                      lambda idx: all_states[idx.flatten()].reshape((len(idx),2,num_objs,-1)).transpose((1,0,2,3)))
+
+
+def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
+                    num_objects=None, comment=None,
+                    dataset_path=None, images_dir=None,
+                    transition_mode="all_pairs",
+                    epoch=5000, max_images=None, batch_size=None):
+    """Train FOSAE on the VLM-annotated labeled-object COCO dataset.
+
+    Uses the same encoding as blocksworld (blocks_activation, blocks_renderer):
+      feature = [ patch_pixels (32^2*3, sigmoid) | x1_onehot | y1_onehot | x2_onehot | y2_onehot ]
+    Bboxes are letterboxed onto a 200x300 canvas, preserving the source aspect ratio (puzzle_labeled_objects._scale_bbox_to_canvas). The blocks-5-3 attribution this line used to carry was never a reason with a 5px grid.
+
+    Parameters
+    ----------
+    aeclass         : FOSAE model class name registered in model.model
+    U, A, P         : FOSAE hyperparameter overrides
+    num_objects     : override MAX_OBJECTS per state
+    dataset_path    : path to fosae_labeled_dataset_unsloth.json (default: auto)
+    images_dir      : path to raw_images/ directory (default: auto)
+    transition_mode : 'sequential' | 'all_pairs' (default: all_pairs)
+    batch_size      : override default batch size (default: 1000). Use a value
+                      >= training set size to process the whole dataset in one
+                      GPU pass per epoch (maximises GPU utilisation on large-VRAM
+                      cards like the L40S).
+    """
+    from model.puzzles.puzzle_labeled_objects import (
+        build_dataset, build_transitions, MAX_OBJECTS, PICSIZE)
+    from model.puzzles.util import preprocess
+    import json as _json
+
+    # Propagate any provided hyperparameter overrides
+    for name, value in dict(U=U, A=A, P=P).items():
+        if value is not None:
+            parameters[name] = [value]
+    default_parameters["aeclass"]    = aeclass
+    default_parameters["activation"] = "self.blocks_activation"
+    default_parameters["epoch"]      = epoch
+    parameters['preencoder_layers']              = [2]
+    parameters['preencoder_dimention']           = [256]
+    parameters['preencoder_output_activation']   = [("linear", "MSE")]
+    parameters['lr']                             = [0.0001]
+    # After the four lines above, not before them. `lr` is one of the env
+    # knobs, so calling this first meant LR=... was read and then silently
+    # overwritten by 0.0001 on every labeled_objects run. vidvrd() already
+    # orders it this way.
+    _apply_env_overrides(parameters)
+    if batch_size is not None:
+        default_parameters["batch_size"] = batch_size
+
+    num_objs = num_objects if num_objects is not None else MAX_OBJECTS
+
+    print("Loading labeled-objects dataset...")
+    images, bboxes, all_object_names, image_ids = build_dataset(
+        dataset_path=dataset_path, images_dir=images_dir,
+        num_objs=num_objs, max_images=max_images)
+
+    num_states = len(images)
+    print(f"Loaded {num_states} states, {num_objs} objects each")
+
+    # --- Same preprocessing pipeline as blocksworld ---
+    picsize      = np.array(PICSIZE)
+    picsize_grid = (picsize // 5).astype(int)        # [40, 60, 0]
+    Y, X         = picsize_grid[0], picsize_grid[1]  # Y=40, X=60
+
+    default_parameters["picsize_grid"] = list(map(int, picsize_grid))
+    default_parameters["picsize"]      = list(map(int, picsize))
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    all_states = np.concatenate(
+        (images.reshape   ((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))),
+        axis=-1)
+    del images, bboxes_onehot
+    print(f"Feature dim per object: {all_states.shape[-1]}")
+
+    # Build transition pairs: (2, num_pairs, num_objs, feature_dim)
+    transitions = build_transitions(all_states, mode=transition_mode)
+    num_trans   = transitions.shape[1]
+    print(f"Built {num_trans} transitions (mode='{transition_mode}')")
+
+    # Flatten both transition endpoints into the states pool for training
+    states = transitions.reshape((num_trans * 2, num_objs, -1))
+
+    if num_states < 100:
+        # Very small dataset: use entire set for every split
+        train = all_states
+        val   = all_states
+        test  = all_states
+    else:
+        train = states[:int(len(states) * 0.9)]
+        val   = states[int(len(states) * 0.9):int(len(states) * 0.95)]
+        test  = states[int(len(states) * 0.95):]
+
+    _U_val = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A_val = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P_val = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "labeled_objects", parameters, aeclass, _U_val, _A_val, _P_val)
+    os.makedirs(out_path, exist_ok=True)
+
+    ae = run(out_path, train, val, parameters)
+    show_summary(ae, train, test)
+    plot_autoencoding_image(ae, test, train, "blocks")
+
+    dump_states (ae, all_states)
+    dump_actions(ae, transitions)
+
+    # Persist object names so model/train/extract_fol.py can reconstruct predicate labels
+    names_path = os.path.join(out_path, "object_names.json")
+    with open(names_path, "w") as f:
+        _json.dump({"image_ids": image_ids, "object_names": all_object_names}, f, indent=2)
+    print(f"Object names saved to {names_path}")
+
+
+def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
+           annotations_dir=None, frames_dir=None,
+           transition_mode="sequential",
+           epoch=5000, max_videos=None, batch_size=None,
+           fps=3, category=None, npz_path=None):
+    """Train FOSAE on ImageNet-VidVRD. Download first: bash runs/data/download_vidvrd.sh
+
+    npz_path : str | None
+        When set, skip on-the-fly build_dataset() and load the raw-array npz
+        baked by ``tools/setup-dataset.py video_vidvrd``. Useful for the
+        smallest-overfit pipeline (one video, no rebuild on every train).
+    """
+    from model.puzzles import puzzle_vidvrd as _pv
+    from model.puzzles.puzzle_vidvrd import build_dataset, build_transitions, PICSIZE, MAX_OBJECTS
+    from model.puzzles.util  import preprocess
+    from model.util.cache    import load_cached
+    import json as _json
+
+    for name, value in dict(U=U, A=A, P=P).items():
+        if value is not None:
+            parameters[name] = [value]
+    default_parameters["aeclass"]    = aeclass
+    default_parameters["activation"] = "self.blocks_activation"
+    default_parameters["epoch"]      = epoch
+    # Env-overridable hyperparameters. Default = encoder-collapse-resistant
+    # settings tuned for full-dataset realistic-image domains (SPEC §C6).
+    # For tiny overfit datasets (one video), match the MNIST baseline:
+    #   LR=0.001 PREENC_LAYERS=0 ZEROSUPPRESS=0 — see README §5.1.
+    parameters['preencoder_layers']            = [int(os.environ.get('PREENC_LAYERS', 2))]
+    parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
+    parameters['preencoder_output_activation'] = [("linear", "MSE")]
+    parameters['lr']                           = [float(os.environ.get('LR', 0.0001))]
+    _apply_env_overrides(parameters)
+    if batch_size is not None:
+        default_parameters["batch_size"] = batch_size
+
+    if npz_path is not None and npz_path not in ("None", "none", ""):
+        print(f"Loading VidVRD overfit npz: {npz_path}")
+        hit = load_cached(npz_path)
+        if hit is None:
+            raise SystemExit(f"vidvrd: npz_path {npz_path!r} not found or unreadable")
+        images, bboxes, all_object_names, frame_ids, meta = hit
+        _pv.last_load_metadata.clear()
+        _pv.last_load_metadata.update(meta)
+        if category is None:
+            category = meta.get("category")
+        if meta.get("fps") is not None:
+            fps = meta.get("fps")
+    else:
+        if frames_dir is None:
+            frames_dir = os.path.join(DATA_DIR, "video", "vidvrd", f"frames_{fps}fps", "train")
+        print("Loading VidVRD dataset...")
+        images, bboxes, all_object_names, frame_ids = build_dataset(
+            annotations_dir=annotations_dir, frames_dir=frames_dir,
+            max_videos=max_videos, category_filter=category, fps=fps)
+
+    num_states, num_objs = len(images), images.shape[1]
+    print(f"Loaded {num_states} frames, {num_objs} objects each")
+
+    picsize      = np.array(PICSIZE)
+    picsize_grid = (picsize // 5).astype(int)
+    Y, X         = picsize_grid[0], picsize_grid[1]
+    default_parameters["picsize_grid"] = list(map(int, picsize_grid))
+    default_parameters["picsize"]      = list(map(int, picsize))
+
+    images = images.astype(np.float32) / 256
+    images = preprocess(images)
+    bboxes_onehot = bboxes_to_onehot(bboxes, X, Y)
+    all_states = np.concatenate(
+        (images.reshape((num_states, num_objs, -1)),
+         bboxes_onehot.reshape((num_states, num_objs, -1))), axis=-1)
+    del images, bboxes_onehot
+
+    transitions = build_transitions(all_states, frame_ids, mode=transition_mode)
+    num_trans   = transitions.shape[1]
+    print(f"Built {num_trans} transitions (mode='{transition_mode}')")
+
+    states = transitions.reshape((num_trans * 2, num_objs, -1))
+    # SPLIT=clip gives each clip to one split. The default cut below puts the
+    # "after" frame of a val pair in training as the "before" frame of the
+    # next pair, so its val curve is not held out. See model/util/split.py.
+    # SPLIT=none trains and scores the same frames, for an overfit check.
+    split_mode = os.environ.get("SPLIT", "")
+    split_info = None
+    if split_mode == "none":
+        # An overfit: train, val and test are the same frames on purpose.
+        train = val = test = all_states
+        split_info = {"mode": "none", "states": int(len(all_states))}
+        print(f"[split] SPLIT=none  train, val and test are all "
+              f"{len(all_states)} states, an overfit")
+    elif split_mode == "clip" and transition_mode != "sequential":
+        raise SystemExit(f"vidvrd: SPLIT=clip splits the sequential pairs, so "
+                         f"TRANSITION_MODE={transition_mode!r} would train on "
+                         f"pairs the split never saw; use sequential")
+    elif split_mode == "clip":
+        from model.util.adjacency import sequential_pairs, strict_from_env
+        from model.util.split import split_states
+        import re
+        _pairs, _ = sequential_pairs(frame_ids, strict=strict_from_env())
+        # SPLIT_GROUP, a regex on the clip name, keeps one session in one
+        # split, so val and test show sessions that training never saw.
+        train, val, test, split_info = split_states(
+            all_states, frame_ids, _pairs,
+            group=os.environ.get("SPLIT_GROUP") or None,
+            val_groups=[g for g in re.split(r"[,:\s]+",
+                                            os.environ.get("SPLIT_VAL", ""))
+                        if g] or None,
+            test_groups=[g for g in re.split(r"[,:\s]+",
+                                             os.environ.get("SPLIT_TEST", ""))
+                         if g] or None)
+        print(f"[split] SPLIT=clip  group {split_info['group']!r}  "
+              f"clips {split_info['clips']}  pairs {split_info['pairs']}")
+    elif split_mode:
+        raise SystemExit(f"vidvrd: SPLIT={split_mode!r} is unknown; use "
+                         f"SPLIT=clip, SPLIT=none or leave it unset")
+    elif num_states < 100:
+        train = val = test = all_states
+    else:
+        train = states[:int(len(states) * 0.9)]
+        val   = states[int(len(states) * 0.9):int(len(states) * 0.95)]
+        test  = states[int(len(states) * 0.95):]
+
+    _U = parameters.get('U', [default_parameters.get('U', 'x')])[0]
+    _A = parameters.get('A', [default_parameters.get('A', 'x')])[0]
+    _P = parameters.get('P', [default_parameters.get('P', 'x')])[0]
+    out_path = os.environ.get("JOB_OUT_DIR") or _resolved_out_dir(
+        "vidvrd", parameters, aeclass, _U, _A, _P,
+        video_category=(category or "_all"), fps=fps)
+    os.makedirs(out_path, exist_ok=True)
+
+    # The trivial model's loss, drawn as a line by tools/analysis/plot_training_curve.py
+    # so a curve can be read against something. See model/util/baseline.py.
+    from model.util.baseline import mean_baseline
+    with open(os.path.join(out_path, "baseline.json"), "w") as f:
+        _json.dump(mean_baseline(train, val), f, indent=2)
+
+    ae = run(out_path, train, val, parameters)
+    show_summary(ae, train, test)
+    plot_autoencoding_image(ae, test, train, "blocks")
+
+    # The test clips, scored with the weights that were saved: those of the
+    # best val epoch under KEEP_BEST=1, else those of the last epoch. Added
+    # 2026-10-06, because no run at patch 48 had a test number.
+    from model.util.baseline import mean_baseline, reconstruction_scores
+    _scores = reconstruction_scores(test, ae.autoencode(test, batch_size=1000))
+    _base = mean_baseline(train, test)
+    _best = {}
+    _best_path = os.path.join(out_path, "best_epoch.json")
+    if os.path.isfile(_best_path):
+        with open(_best_path) as f:
+            _best = _json.load(f)
+    with open(os.path.join(out_path, "test_metrics.json"), "w") as f:
+        _json.dump({"test_BCE": _scores["BCE"], "test_MSE": _scores["MSE"],
+                    "test_BCE_mean_predictor": _base["val_BCE"],
+                    "test_BCE_floor": _base["val_BCE_floor"],
+                    "test_states": int(len(test)),
+                    "weights": "best val epoch" if _best else "last epoch",
+                    "best_epoch": _best.get("best_epoch"),
+                    "best_val_BCE": _best.get("best_val_BCE"),
+                    "best_counted_from": _best.get("counted_from")},
+                   f, indent=2)
+
+    dump_states (ae, all_states)
+    dump_actions(ae, transitions)
+
+    names_path = os.path.join(out_path, "object_names.json")
+    with open(names_path, "w") as f:
+        _json.dump({"frame_ids": frame_ids, "object_names": all_object_names,
+                    "category_filter": category}, f, indent=2)
+    print(f"Object names saved to {names_path}")
+
+    manifest_path = os.path.join(out_path, "loaded_videos.json")
+    manifest = dict(_pv.last_load_metadata)
+    manifest.update({"fps": fps, "transition_mode": transition_mode,
+                     "npz_path": npz_path if npz_path not in (None, "None", "none", "") else None,
+                     "split": split_mode or "states_cut",
+                     "split_info": split_info})
+    with open(manifest_path, "w") as f:
+        _json.dump(manifest, f, indent=2)
+    print(f"Loaded-videos manifest saved to {manifest_path}")
+
+
+def main():
+    global mode, sae_path
+    import sys
+    sae_path = ""
+    if len(sys.argv) == 1:
+        print({ k for k in dir(model.model)})
+        gs = globals()
+        print({ k for k in gs if hasattr(gs[k], '__call__')})
+    else:
+        print('args:',sys.argv)
+        sys.argv.pop(0)
+        mode = sys.argv.pop(0)
+        task = sys.argv.pop(0)
+
+        def myeval(str):
+            try:
+                return eval(str)
+            except:
+                return str
+        
+        globals()[task](*map(myeval,sys.argv))
+    
+if __name__ == '__main__':
+    try:
+        main()
+    except:
+        import model.util.stacktrace
+        model.util.stacktrace.format()

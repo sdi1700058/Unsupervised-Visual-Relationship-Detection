@@ -2,7 +2,7 @@
 """Something-Else into the VidVRD format the FOSAE training builder reads.
 
 WHY. The author locked Something-Else as the easy rung on 2026-10-03, and no
-training builder reads it: `latplan/puzzles/puzzle_vidvrd.py` reads VidVRD's
+training builder reads it: `model/puzzles/puzzle_vidvrd.py` reads VidVRD's
 format only, and its `--annotations-dir` and `--frames-dir` flags exist for a
 dataset written into that format. This writes one VidVRD-format JSON per clip
 and decodes each clip's SSv2 video into the frames the builder expects. Plan
@@ -17,7 +17,7 @@ cover part of a video only: that file's first video starts at `0009.jpg`.
 
 THE RULES THIS FILE ADDS, each a choice of this project:
   identity   `standard_category` is the track. Objects take tids in id order
-             and the hand comes last, as `tools/planner/box_geometry.py`
+             and the hand comes last, as `planner/box_geometry.py`
              orders them.
   two hands  a clip where one track id repeats inside a frame is skipped:
              two boxes under one id cannot be told apart.
@@ -87,7 +87,7 @@ def _anchors(doc):
     between, so they need a frame where the whole scene is visible. Frame 0
     does not serve: measured 2026-10-11 over the 237 converted clips, every
     track is boxed in frame 0 in 99 of them and in the last frame in 64, and
-    `tools/planner/m7_map.py:284` drops an instance whose range holds a frame
+    `planner/m7_map.py:284` drops an instance whose range holds a frame
     with a box missing.
     """
     want = set(o["tid"] for o in doc.get("subject/objects") or [])

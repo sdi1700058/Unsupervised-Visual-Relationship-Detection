@@ -1,0 +1,342 @@
+#!/usr/bin/env python3
+"""tools/analysis/plot_training_curve.py — emit a learning-curve PNG + caption.
+
+Tries, in order:
+  1. `training_history.csv` next to the saved model (CSVLogger, future jobs)
+  2. TensorBoard event files in `<model_dir>/logs/.../events.out.tfevents.*`
+     (works on TIMED-OUT / killed jobs as long as the events dir exists)
+  3. regex scrape of a `.err` / `.out` log file (last-resort; latplan's custom
+     loop emits only a final `history: [...]` line which suffices)
+
+Usage:
+    python3 tools/analysis/plot_training_curve.py <model_dir_or_log_file> [--logy] [--output X.png]
+"""
+
+import os
+import re
+import sys
+import argparse
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
+
+_LOSS_ONLY    = re.compile(r"loss:\s*([\d\.eE+-]+)")
+_VAL_LOSS     = re.compile(r"val_loss:\s*([\d\.eE+-]+)")
+_HISTORY_LIST = re.compile(r"^history:\s*\[(.+)\]$")
+
+# latplan custom bar_update format. Example:
+#   "4:07:50 79 | 2026-05-24 21:20:56 status: [t] BCE   0.0729  MSE   0.0163  ...
+#                                                  ... loss     10.4  loss0   0.0682 ..."
+_STATUS_HEAD = re.compile(
+    r"^\s*(\d+:\d+:\d+)\s+(\d+)\s+\|\s+\S+\s+\S+\s+status:\s*\[([tv])\]\s+(.*)$"
+)
+
+
+def _kv_pairs(rest):
+    """Tokenize 'key  val  key2  val2' (key/val separated by 2+ spaces)."""
+    out = {}
+    for tok in re.split(r"\s{2,}", rest.strip()):
+        parts = tok.split()
+        if len(parts) == 2:
+            try:
+                out[parts[0]] = float(parts[1])
+            except ValueError:
+                pass
+    return out
+
+
+def _parse_log(path):
+    """Scrape per-epoch metrics from latplan's `bar_update` `status:` lines
+    AND legacy Keras `loss:`/`val_loss:` colon-format AND a final `history: [...]`.
+
+    Returns dict of series keyed by metric name; train metrics get the raw name,
+    val metrics are prefixed `val_`.
+    """
+    # epoch -> {'t': {...}, 'v': {...}}
+    epoch_buckets = {}
+    legacy_train, legacy_val = [], []
+    final_history = []
+
+    with open(path, errors="ignore") as f:
+        for raw in f:
+            line = raw.rstrip("\n").rstrip("\r")
+
+            m_hist = _HISTORY_LIST.match(line)
+            if m_hist:
+                try:
+                    final_history = [float(x) for x in m_hist.group(1).split(",")]
+                except ValueError:
+                    pass
+                continue
+
+            m_status = _STATUS_HEAD.match(line)
+            if m_status:
+                epoch = int(m_status.group(2))
+                tag   = m_status.group(3)   # 't' or 'v'
+                metrics = _kv_pairs(m_status.group(4))
+                epoch_buckets.setdefault(epoch, {}).setdefault(tag, {}).update(metrics)
+                continue
+
+            # legacy Keras path (model.fit-style)
+            m_loss = _LOSS_ONLY.search(line)
+            m_val  = _VAL_LOSS.search(line)
+            if m_loss and m_val:
+                legacy_train.append(float(m_loss.group(1)))
+                legacy_val.append(float(m_val.group(1)))
+
+    # ---- assemble series ----
+    series = {}
+    if epoch_buckets:
+        epochs = sorted(epoch_buckets.keys())
+        all_train_keys = set()
+        all_val_keys   = set()
+        for e in epochs:
+            all_train_keys.update(epoch_buckets[e].get("t", {}).keys())
+            all_val_keys  .update(epoch_buckets[e].get("v", {}).keys())
+        for k in all_train_keys:
+            series[k]            = [epoch_buckets[e].get("t", {}).get(k, float("nan")) for e in epochs]
+        for k in all_val_keys:
+            series[f"val_{k}"]   = [epoch_buckets[e].get("v", {}).get(k, float("nan")) for e in epochs]
+        series["_epochs"] = epochs
+
+    if legacy_train or legacy_val:
+        # only use legacy data if status-format didn't fire
+        if not series:
+            series["loss"]     = legacy_train
+            series["val_loss"] = legacy_val
+            series["_epochs"]  = list(range(1, max(len(legacy_train), len(legacy_val)) + 1))
+
+    if final_history and "loss" not in series:
+        series["loss"]    = final_history
+        series["_epochs"] = list(range(1, len(final_history) + 1))
+
+    return series
+
+
+def _parse_csv(path):
+    """B17 CSVLogger output: epoch,loss,val_loss[,...]"""
+    import csv
+    series = {}
+    with open(path) as f:
+        rdr = csv.DictReader(f)
+        for col in rdr.fieldnames or []:
+            series[col] = []
+        for row in rdr:
+            for k, v in row.items():
+                try:
+                    series.setdefault(k, []).append(float(v))
+                except (TypeError, ValueError):
+                    pass
+    epochs = series.pop("epoch", None)
+    if epochs:
+        series["_epochs"] = [int(e) for e in epochs]
+    return series
+
+
+def _parse_tfevents(events_path):
+    """Read scalars from a TensorBoard events file. Returns dict of series."""
+    try:
+        from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+        ea = EventAccumulator(events_path).Reload()
+        tags = ea.Tags().get("scalars", [])
+        series = {}
+        epochs = None
+        for t in tags:
+            scs = ea.Scalars(t)
+            series[t] = [s.value for s in scs]
+            if epochs is None:
+                epochs = [s.step for s in scs]
+        if epochs:
+            series["_epochs"] = epochs
+        return series
+    except ImportError:
+        try:
+            from tensorflow.python.summary.summary_iterator import summary_iterator
+        except Exception as e:
+            raise RuntimeError(f"no tensorboard / tf summary reader available: {e}")
+        series = {}
+        for ev in summary_iterator(events_path):
+            for v in ev.summary.value:
+                series.setdefault(v.tag, []).append(v.simple_value)
+        return series
+
+
+def _find_events_dir(model_dir):
+    """Locate the events.out.tfevents.* file under <model_dir>/logs/<run>/."""
+    import glob
+    candidates = sorted(glob.glob(os.path.join(model_dir, "logs", "*", "events.out.tfevents.*")))
+    return candidates[-1] if candidates else None
+
+
+def latent_from(target):
+    """The epoch from which every TRAINING reconstruction goes through the latent.
+
+    `model/model.py` `build_decoder` skips the latent through the
+    pre-encoder until `epoch * preencoder_delay` and fades it in by twice
+    that, in the training phase only (`K.in_train_phase`): the val curve goes
+    through the latent at every epoch. None when the run has no `aux.json` or
+    no pre-encoder. Found 2026-10-04, corrected the same day by an adversary.
+    """
+    path = os.path.join(target, "aux.json") if os.path.isdir(target) else None
+    if not path or not os.path.isfile(path):
+        return None
+    import json
+    with open(path) as f:
+        p = json.load(f).get("parameters", {})
+    if not p.get("preencoder_layers") or not p.get("preencoder_delay"):
+        return None
+    return int(round(2 * float(p["preencoder_delay"]) * int(p["epoch"])))
+
+
+def load_baseline(target):
+    """`baseline.json` beside a run's CSV as a dict, or None when absent.
+
+    `model/train/strips.py vidvrd()` writes it from 2026-10-03: the loss of a model that
+    always predicts the mean training state. Older runs and log-file targets
+    have none, and they still plot.
+    """
+    path = os.path.join(target, "baseline.json") if os.path.isdir(target) else None
+    if not path or not os.path.isfile(path):
+        return None
+    import json
+    with open(path) as f:
+        got = json.load(f)
+    return {k: got[k] for k in ("train_BCE", "val_BCE", "train_MSE", "val_MSE",
+                                "val_BCE_floor")
+            if k in got}
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("target", help="model_dir OR log file (.out/.err) OR events.out.tfevents.*")
+    p.add_argument("--output", default=None, help="Output PNG path")
+    p.add_argument("--logy",   action="store_true")
+    args = p.parse_args()
+
+    source = None
+    series = {}
+
+    if os.path.isdir(args.target):
+        csv_path = os.path.join(args.target, "training_history.csv")
+        if os.path.isfile(csv_path):
+            series = _parse_csv(csv_path)
+            source = csv_path
+        if not series:
+            ev = _find_events_dir(args.target)
+            if ev:
+                series = _parse_tfevents(ev)
+                source = ev
+    elif os.path.basename(args.target).startswith("events.out.tfevents"):
+        series = _parse_tfevents(args.target)
+        source = args.target
+    else:
+        series = _parse_log(args.target)
+        source = args.target
+
+    if not series:
+        sys.exit(f"ERROR: no loss data extractable from {args.target!r} "
+                 f"(tried csv / tfevents / log-scrape).")
+
+    print(f"[plot_training_curve] source = {source}")
+    print(f"[plot_training_curve] series = {sorted(k for k in series if k != '_epochs')}")
+
+    epochs = series.pop("_epochs", None)
+    train_loss = series.pop("loss", [])
+    val_loss   = series.pop("val_loss", [])
+
+    # `rstrip(".outerr")` strips a CHARACTER SET, not a suffix: it ate every
+    # trailing '.', 'o', 'u', 't', 'e' and 'r', so `logs/torture.out` and
+    # `logs/rotor.err` both wrote to `logs/.curve.png` — a hidden file, and the
+    # same one for two different runs.
+    stem = args.target
+    for suffix in (".out", ".err"):
+        if stem.endswith(suffix):
+            stem = stem[:-len(suffix)]
+            break
+    out_path = args.output or (
+        os.path.join(args.target, "training_curve.png") if os.path.isdir(args.target)
+        else stem + ".curve.png")
+
+    # Keep only "interesting" series; drop per-batch noise (loss0..lossN, val_loss0..)
+    def _interesting(k):
+        return not re.match(r"^(val_)?loss\d+$", k)
+
+    extras = {k: v for k, v in series.items() if _interesting(k) and any(v)}
+
+    n_panels = 1 + min(len(extras), 3)
+    fig, axes = plt.subplots(n_panels, 1, figsize=(9, 3 * n_panels), squeeze=False)
+
+    # Panel 0 — train BCE vs val BCE on same axes (the actual "did model learn?" signal).
+    # `loss`/`val_loss` are misleading on FOSAE because train `loss` includes
+    # regularizer terms (preencoder_l1, zerosuppress * latent_l1) that scale with
+    # latent size — the train series ends up ~30x bigger than val on the same axes.
+    train_bce = extras.get("BCE") or train_loss
+    val_bce   = extras.get("val_BCE") or val_loss
+    ax = axes[0, 0]
+    if train_bce:
+        ax.plot(epochs[:len(train_bce)] if epochs else range(1, len(train_bce) + 1),
+                train_bce, label="train BCE", marker=".", ms=3, lw=1)
+    if val_bce:
+        ax.plot(epochs[:len(val_bce)] if epochs else range(1, len(val_bce) + 1), val_bce,
+                label="val BCE", marker=".", ms=3, lw=1, alpha=0.7)
+    # Only the val line: the logged train BCE comes from train_on_batch with
+    # noise and dropout on, so it is not comparable with a noiseless mean.
+    # val BCE comes from evaluate in the test phase, and it is.
+    base = load_baseline(args.target)
+    if base and "val_BCE" in base:
+        ax.axhline(base["val_BCE"], color="C1", ls="--", lw=1,
+                   label="val BCE of the mean predictor")
+    if base and "val_BCE_floor" in base:
+        ax.axhline(base["val_BCE_floor"], color="black", ls="-.", lw=1,
+                   label="val BCE of a perfect copy")
+    mark = latent_from(args.target)
+    if mark:
+        for a in axes[:, 0]:
+            a.axvline(mark, color="grey", ls=":", lw=1)
+        ax.axvline(mark, color="grey", ls=":", lw=1,
+                   label="train curve: shortcut ends here")
+    ax.set_ylabel("BCE")
+    ax.set_title(f"Reconstruction BCE — {os.path.basename(source)}")
+    if args.logy:
+        ax.set_yscale("log")
+    ax.grid(True, alpha=0.3)
+    if train_bce or val_bce or base or mark:
+        ax.legend()
+    # Don't drop BCE from extras — it might also be useful as a separate panel below.
+
+    # Pick the top-3 most informative extra metrics (prefer BCE, MSE, then alphabetical)
+    priority = ["BCE", "MSE", "val_BCE", "val_MSE", "activation", "preencoder_l1"]
+    chosen = [k for k in priority if k in extras][:3]
+    if len(chosen) < 3:
+        for k in sorted(extras.keys()):
+            if k not in chosen and len(chosen) < 3:
+                chosen.append(k)
+
+    for i, k in enumerate(chosen, start=1):
+        if i >= n_panels:
+            break
+        ax = axes[i, 0]
+        v = extras[k]
+        xs = (epochs[:len(v)] if epochs else range(1, len(v) + 1))
+        ax.plot(xs, v, label=k, marker=".", ms=3, lw=1, color=f"C{i}")
+        ax.set_ylabel(k)
+        ax.grid(True, alpha=0.3)
+        ax.legend()
+        if args.logy and all(x > 0 for x in v if x == x):
+            ax.set_yscale("log")
+
+    axes[-1, 0].set_xlabel("epoch")
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"[plot_training_curve] wrote {out_path}")
+    print(f"[plot_training_curve] panels: aggregate + {chosen}")
+    if train_loss:
+        print(f"[plot_training_curve] train loss: epochs={len(train_loss)} min={min(train_loss):.4f} last={train_loss[-1]:.4f}")
+    for k in chosen:
+        v = extras[k]
+        print(f"[plot_training_curve] {k}: epochs={len(v)} min={min(v):.4f} last={v[-1]:.4f}")
+
+
+if __name__ == "__main__":
+    main()
