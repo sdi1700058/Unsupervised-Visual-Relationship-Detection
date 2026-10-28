@@ -34,7 +34,7 @@ import json
 import os
 import sys
 
-# Running this as a script puts tools/video on sys.path, not the repo root,
+# Running this as a script puts tools/datasets on sys.path, not the repo root,
 # and `window_crossover` imports the quantisation floor from the planner.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))

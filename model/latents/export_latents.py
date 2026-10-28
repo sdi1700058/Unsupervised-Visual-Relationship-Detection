@@ -200,7 +200,7 @@ def export(model_dir, npz_path=None, out_path=None, batch=512):
     # It is also unnecessary. Every latent in this table came from the state
     # at the same index, so decode(encode(x)) is autoencode(x) and the boxes
     # are identical. The planner never decodes a latent that is not already in
-    # the table either — common/export.py looks boxes up by latent and falls
+    # the table either — model/latents/export.py looks boxes up by latent and falls
     # back to the nearest row by Hamming distance.
     recon = apply_in_batches(net.autoencode, states, batch)
     decoded = features_to_bboxes(recon)

@@ -127,7 +127,7 @@ def run_window(export_path, init_idx, goal_idx, out_dir, solve,
             # own floor. On `eval/exports/oracle-real-5005-b16.npz` the two
             # differ by 335.07 against 19.94. An export that records no bins
             # was written by a trained model, whose decoder is fixed at
-            # `common/decode.py`'s PICSIZE // 5, so the default is right there.
+            # `model/latents/decode.py`'s PICSIZE // 5, so the default is right there.
             bins_x = export.bins_x if export.bins_x else DEFAULT_BINS_X
             bins_y = export.bins_y if export.bins_y else DEFAULT_BINS_Y
             floor = round_trip_error(gt_window, bins_x, bins_y)

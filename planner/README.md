@@ -48,24 +48,26 @@ the learned schema. It earns its place by exercising the whole encode, decode
 and scoring path with no external toolchain, which makes it the right first
 smoke test.
 
-Each directory holds one `planner.py` with a `run()` entry. Everything else
-lives in `common/`.
+Each directory holds one `planner.py` with a `run()` entry. The shared code
+sits beside them in `planner/`.
 
 ## Layout
 
     plan_video.py           one window, one method
-    eval_plannability.sh    slides windows across videos, writes summary.csv
+    harness.py              the shared run path for all three methods
+    windows.py              window layout, straight-line baseline
+    plan_score.py           error, baseline comparison, temporal order
     viz_plannability.py     turns summary.csv into figures
     install_fd.sh           builds Fast Downward
     install_roswell.sh      installs Roswell, SBCL, arrival, lisp binaries
 
-    export_latents.py       run where the model is; writes an export
-    common/encode.py        load the model, encode frames  (export side)
-    common/decode.py        latents back to boxes          (export side)
-    common/export.py        read an export                 (planner side)
-    common/windows.py       window layout, straight-line baseline
-    common/metrics.py       error, baseline comparison, temporal order
-    common/harness.py       the shared run path for all three methods
+Outside `planner/`:
+
+    model/latents/export_latents.py   run where the model is, writes an export
+    model/latents/encode.py           load the model, encode frames  (export side)
+    model/latents/decode.py           latents back to boxes          (export side)
+    model/latents/export.py           read an export                 (planner side)
+    runs/eval/eval_plannability.sh    slides windows across videos, writes summary.csv
 
 A method supplies only `_solve(z_init, z_goal, ...)`. The harness does the
 loading, decoding, scoring and writing, so the three stay comparable.

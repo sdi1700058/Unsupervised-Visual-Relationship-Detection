@@ -1271,7 +1271,7 @@ class TestReviewRegressions(unittest.TestCase):
     def test_dequantise_matches_the_real_decoder(self):
         from metrics import box_geometry as O
 
-        # `common/decode.py` maps a bin index to the bin's LEFT EDGE:
+        # `model/latents/decode.py` maps a bin index to the bin's LEFT EDGE:
         #     x1 = argmax(...) * (canvas_w / X)
         # The oracle used bin centres, which put its floor 4x below the one
         # every trained model is measured against.

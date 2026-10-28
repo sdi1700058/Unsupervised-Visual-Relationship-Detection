@@ -36,7 +36,7 @@ class TestQuantise(unittest.TestCase):
         self.assertEqual(quantise(-5.0, 10, 100), 0)
 
     def test_dequantise_returns_the_bin_left_edge(self):
-        """Matches `common/decode.py`, which is the point of the oracle.
+        """Matches `model/latents/decode.py`, which is the point of the oracle.
 
         This asserted the bin CENTRE until 2026-08-30. The centre is the
         better estimator, but no trained model's decoder emits it --
@@ -131,7 +131,7 @@ class TestRoundTripError(unittest.TestCase):
         ], axis=-1)
         mse = round_trip_error(boxes, bins_x=60, bins_y=40)
         # Four coordinates, each at most one WHOLE bin out, because the
-        # dequantiser returns the bin's left edge to match `common/decode.py`.
+        # dequantiser returns the bin's left edge to match `model/latents/decode.py`.
         worst = 2 * (CANVAS_W / 60) ** 2 + 2 * (CANVAS_H / 40) ** 2
         self.assertLessEqual(mse, worst + 1e-6)
 

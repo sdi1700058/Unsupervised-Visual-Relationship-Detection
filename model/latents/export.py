@@ -37,7 +37,7 @@ class Export:
 
         # The bbox bin count, when the writer recorded it. `oracle.py` does;
         # `export_latents.py` does not, because a trained model's decoder is
-        # fixed at `common/decode.py`'s PICSIZE // 5 and there is nothing to
+        # fixed at `model/latents/decode.py`'s PICSIZE // 5 and there is nothing to
         # record. None therefore means "the decoder's own resolution", which
         # is what a reader should fall back to.
         self.bins_x = int(data["bins_x"]) if "bins_x" in data.files else None

@@ -1,7 +1,7 @@
 """The one convention every oracle floor rests on: bins decode to left edges.
 
 `oracle.dequantise` says in its own docstring that it maps a bin index the way
-`common/decode.py` does, and records what it cost when the two disagreed: on
+`model/latents/decode.py` does, and records what it cost when the two disagreed: on
 200 random two-object frames, 2026-08-30, the floor read **8.37 under bin
 centres and 34.11 under the decoder's left edges**, a factor of 4.1. Every
 statement of the form "the planner is at the floor" was measuring against a
@@ -11,7 +11,7 @@ That was fixed. What was missing until 2026-09-06 was a test. The test that
 claimed to guard it, `test_dequantise_matches_the_real_decoder`, asserted only
 that `dequantise(idx, 60, 300) == idx * (300.0 / 60)` -- a hand-written
 constant on one side and `dequantise` on the other. **No test anywhere
-imported `common/decode.py`.** So `decode.py` could go back to bin centres and
+imported `model/latents/decode.py`.** So `decode.py` could go back to bin centres and
 the whole suite would stay green while the regression came back in silence.
 
 This file runs both sides against each other. It fails if either one moves.

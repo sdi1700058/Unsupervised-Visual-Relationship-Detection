@@ -73,14 +73,8 @@ echo
 echo "=========================================="
 echo "M2  a rule, or memorised objects?"
 echo "=========================================="
-if (( ${#ANNS[@]} >= 3 )); then
-    ( ulimit -v "${MEM_KB}"
-      "$PY" planner/compositional.py "${EXPORTS[@]}" \
-          --annotations "${ANN_DIR}" --hold-out "${HOLD_OUT}" \
-          --out-dir "${OUT}/M2" ) || echo "  (M2 could not form a split)"
-else
-    echo "SKIP: M2 needs at least three clips."
-fi
+echo "SKIP: M2 (compositional.py) went to the archive in the 2026-10 cleanup."
+echo "      workbench/ARCHIVE.md tells how to bring it back."
 
 echo
 echo "=========================================="
@@ -94,7 +88,6 @@ cat <<NOTE
 ==========================================
 Figures, all saved to disk:
     ${OUT}/M1/probe.svg
-    ${OUT}/M2/compositional.svg
     ${OUT}/M3/validity.svg
 
 How to read each one is pre-registered in

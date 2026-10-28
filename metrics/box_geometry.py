@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A library for box quantisation and box reading.
 
-`deprecated/position_oracle.py` uses this module to build a planner export
+`planner/position_oracle.py` uses this module to build a planner export
 whose latents are perfect by construction: the evaluation has two halves
 that a single number cannot separate, and when `mse_ratio` comes back bad we
 cannot tell whether FOSAE's relations are poor or whether a classical
@@ -14,7 +14,7 @@ also fail to do on a perfect model. The resulting `mse_ratio` is the
 against zero.
 
 The encoding is deliberately the same shape the real decoder emits. In
-`common/decode.py` the bbox block of a FOSAE feature vector is four
+`model/latents/decode.py` the bbox block of a FOSAE feature vector is four
 one-hot runs — x1 over X bins, y1 over Y bins, then x2 and y2 — with
 X, Y = PICSIZE // 5, i.e. 60 and 40 on the 200x300 canvas. This module
 writes exactly that, so the oracle built from it is an oracle *of the
@@ -26,7 +26,7 @@ mean something: moving one coordinate by one bin flips exactly two bits.
 A binary code would flip up to log2(bins) bits for the same motion and the
 mined action set would be far larger than the real transition structure.
 
-This module has no command line of its own. `deprecated/position_oracle.py`
+This module has no command line of its own. `planner/position_oracle.py`
 writes an ordinary export from these functions, so `plan_video.py`,
 `harness.py` and all three planning methods consume it unchanged.
 """
@@ -56,7 +56,7 @@ def quantise(values, n_bins, extent):
 
 
 def dequantise(idx, n_bins, extent):
-    """Map bin indices back to pixels, exactly as `common/decode.py` does.
+    """Map bin indices back to pixels, exactly as `model/latents/decode.py` does.
 
     The real decoder takes the bin's **left edge**::
 
@@ -94,7 +94,7 @@ def _code_width(n_bins):
 def bits_per_object(bins_x, bins_y, encoding="onehot"):
     """Latent bits one object occupies under the chosen positional code.
 
-    `onehot` matches `common/decode.py`: four runs, x1 | y1 | x2 | y2, one bit
+    `onehot` matches `model/latents/decode.py`: four runs, x1 | y1 | x2 | y2, one bit
     per bin. `binary` writes each bin index as a plain binary number, which is
     far narrower and — measured in `EVAL.md` — far better behaved as an action
     model: one-hot gives "move one bin" a different effect at all 31 start
@@ -112,7 +112,7 @@ def boxes_to_latents(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     """Encode (N, num_objs, 4) pixel boxes as (N, num_objs*bits) binary.
 
     Each object contributes four one-hot runs laid out x1 | y1 | x2 | y2,
-    matching `common/decode.py`.
+    matching `model/latents/decode.py`.
 
     A padded slot — an all-zero box, which is how the loaders mark "no
     object here" — encodes to an all-zero block rather than to bin 0 of
@@ -161,7 +161,7 @@ def latents_to_boxes(latents, n_objs, bins_x=DEFAULT_BINS_X,
                      encoding="onehot"):
     """Decode binary latents back to (N, num_objs, 4) pixel boxes.
 
-    argmax per run, exactly as `common/decode.py` does, so a run with no
+    argmax per run, exactly as `model/latents/decode.py` does, so a run with no
     bit set decodes to bin 0 — and an all-zero object block therefore comes
     back as an all-zero box, round-tripping the padding.
     """
@@ -224,7 +224,7 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
     averages over whatever is handed to it, so a floor taken over one window's
     intermediate frames and a floor taken over a whole clip are different
     numbers, and any ratio built on them is a different number too. Both are
-    in circulation: `common/harness.py` takes the window, while the paired
+    in circulation: `planner/harness.py` takes the window, while the paired
     figure of 2026-08-31 took the whole clip and reused that one value for
     every window of the clip. Measured over 19 VidVRD clips at window 16, the
     median oracle ratio is **1.70 per window against 1.56 per clip** — the same
@@ -372,11 +372,11 @@ def boxes_from_something_else(path, video_id=None, num_objs=3,
 def ag_runs_within(frames, max_gap):
     """Maximal runs of frame numbers whose consecutive gaps are <= max_gap.
 
-    `tools/datasets/screen_actiongenome.py` has a near-twin returning run
-    *lengths*, for the dataset screen. This one returns the frames themselves,
-    which the loader needs. They stay separate on purpose: this module imports
-    nothing beyond numpy so it runs on the cluster's Python 3.6 venv, while the
-    screen reads the dataset through pickle.
+    `tools/video/screen_actiongenome.py` (archived, see `workbench/ARCHIVE.md`)
+    had a near-twin returning run *lengths*, for the dataset screen. This one
+    returns the frames themselves, which the loader needs. They stay separate
+    on purpose: this module imports nothing beyond numpy so it runs on the
+    cluster's Python 3.6 venv, while the screen reads the dataset through pickle.
     """
     if not frames:
         return []
