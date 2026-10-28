@@ -13,20 +13,22 @@ labels beyond reconstruction loss. The FOSAE paper is at
 
 ## Layout
 
-- `model/` — the model (encoder, decoder, training loop), forked from
-  upstream.
-- `tools/video/` — the dataset conversions: each dataset's raw annotations
-  into the common VidVRD-style relation format.
-- `planner/` — the classical planner and its evaluation, including
-  `triplet_eval.py` (triplet mAP with the official evaluator of
-  VidVRD-helper).
-- `sh/` — Slurm jobs for dataset download, unpack, and conversion.
-- `experiments/` — one directory per experiment, each with its own `README.md`
-  and run script.
-- `model/train/strips.py` trains and evaluates a model (`model/train/strips.py <mode> <task> ...`),
-  `tools/setup-dataset.py` bakes a dataset into `.npz`, `model/train/extract_fol.py` reads
-  predicates out of a trained model, and `model/config.py` / `model/config_cpu.py` set up
-  the Keras session.
+- `model/` — FOSAE, the model (encoder, decoder, layers), forked from
+  upstream Latplan. `model/train/strips.py` trains a model
+  (`model/train/strips.py <mode> <task> ...`), `model/train/extract_fol.py`
+  reads predicates out of a trained model, and `model/config.py` sets up the
+  Keras session.
+- `tools/` — the tooling: `tools/video/` converts each dataset's raw
+  annotations into the common VidVRD-style relation format,
+  `tools/setup-dataset.py` bakes a converted dataset into `.npz`, and
+  `tools/analysis/` holds the training-run analysis scripts.
+- `planner/` — the planners (bfs, pddl, ama3), the latent export
+  (`export_latents.py`) and the evaluation, including `triplet_eval.py`
+  (triplet mAP with the official evaluator of VidVRD-helper).
+- `runs/` — what runs the pipeline on Sherlock: `runs/data/` downloads,
+  unpacks and converts the datasets, `runs/eval/` exports and scores, and
+  `runs/experiments/` holds one folder per evaluation experiment.
+- `tests/` — the test suite.
 - `data/`, `out/`, `logs/`, `venv/` — datasets, model outputs, Slurm logs and
   the Python 3.6 environment (`.venv-local` links to it). Not in git.
 - `_attic/` — files set aside during the 2026-10 cleanup, kept recoverable.
