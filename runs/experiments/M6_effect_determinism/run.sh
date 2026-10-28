@@ -18,7 +18,7 @@ PY=.venv-local/bin/python
 [ -x "$PY" ] || PY=python3
 
 CLIPS=${M6_CLIPS:-12}
-OUT=${M6_OUT:-eval/m6}
+OUT=${M6_OUT:-eval/M6}
 EXPORTS=eval/exports/m6
 mkdir -p "$EXPORTS" "$OUT"
 

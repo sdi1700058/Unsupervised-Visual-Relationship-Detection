@@ -20,10 +20,10 @@ This module measures how far from true it is, using the planner's own operator
 definition, so the number describes the action model the planner reads::
 
     .venv-local/bin/python metrics/m6_determinism.py \\
-        eval/exports/H14-U40_A2_P20-150010.npz --out-dir eval/m6
+        eval/exports/H14-U40_A2_P20-150010.npz --out-dir eval/M6
 
     .venv-local/bin/python metrics/m6_determinism.py \\
-        "oracle VidOR=a.npz,b.npz" other.npz --out-dir eval/m6
+        "oracle VidOR=a.npz,b.npz" other.npz --out-dir eval/M6
 
 **The metric has one obvious way to lie, and it is guarded here rather than in
 the reader.** If every transition has its own effect, then every operator's

@@ -147,7 +147,7 @@ bash runs/experiments/M6_effect_determinism/run.sh
 ```
 
 That builds the oracle exports it needs under `eval/exports/m6/`, then writes
-`eval/m6/m6_determinism.json`, `eval/m6/m6_determinism.svg` and a table on
+`eval/M6/m6_determinism.json`, `eval/M6/m6_determinism.svg` and a table on
 standard output. It runs under `ulimit -v 6000000`, because an unbounded local
 run crashed this workstation on 2026-08-28.
 
@@ -156,7 +156,7 @@ To rerun one row by hand, on an export whose encoder did not collapse:
 ```bash
 .venv-local/bin/python metrics/m6_determinism.py \
     eval/exports/U40_A2_P10_catH14-winnable88-30fps-mo3-nofill-p8_fps30_0cab2f.npz \
-    --out-dir eval/m6
+    --out-dir eval/M6
 ```
 
 `M6_CLIPS=4 bash runs/experiments/M6_effect_determinism/run.sh` shortens the oracle
