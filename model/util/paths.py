@@ -1,7 +1,7 @@
 """Shared path utilities for the FOSAE project.
 
 Composes the canonical hierarchical output directory consumed by
-model/train/strips.py and sh/submit.sh (single source of truth — see SPEC §C15, §V13).
+model/train/strips.py and scripts/train/submit.sh (single source of truth — see SPEC §C15, §V13).
 
 Layout: ``out/<domain>/<category>/<run_tag>/`` (labeled_objects is 2-tier:
 ``out/labeled_objects/<run_tag>/`` — no category).
@@ -92,7 +92,7 @@ def resolved_out_dir(domain, parameters, aeclass, U, A, P,
                      video_category=None, fps=None, base=None, **dom_kw):
     """Convenience: domain_category + run_tag + build_out_dir + unique_dir.
 
-    Used by both model/train/strips.py and sh/submit.sh (via `python3 -c`).
+    Used by both model/train/strips.py and scripts/train/submit.sh (via `python3 -c`).
     """
     d, c = domain_category(domain, **dom_kw)
     tag  = run_tag(parameters, aeclass, U, A, P,

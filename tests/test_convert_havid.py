@@ -185,7 +185,7 @@ class RelationInstances(unittest.TestCase):
     insert ball into cylinder base, and this project reads a key action with
     a target as a relation between the moved object and the target, true
     when the action ends. The rule is this project's, so the tier is T3, and
-    `workbench/tools/havid_relations.py` says so in its own header.
+    `workbench/scripts/analysis/havid_relations.py` says so in its own header.
 
     A clip IS one primitive task: `tools/video/convert_havid.py:283` clamps
     the clip to the segment, so the action ends on the clip's last frame and

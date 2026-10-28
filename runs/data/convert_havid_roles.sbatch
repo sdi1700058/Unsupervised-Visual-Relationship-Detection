@@ -27,5 +27,5 @@ module load ffmpeg/7.1
     --ext data/video/ha_vid/ext \
     --frame-rates data/video/ha_vid/frame_rates.tsv \
     --out data/video/ha_vid/vidvrd_format \
-    --ids-out "${IDS_OUT:-workbench/sh/rung_ids/havid-roles.rerun.txt}" \
+    --ids-out "${IDS_OUT:-workbench/scripts/train/rung_ids/havid-roles.rerun.txt}" \
     --roles

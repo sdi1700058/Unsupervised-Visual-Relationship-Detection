@@ -8,7 +8,7 @@
 # Re-reads every member against its stored CRC, checks the unpacked copy name
 # for name and size for size, and with --images decodes every image in full.
 # A size that matches Content-Length says the byte count arrived and nothing
-# more, which is why this job exists. See workbench/tools/verify_archive.py.
+# more, which is why this job exists. See workbench/scripts/analysis/verify_archive.py.
 #
 #SBATCH --partition=normal
 #SBATCH --time=02:00:00
@@ -36,4 +36,4 @@ module load viz
 module load py-pillow/9.3.0_py39
 cd "${ROOT}/workbench" || exit 2
 PYTHONPATH="..:${PYTHONPATH:-}" python3 \
-    -m tools.verify_archive "${ROOT}/${ZIP}" ${ARGS[@]+"${ARGS[@]}"}
+    -m scripts.analysis.verify_archive "${ROOT}/${ZIP}" ${ARGS[@]+"${ARGS[@]}"}

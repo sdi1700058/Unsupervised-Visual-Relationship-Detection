@@ -5,7 +5,7 @@ WHY IT IS HERE AND NOT IN `workbench`. The relations of Something-Else come
 from the published domain of Migimatsu and Bohg, arXiv 2109.14718, shipped as
 `data/video/something_else/raw/twentybn_domain.pddl`. Reading it is a step of
 the conversion, so it belongs in the public tree with the converter that uses
-it. `workbench/tools/something_else_relations.py` wrote these functions first,
+it. `workbench/scripts/analysis/something_else_relations.py` wrote these functions first,
 on 2026-10-03, to measure the dataset, and now imports them from here rather
 than holding a second copy. Plan
 notes/plans/2026-10-10-relations-and-boxes.md, A2.

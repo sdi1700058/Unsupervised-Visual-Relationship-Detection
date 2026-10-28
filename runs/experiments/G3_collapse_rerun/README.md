@@ -85,7 +85,7 @@ k = 1 is not a failure.
 ## The limits, written before the run
 
 **No seed is pinned anywhere in this project.** `grep -rn "SEED\|seed"` over
-`workbench/sh/sweep_lib.sh`, `workbench/sh/submit.sh` and `model/train/strips.py` returns
+`workbench/scripts/train/sweep_lib.sh`, `workbench/scripts/train/submit.sh` and `model/train/strips.py` returns
 nothing on 2026-09-18. That is what makes a re-run a genuinely fresh draw, and
 it is also why **this experiment is not reproducible**: a third run would be a
 third draw. Reading k as a rate needs a seed knob and three runs for each arm,

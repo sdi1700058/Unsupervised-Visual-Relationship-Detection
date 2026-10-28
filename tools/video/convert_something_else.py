@@ -219,7 +219,7 @@ def choose(records, template_of, allowed, count, seed=0, max_tracks=3,
 
     `only` names the clips instead, and then the seed, the count and the
     filters are not consulted. **A seed does not make this repeatable.** The
-    clips of `workbench/sh/rung_ids/se-f6.txt` were drawn under the code of
+    clips of `workbench/scripts/train/rung_ids/se-f6.txt` were drawn under the code of
     2026-10-03, and a check added that day, which refuses a clip listing one
     frame twice, moved the usable pool from 37,000 to 36,759. The seeded
     sample of the smaller pool shares NOT ONE clip with the older one,

@@ -2,8 +2,8 @@
 """One place to open an `--ids-out` list, so a rerun cannot silently lose one.
 
 `notes/OPEN-ISSUES.md` I28. Two tracked ids files went this way in six days,
-`sh/rung_ids/kit3d-roles.txt` on 2026-10-06 and
-`sh/rung_ids/se-250clips.txt` on 2026-10-11. Both times a rerun pointed
+`scripts/train/rung_ids/kit3d-roles.txt` on 2026-10-06 and
+`scripts/train/rung_ids/se-250clips.txt` on 2026-10-11. Both times a rerun pointed
 `--ids-out` at a list somebody else had made, both times the run succeeded,
 and both times the damage was found later by eye. Four converters each held
 their own `open(args.ids_out, "w")`, which is why there was nowhere to put

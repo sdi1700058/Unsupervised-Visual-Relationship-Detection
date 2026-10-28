@@ -5,8 +5,8 @@ WHY THIS EXISTS. `notes/OPEN-ISSUES.md` I28. Two TRACKED ids files were lost
 this way inside six days, each time by a rerun whose `--ids-out` pointed at a
 list somebody else had made:
 
-  2026-10-06  sh/rung_ids/kit3d-roles.txt   restored by the author, by hand
-  2026-10-11  sh/rung_ids/se-250clips.txt   238 wrong ids sat in the working
+  2026-10-06  scripts/train/rung_ids/kit3d-roles.txt   restored by the author, by hand
+  2026-10-11  scripts/train/rung_ids/se-250clips.txt   238 wrong ids sat in the working
                                             tree until a session noticed
 
 Neither run failed. Both wrote a perfectly good file over a perfectly good

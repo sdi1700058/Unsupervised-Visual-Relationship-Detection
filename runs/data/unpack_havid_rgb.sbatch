@@ -25,7 +25,7 @@ mkdir -p "${DEST}"
 module load python/3.9.0
 python3 -c "import zipfile,sys; zipfile.ZipFile(sys.argv[1]).extractall(sys.argv[2]); print('extracted')" "${SRC}" "${DEST}"
 cd "${ROOT}/workbench" || exit 2
-PYTHONPATH="..:${PYTHONPATH:-}" python3 -m tools.verify_archive "${SRC}" --root "${DEST}"
+PYTHONPATH="..:${PYTHONPATH:-}" python3 -m scripts.analysis.verify_archive "${SRC}" --root "${DEST}"
 verdict=$?
 module load system
 module load ffmpeg/7.1

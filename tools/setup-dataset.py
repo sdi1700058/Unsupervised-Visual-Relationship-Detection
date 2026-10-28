@@ -257,7 +257,7 @@ def _bake_video_npz(loader_module, dataset_name, category, video_id, fps,
     })
     save_cache(out_path, images, bboxes, names, frame_ids, meta)
     print(f"[bake] OK — {len(images)} states, {len(meta.get('video_ids', []))} videos")
-    submit = "workbench/sh/submit.sh" if os.path.isdir("workbench") else "sh/submit.sh"
+    submit = "workbench/scripts/train/submit.sh" if os.path.isdir("workbench") else "scripts/train/submit.sh"
     print(f"[bake] use with: NPZ_PATH={out_path} DOMAIN={dataset_name} bash {submit}")
     return out_path
 

@@ -4,7 +4,7 @@ from setuptools import setup, find_packages
 
 setup(name='latplan',
       version='0.0.1',
-      # The cluster pins python/3.6.1 (workbench/sh/sherlock_config.sh) because that is
+      # The cluster pins python/3.6.1 (workbench/scripts/train/sherlock_config.sh) because that is
       # what TF 1.15 needs. Until now the floor lived only in a comment, and a
       # py3.7-only line reached Sherlock twice: `from __future__ import
       # annotations` in the planner, then `subprocess.run(capture_output=)`.

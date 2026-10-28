@@ -236,7 +236,7 @@ def relation_instances(verb, n_tracks, size):
 
     A key action with a target object reads as a relation between the moved
     object and the target, TRUE WHEN THE ACTION ENDS.
-    `workbench/tools/havid_relations.py` states the rule and marks it T3,
+    `workbench/scripts/analysis/havid_relations.py` states the rule and marks it T3,
     this project's own, because HA-ViD ships no relation of its own.
 
     A clip is exactly one primitive task: `end = min(end, start + size - 1,

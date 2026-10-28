@@ -4,8 +4,8 @@
 # Plan workbench/notes/plans/2026-10-03-train-the-rungs.md, steps 1.2b and
 # 1.2c. Reads three 1.1 GB box files, so it runs here and not on a login node.
 # The template list comes from
-#   python3 workbench/tools/something_else_relations.py \
-#       --flipping-templates workbench/sh/rung_ids/se-flip-templates.txt
+#   python3 workbench/scripts/analysis/something_else_relations.py \
+#       --flipping-templates workbench/scripts/train/rung_ids/se-flip-templates.txt
 #
 #   sbatch runs/data/convert_something_else.sbatch
 #
@@ -39,9 +39,9 @@ RAW=data/video/something_else/raw
     --videos data/video/ssv2/ext/20bn-something-something-v2 \
     --labels data/video/ssv2/raw/labels.json \
     --splits data/video/ssv2/raw/train.json data/video/ssv2/raw/validation.json \
-    --templates workbench/sh/rung_ids/se-flip-templates.txt \
+    --templates workbench/scripts/train/rung_ids/se-flip-templates.txt \
     --out data/video/something_else/vidvrd_format \
     --count 250 --seed 0 \
     --domain "${RAW}/twentybn_domain.pddl" \
     ${ONLY:+--only "${ONLY}"} \
-    --ids-out "${IDS_OUT:-workbench/sh/rung_ids/se-250clips.txt}"
+    --ids-out "${IDS_OUT:-workbench/scripts/train/rung_ids/se-250clips.txt}"

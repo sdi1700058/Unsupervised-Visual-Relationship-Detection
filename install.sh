@@ -6,7 +6,7 @@ set -e
 # planner/install_roswell.sh. Neither needs sudo.
 
 conda env create -f environment.yml
-# --no-deps, matching workbench/sh/sherlock_setup.sh. environment.yml has
+# --no-deps, matching workbench/scripts/train/sherlock_setup.sh. environment.yml has
 # already resolved every dependency; without the flag pip re-resolves from
 # setup.py and the two disagree, so a working environment is silently changed
 # underneath itself: protobuf 3.20.3 becomes 3.19.6 and h5py <3.0 becomes
