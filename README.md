@@ -13,18 +13,21 @@ labels beyond reconstruction loss. The FOSAE paper is at
 
 ## Layout
 
-- `model/` — FOSAE, the model (encoder, decoder, layers), forked from
-  upstream Latplan. `model/train/strips.py` trains a model
-  (`model/train/strips.py <mode> <task> ...`), `metrics/extract_fol.py`
-  reads predicates out of a trained model, and `model/config.py` sets up the
-  Keras session.
-- `tools/` — the tooling: `tools/datasets/` converts each dataset's raw
-  annotations into the common VidVRD-style relation format,
-  `tools/datasets/setup_dataset.py` bakes a converted dataset into `.npz`, and
-  `tools/analysis/` holds the training-run analysis scripts.
-- `planner/` — the planners (bfs, pddl, ama3), the latent export
-  (`export_latents.py`) and the evaluation, including `triplet_eval.py`
-  (triplet mAP with the official evaluator of VidVRD-helper).
+- `model/` — FOSAE, the network, forked from upstream Latplan.
+  `model/model.py` holds the network classes. `model/loaders/` reads the baked
+  datasets into training, `model/train/strips.py` trains a model
+  (`model/train/strips.py <mode> <task> ...`), and `model/latents/` exports
+  and reads the latent codes of a trained model.
+- `tools/` — scripts that a person runs by hand: `tools/datasets/` converts
+  each dataset's raw annotations into the common VidVRD-style relation format
+  and bakes it into `.npz` (`setup_dataset.py`), and `tools/analysis/`
+  inspects one finished training run.
+- `planner/` — plans between two frames and scores the plan: one folder for
+  each planning method (`bfs/`, `pddl/`, `ama3/`), and the planning run in
+  `plan_video.py`.
+- `metrics/` — measures a trained model: `triplet_eval.py` (triplet mAP with
+  the official evaluator of VidVRD-helper), relation matching, effect
+  determinism and the latent checks.
 - `runs/` — what runs the pipeline on Sherlock: `runs/data/` downloads,
   unpacks and converts the datasets, `runs/eval/` exports and scores, and
   `runs/experiments/` holds one folder per evaluation experiment.
