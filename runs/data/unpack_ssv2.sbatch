@@ -2,7 +2,7 @@
 #
 # unpack_ssv2.sbatch — unpack SSv2's 220,847 videos, the frames under Something-Else
 #
-#   sbatch --job-name=ssv2-unpack sh/unpack_ssv2.sbatch
+#   sbatch --job-name=ssv2-unpack runs/data/unpack_ssv2.sbatch
 #
 # WHY. runs/data/convert_something_else.sbatch (the C.4 unpack step) reads its webm
 # source from data/video/ssv2/ext; this script rebuilds that directory from

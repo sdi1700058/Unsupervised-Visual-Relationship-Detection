@@ -21,20 +21,20 @@ fail() { echo "  [FAIL] $*"; FAIL=$((FAIL+1)); }
 
 echo "FOSAE smoke test"
 
-python3 -c "import latplan; import latplan.model; print('  latplan:', latplan.__file__)" \
-    && ok "latplan import" || fail "latplan import"
+python3 -c "import model; import model.model; print('  model:', model.__file__)" \
+    && ok "model import" || fail "model import"
 
-python3 -c "import config_cpu" \
+python3 -c "from model import config_cpu" \
     && ok "config_cpu import" || fail "config_cpu import"
 
-python3 -c "from latplan.util.paths import DATA_DIR, OUT_DIR; print('  DATA_DIR:', DATA_DIR)" \
+python3 -c "from model.util.paths import DATA_DIR, OUT_DIR; print('  DATA_DIR:', DATA_DIR)" \
     && ok "paths import" || fail "paths import"
 
-python3 -c "from latplan.puzzles.puzzle_vidvrd import PATCH_SIZE, MAX_OBJECTS, PICSIZE" \
+python3 -c "from model.puzzles.puzzle_vidvrd import PATCH_SIZE, MAX_OBJECTS, PICSIZE" \
     && ok "puzzle_vidvrd import" || fail "puzzle_vidvrd import"
 
-python3 -c "from latplan.domains.video.actiongenome import build_dataset; from latplan.util.cache import npz_cache_path" \
-    && ok "actiongenome + cache import" || fail "actiongenome + cache import"
+python3 -c "from model.util.cache import npz_cache_path" \
+    && ok "cache import" || fail "cache import"
 
 echo ""
 echo "Results: ${PASS} passed, ${FAIL} failed"

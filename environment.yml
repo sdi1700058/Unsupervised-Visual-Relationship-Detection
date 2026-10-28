@@ -1,7 +1,7 @@
 
 name : fosae
 dependencies:
-  # Sherlock pins python/3.6.1 (workbench/sh/sherlock_config.sh); this env is
+  # Sherlock pins python/3.6.1 (workbench/scripts/train/sherlock_config.sh); this env is
   # one minor version ahead, so 3.7-only syntax passes here and fails there.
   # Run `python3 workbench/tools/check_py36.py` before pushing anything on
   # the cluster path.

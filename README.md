@@ -74,5 +74,5 @@ repository.
 ## Datasets
 
 Each dataset moves through download, prepare, screen, oracle, and verify
-stages. `sh/` holds the Slurm job for each stage that needs a compute node
-rather than a login node.
+stages. `runs/data/` and `runs/eval/` hold the Slurm job for each stage that
+needs a compute node rather than a login node.

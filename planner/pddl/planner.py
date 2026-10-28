@@ -195,7 +195,7 @@ def replay(z_init, effects, indices):
 
 def find_fast_downward():
     here = Path(__file__).resolve().parents[1]
-    project_root = here.parent.parent
+    project_root = here.parent
 
     candidates = [
         os.environ.get("FAST_DOWNWARD"),

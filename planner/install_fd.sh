@@ -2,7 +2,7 @@
 # planner/install_fd.sh — bootstrap Fast Downward for SPEC §T H2.
 #
 # FD is required by planner/plan_video.py (§T H1). Upstream
-# /home/panoslat/Dev/Thesis/FOSAE/model/downward/ is empty (git submodule
+# /home/panoslat/Dev/Thesis/FOSAE/latplan/downward/ is empty (git submodule
 # not initialized) and is C14 read-only, so we build our own copy out of git.
 #
 # Local  : builds under data/deps/fast-downward/ (gitignored via data/*)
