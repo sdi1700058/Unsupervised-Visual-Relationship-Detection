@@ -1,0 +1,177 @@
+"""Shared run path for every planner method.
+
+Each method answers one question: given the init latent and the goal latent,
+what states lie between them? Everything either side of that lives here so
+the three methods stay comparable.
+
+The frames come from a planner export rather than from the model, so this
+runs with numpy alone. See model/latents/export_latents.py for how an export
+is made and why the split exists.
+"""
+
+import json
+from pathlib import Path
+
+
+def run_window(export_path, init_idx, goal_idx, out_dir, solve,
+               time_budget_s=60, matching="hungarian", plan_only=False,
+               method="unknown", solve_kwargs=None, length_mode="max"):
+    """Plan across one window and score it.
+
+    `solve` is called as solve(z_init, z_goal, z_all, time_budget_s, out_dir,
+    **solve_kwargs) and returns (found, trace, wall_s, extra). The trace holds
+    the init state, the states between, and the goal state.
+
+    `length_mode` decides what the method is asked for:
+
+    - `max` asks for the shortest plan of at most window_frames-1 actions.
+      This is the default because a trained encoder maps runs of consecutive
+      frames to one code, so most windows hold fewer than window_frames-1
+      real transitions.
+    - `exact` asks for exactly window_frames-1 actions. Right for the oracle
+      export, whose encoding changes on every frame by construction.
+    - `free` removes the constraint. Kept for comparison only; an unbounded
+      search over a wide latent is expensive and can exhaust memory.
+    """
+    import numpy as np
+
+    from model.latents.export import load as load_export
+    from planner.plan_score import (
+        moving_gt_steps, score_window, summarize)
+    from planner.windows import (
+        extract_intermediate_states, linear_interp_bboxes)
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    export = load_export(export_path)
+    n_frames = len(export)
+
+    init_idx = init_idx if init_idx >= 0 else n_frames + init_idx
+    goal_idx = goal_idx if goal_idx >= 0 else n_frames + goal_idx
+    if not (0 <= init_idx < n_frames and 0 <= goal_idx < n_frames):
+        raise IndexError(f"window {init_idx}..{goal_idx} outside [0,{n_frames})")
+    if goal_idx <= init_idx:
+        raise ValueError(f"goal frame {goal_idx} must come after init {init_idx}")
+
+    window = {
+        "init": init_idx,
+        "goal": goal_idx,
+        "intermediate": list(range(init_idx + 1, goal_idx)),
+        "plan_length": goal_idx - init_idx,
+    }
+    n_mid = len(window["intermediate"])
+
+    z_all = export.latents
+    z_init, z_goal = z_all[init_idx], z_all[goal_idx]
+    hamming = int((z_init ^ z_goal).sum())
+    print(f"latents differ in {hamming} of {export.n_bits} bits; "
+          f"{n_mid} frames to reconstruct")
+
+    # plan_length goes to the method because the interpolation task constrains
+    # the trajectory rather than asking for the cheapest plan between the two
+    # ends. A method free to return its shortest plan will collapse a
+    # three-frame window into one action whenever the two latents are close.
+    found, trace, wall, extra = solve(
+        z_init=z_init, z_goal=z_goal, z_all=z_all, export=export,
+        time_budget_s=time_budget_s, out_dir=out_dir,
+        plan_length=window["plan_length"], length_mode=length_mode,
+        **(solve_kwargs or {}))
+
+    plan_length = max(0, len(trace) - 1) if found else 0
+    print(f"plan length {plan_length} (expected {window['plan_length']}) "
+          f"in {wall:.2f}s")
+
+    # How many of the window's frame steps actually move the latent. When this
+    # is below window_frames-1 the encoder has merged frames, and a
+    # window_frames-1-step plan cannot exist except by padding. Recorded so a
+    # short plan is readable as a property of the model rather than a failure
+    # of the search.
+    span = z_all[init_idx:goal_idx + 1]
+    moving_steps = int((span[1:] ^ span[:-1]).any(axis=1).sum())
+
+    # The same count taken from the annotations. When it is 0 the objects
+    # stand still, linear interpolation is exact, and `mse_ratio` divides by
+    # noise -- the window cannot separate a good model from a bad one and has
+    # to be dropped when the results are aggregated.
+    moving_gt = moving_gt_steps(export.gt_boxes[init_idx:goal_idx + 1])
+    if moving_gt == 0:
+        print("warning: the annotated boxes do not move in this window; "
+              "any ratio from it is noise")
+
+    scores = None
+    if found and not plan_only and n_mid > 0:
+        mid_latents, exact = extract_intermediate_states(trace, n_mid)
+        pred_boxes = export.boxes_for_trace(mid_latents)
+        gt_window = export.gt_boxes[window["intermediate"]]
+        baseline = linear_interp_bboxes(
+            export.gt_boxes[init_idx], export.gt_boxes[goal_idx], n_mid)
+
+        scores = score_window(pred_boxes, gt_window, baseline, matching,
+                              endpoints=(export.gt_boxes[init_idx],
+                                         export.gt_boxes[goal_idx]))
+        scores["resample_free"] = exact
+
+        # `floor_ratio` beside `mse_ratio`, because the two answer different
+        # questions and only the second is stable across clips: the linear
+        # baseline spans 1575x across screened clips where the quantisation
+        # floor spans 1.9x, so mse_ratio reports the clip and floor_ratio
+        # reports the representation (SPEC V38).
+        try:
+            from metrics.box_geometry import (
+                DEFAULT_BINS_X, DEFAULT_BINS_Y, round_trip_error)
+            from planner.plan_score import floor_ratio
+            # The export's own bin count, not the decoder's. `floor_ratio` is
+            # documented as "how close to the best achievable AT THIS BIN
+            # RESOLUTION", so a coarse-binned oracle has to be divided by its
+            # own floor. On `eval/exports/oracle-real-5005-b16.npz` the two
+            # differ by 335.07 against 19.94. An export that records no bins
+            # was written by a trained model, whose decoder is fixed at
+            # `common/decode.py`'s PICSIZE // 5, so the default is right there.
+            bins_x = export.bins_x if export.bins_x else DEFAULT_BINS_X
+            bins_y = export.bins_y if export.bins_y else DEFAULT_BINS_Y
+            floor = round_trip_error(gt_window, bins_x, bins_y)
+            scores["quantisation_floor"] = floor
+            scores["floor_ratio"] = floor_ratio(
+                scores["planner"]["mean_mse"], floor)
+        except Exception as exc:                       # noqa: BLE001
+            # A missing floor must not cost the run its other metrics.
+            scores["quantisation_floor"] = None
+            scores["floor_ratio"] = None
+            scores["floor_error"] = str(exc)
+
+        (out_dir / "plan_trace.json").write_text(json.dumps({
+            "window": window,
+            "latents": trace.astype(int).tolist(),
+            "intermediate_bboxes": pred_boxes.tolist(),
+        }, indent=2))
+
+    metrics = summarize(found, plan_length, wall, window, scores,
+                        extra={"method": method,
+                               "hamming_init_goal": hamming,
+                               "length_mode": length_mode,
+                               "moving_steps": moving_steps,
+                               "moving_gt_steps": moving_gt,
+                               "decode_fallbacks": export.fallback_count,
+                               **(extra or {})})
+    (out_dir / "metrics.json").write_text(json.dumps(metrics, indent=2))
+
+    if scores:
+        planner_mse = scores["planner"]["mean_mse"]
+        base_mse = scores["baseline_linear"]["mean_mse"]
+        ratio = scores.get("mse_ratio")
+        line = f"bbox mse {planner_mse:.2f} vs baseline {base_mse:.2f}"
+        if ratio is None:
+            # The straight line was exact, so the objects moved linearly and
+            # this window cannot separate a good model from a lucky one.
+            line += " (baseline is exact; window carries no signal)"
+        else:
+            line += f" (ratio {ratio:.3f})"
+        fr = scores.get("floor_ratio")
+        if fr is not None:
+            line += f", {fr:.2f}x the floor"
+        print(line)
+    if export.fallback_count:
+        print(f"note: {export.fallback_count} latents were not in the export "
+              "and fell back to the nearest one")
+    return metrics

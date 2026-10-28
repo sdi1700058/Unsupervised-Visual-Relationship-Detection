@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(
     os.path.dirname(os.path.abspath(__file__))))
 
-from planner.common.metrics import truthy  # noqa: E402
+from planner.plan_score import truthy  # noqa: E402
 
 import csv  # noqa: E402,F811
 import glob

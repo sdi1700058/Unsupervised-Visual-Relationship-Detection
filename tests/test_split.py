@@ -8,7 +8,7 @@ every val state was also a training state. Found 2026-10-03 while planning
 the rung runs, and confirmed by an adversary from `model/train/strips.py:622-628`.
 
 `SPLIT=clip` gives each clip to exactly one split. The default is unchanged,
-so earlier runs reproduce. `model/util/split.py` imports nothing from
+so earlier runs reproduce. `model/loaders/split.py` imports nothing from
 `latplan`, so it loads from file here without TensorFlow.
 """
 
@@ -22,7 +22,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
 _spec = importlib.util.spec_from_file_location(
-    "_split", os.path.join(ROOT, "model", "util", "split.py"))
+    "_split", os.path.join(ROOT, "model", "loaders", "split.py"))
 split = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(split)
 

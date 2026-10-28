@@ -18,7 +18,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-_VIDEO = str(Path(__file__).resolve().parents[1] / "tools" / "video")
+_VIDEO = str(Path(__file__).resolve().parents[1] / "tools" / "datasets")
 if _VIDEO not in sys.path:
     sys.path.insert(0, _VIDEO)
 

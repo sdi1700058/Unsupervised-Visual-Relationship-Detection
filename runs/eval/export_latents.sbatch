@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Export the latents, bindings and decoded boxes of one trained run.
 #
-# WHY IT NEEDS A JOB. `planner/export_latents.py` holds the whole state
+# WHY IT NEEDS A JOB. `model/latents/export_latents.py` holds the whole state
 # array in memory: the KIT role clips are 29,078 states of 3 slots and 6,916
 # features, about 2.4 GB in float32 before TensorFlow takes its share. It was
 # killed at exit 137 twice inside an 8 GB allocation on 2026-10-10 and
@@ -42,7 +42,7 @@ echo "run   ${RUN}"
 echo "out   ${OUT}"
 echo "batch ${BATCH}"
 
-venv/bin/python planner/export_latents.py "${RUN}" \
+venv/bin/python model/latents/export_latents.py "${RUN}" \
     -o "${OUT}" --batch "${BATCH}"
 
 echo "wrote ${OUT}"

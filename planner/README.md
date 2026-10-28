@@ -78,7 +78,7 @@ holds the model, so they are split.
 
 Stage one runs where the model lives, usually Sherlock:
 
-    python3 planner/export_latents.py <model_dir> -o dog.npz
+    python3 model/latents/export_latents.py <model_dir> -o dog.npz
 
 That writes the encoded frames, the annotated boxes and the decoder output
 for each frame. It is a few hundred kilobytes, so `scp` it and forget it.
@@ -118,7 +118,7 @@ One window:
 
 Every window in one or more exports:
 
-    bash planner/eval_plannability.sh exports/ --window 5 --methods bfs,pddl
+    bash runs/eval/eval_plannability.sh exports/ --window 5 --methods bfs,pddl
     python3 planner/viz_plannability.py eval/planner/exports
 
 ## Output

@@ -54,7 +54,7 @@ vidor_clips() {
 # a malformed annotation or the memory cap all looked the same.
 build_oracle() {
     [ -f "$2" ] && return 0
-    "$PY" planner/deprecated/position_oracle.py "$1" --out "$2" --encoding "$3" \
+    "$PY" planner/position_oracle.py "$1" --out "$2" --encoding "$3" \
         --max-objects 3 --no-fill >/dev/null \
         || echo "  could not build $2" >&2
 }
@@ -112,5 +112,5 @@ if [ ${#ROWS[@]} -eq 0 ]; then
 fi
 
 echo "measuring ${#ROWS[@]} rows and the synthetic positive control"
-"$PY" planner/m6_determinism.py "${ROWS[@]}" --positive-control \
+"$PY" metrics/m6_determinism.py "${ROWS[@]}" --positive-control \
     --out-dir "$OUT"

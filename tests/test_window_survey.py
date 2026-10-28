@@ -29,7 +29,7 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-_VIDEO = str(Path(__file__).resolve().parents[1] / "tools" / "video")
+_VIDEO = str(Path(__file__).resolve().parents[1] / "tools" / "datasets")
 if _VIDEO not in sys.path:
     sys.path.insert(0, _VIDEO)
 
@@ -194,8 +194,8 @@ class TestTheFloorMatchesTheBaselinesFrames(unittest.TestCase):
         survey, so the test states what the two candidates are instead of
         agreeing with whatever the survey happens to do.
         """
-        from planner.common.windows import linear_interp_bboxes
-        from planner.box_geometry import boxes_from_vidvrd, round_trip_error
+        from planner.windows import linear_interp_bboxes
+        from metrics.box_geometry import boxes_from_vidvrd, round_trip_error
 
         boxes, _ = boxes_from_vidvrd(path, num_objs=3, fill=False)
         w = self.WINDOW

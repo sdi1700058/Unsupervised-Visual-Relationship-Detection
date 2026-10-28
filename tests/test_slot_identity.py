@@ -40,11 +40,11 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
-_STUBBED = ("model", "model.util", "model.puzzles", "model.domains",
-            "model.domains.video", "model.util.paths",
-            "model.puzzles.puzzle_labeled_objects", "model.util.cache",
-            "model.util.adjacency",
-            "model.puzzles.puzzle_vidvrd", "PIL", "PIL.Image")
+_STUBBED = ("model", "model.loaders", "model.domains",
+            "model.domains.video", "model.paths",
+            "model.loaders.labeled_objects", "model.loaders.cache",
+            "model.loaders.adjacency",
+            "model.loaders.vidvrd", "PIL", "PIL.Image")
 
 
 def _from_file(name, path):
@@ -67,15 +67,15 @@ class _Img(object):
 def _stub_latplan(tmp):
     import numpy as np
 
-    for name in ("model", "model.util", "model.puzzles",
+    for name in ("model", "model.loaders",
                  "model.domains", "model.domains.video"):
         sys.modules.setdefault(name, types.ModuleType(name))
 
-    paths = types.ModuleType("model.util.paths")
+    paths = types.ModuleType("model.paths")
     paths.DATA_DIR = os.path.join(tmp, "data")
-    sys.modules["model.util.paths"] = paths
+    sys.modules["model.paths"] = paths
 
-    plo = types.ModuleType("model.puzzles.puzzle_labeled_objects")
+    plo = types.ModuleType("model.loaders.labeled_objects")
     plo.PATCH_SIZE = 4
     plo.MAX_OBJECTS = 3
     plo.CANVAS_H, plo.CANVAS_W = 200, 300
@@ -83,7 +83,7 @@ def _stub_latplan(tmp):
     plo._crop_object = lambda img, bbox, patch_size=4: np.full(
         (patch_size, patch_size, 3), 7, dtype=np.uint8)
     plo._scale_bbox_to_canvas = lambda bbox, W, H: tuple(int(v) for v in bbox)
-    sys.modules["model.puzzles.puzzle_labeled_objects"] = plo
+    sys.modules["model.loaders.labeled_objects"] = plo
 
     pil = types.ModuleType("PIL")
     image = types.ModuleType("PIL.Image")
@@ -92,10 +92,10 @@ def _stub_latplan(tmp):
     sys.modules["PIL"] = pil
     sys.modules["PIL.Image"] = image
 
-    _from_file("model.util.cache",
-               os.path.join(ROOT, "model", "util", "cache.py"))
-    _from_file("model.util.adjacency",
-               os.path.join(ROOT, "model", "util", "adjacency.py"))
+    _from_file("model.loaders.cache",
+               os.path.join(ROOT, "model", "loaders", "cache.py"))
+    _from_file("model.loaders.adjacency",
+               os.path.join(ROOT, "model", "loaders", "adjacency.py"))
 
 
 class LoaderCase(unittest.TestCase):
@@ -162,9 +162,9 @@ class VidVRDCase(LoaderCase):
         return (os.path.join(self.tmp, "ann"), os.path.join(self.tmp, "frm"))
 
     def loader(self):
-        return _from_file("model.puzzles.puzzle_vidvrd",
-                          os.path.join(ROOT, "model", "puzzles",
-                                       "puzzle_vidvrd.py"))
+        return _from_file("model.loaders.vidvrd",
+                          os.path.join(ROOT, "model", "loaders",
+                                       "vidvrd.py"))
 
     def load(self, trajectories, **kwargs):
         ann_root, frm_root = self.build_vidvrd(trajectories)

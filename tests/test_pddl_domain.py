@@ -1,4 +1,4 @@
-"""Tests for tools/video/pddl_domain.py.
+"""Tests for tools/datasets/pddl_domain.py.
 
 WHY PROPERTIES AND NOT GOLDEN NUMBERS. The real domain file is data and not
 code, so an assertion of 174 actions would fail on a machine without it.
@@ -15,7 +15,7 @@ import os
 import tempfile
 import unittest
 
-from tools.video import pddl_domain as se
+from tools.datasets import pddl_domain as se
 
 
 DOMAIN = """(define (domain twentybn)

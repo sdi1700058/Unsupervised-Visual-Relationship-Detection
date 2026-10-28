@@ -13,9 +13,9 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
-from planner.deprecated.position_oracle import (  # noqa: E402
+from planner.position_oracle import (  # noqa: E402
     build_export)
-from planner.box_geometry import (          # noqa: E402
+from metrics.box_geometry import (          # noqa: E402
     CANVAS_H, CANVAS_W, bits_per_object, boxes_to_latents,
     dequantise, latents_to_boxes, quantise, round_trip_error)
 
@@ -153,7 +153,7 @@ class TestBuildExport(unittest.TestCase):
         return boxes
 
     def test_export_loads_through_the_common_reader(self):
-        from planner.common.export import load
+        from model.latents.export import load
         boxes = self._moving_box()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "oracle.npz")
@@ -202,7 +202,7 @@ class TestBboxIoU(unittest.TestCase):
     """IoU is reported next to bbox_mse because MSE is not scale-invariant."""
 
     def _iou(self, pred, gt, **kw):
-        from planner.common.metrics import bbox_iou
+        from planner.plan_score import bbox_iou
         return bbox_iou(np.asarray(pred, dtype=float),
                         np.asarray(gt, dtype=float), **kw)
 
@@ -266,7 +266,7 @@ class TestBboxIoU(unittest.TestCase):
             self._iou([[[0.0, 0, 1, 1]]], [[[0.0, 0, 1, 1], [0, 0, 1, 1]]])
 
     def test_score_window_reports_both_metrics(self):
-        from planner.common.metrics import score_window
+        from planner.plan_score import score_window
         pred = np.array([[[0.0, 0, 10, 10]], [[5.0, 0, 15, 10]]])
         gt = np.array([[[0.0, 0, 10, 10]], [[0.0, 0, 10, 10]]])
         base = np.array([[[0.0, 0, 10, 10]], [[0.0, 0, 10, 10]]])
@@ -338,7 +338,7 @@ class TestSynthBboxContract(unittest.TestCase):
         return p
 
     def test_oracle_reads_a_document_with_no_relation_instances(self):
-        from planner.box_geometry import boxes_from_vidvrd
+        from metrics.box_geometry import boxes_from_vidvrd
 
         boxes, meta = boxes_from_vidvrd(self._write(self._doc()),
                                         num_objs=3, fill=False)
@@ -353,7 +353,7 @@ class TestSynthBboxContract(unittest.TestCase):
         these latents "perfect by construction" -- injected a teleport that
         never happened.
         """
-        from planner.box_geometry import boxes_from_vidvrd
+        from metrics.box_geometry import boxes_from_vidvrd
 
         boxes, _ = boxes_from_vidvrd(self._write(self._doc(grow_left=True)),
                                      num_objs=3, fill=False)
@@ -365,7 +365,7 @@ class TestSynthBboxContract(unittest.TestCase):
 
     def test_the_chain_reaches_a_scoreable_export(self):
         """synth_bbox -> boxes_from_vidvrd -> M3, the auto-annotation route."""
-        from planner.box_geometry import boxes_from_vidvrd, boxes_to_latents
+        from metrics.box_geometry import boxes_from_vidvrd, boxes_to_latents
         from planner.plan_validity import motion_model, discrimination
 
         boxes, _ = boxes_from_vidvrd(self._write(self._doc(n=60)),

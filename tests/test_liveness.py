@@ -20,7 +20,7 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 os.pardir))
 
-from planner import liveness
+from metrics import liveness
 
 
 def write_export(path, latents, **extra):

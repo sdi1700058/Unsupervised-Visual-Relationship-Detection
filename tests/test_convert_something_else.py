@@ -1,7 +1,7 @@
 """Something-Else into the VidVRD format the training builder reads.
 
 Plan `notes/plans/2026-10-03-train-the-rungs.md` step 1.2a. The builder
-`model/puzzles/puzzle_vidvrd.py` reads one JSON per clip: `video_id`,
+`model/loaders/vidvrd.py` reads one JSON per clip: `video_id`,
 `width`, `height`, `subject/objects` of `{tid, category}` and `trajectories`,
 one list per frame of `{tid, bbox{xmin, ymin, xmax, ymax}}`, with frame `fid`
 at `<frames>/<video_id>/<fid:06d>.jpg`.
@@ -22,7 +22,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
 _spec = importlib.util.spec_from_file_location(
-    "_convert_se", os.path.join(ROOT, "tools", "video",
+    "_convert_se", os.path.join(ROOT, "tools", "datasets",
                                 "convert_something_else.py"))
 cse = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(cse)

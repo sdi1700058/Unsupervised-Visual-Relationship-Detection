@@ -29,11 +29,11 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
-from planner.box_geometry import (                       # noqa: E402
+from metrics.box_geometry import (                       # noqa: E402
     DEFAULT_BINS_X, DEFAULT_BINS_Y, boxes_from_vidvrd, boxes_to_latents,
     round_trip_error)
-from planner.common.metrics import moving_gt_steps   # noqa: E402
-from planner.common.windows import linear_interp_bboxes  # noqa: E402
+from planner.plan_score import moving_gt_steps   # noqa: E402
+from planner.windows import linear_interp_bboxes  # noqa: E402
 
 WINDOWS = (2, 4, 6, 8, 10, 12, 16, 20, 24, 32)
 

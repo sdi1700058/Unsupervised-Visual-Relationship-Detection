@@ -118,10 +118,10 @@ def shortest_observed_path(latents, init_idx, goal_idx, max_length=None):
 
 
 def main(argv=None):
-    from planner.common.windows import (make_windows,
+    from planner.windows import (make_windows,
                                               extract_intermediate_states,
                                               linear_interp_bboxes)
-    from planner.common.metrics import score_window
+    from planner.plan_score import score_window
 
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("export")

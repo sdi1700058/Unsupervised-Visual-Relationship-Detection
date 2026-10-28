@@ -1,0 +1,584 @@
+#!/usr/bin/env python3
+"""A library for box quantisation and box reading.
+
+`deprecated/position_oracle.py` uses this module to build a planner export
+whose latents are perfect by construction: the evaluation has two halves
+that a single number cannot separate, and when `mse_ratio` comes back bad we
+cannot tell whether FOSAE's relations are poor or whether a classical
+planner simply cannot do frame interpolation from a binary state at all.
+Discretising the annotated bounding boxes losslessly -- no learning, no
+reconstruction error beyond the quantisation step -- answers the second half
+on its own: anything the planner fails to do on these latents, it would
+also fail to do on a perfect model. The resulting `mse_ratio` is the
+**ceiling**: every trained model is measured against it rather than
+against zero.
+
+The encoding is deliberately the same shape the real decoder emits. In
+`common/decode.py` the bbox block of a FOSAE feature vector is four
+one-hot runs — x1 over X bins, y1 over Y bins, then x2 and y2 — with
+X, Y = PICSIZE // 5, i.e. 60 and 40 on the 200x300 canvas. This module
+writes exactly that, so the oracle built from it is an oracle *of the
+representation the model is actually trying to learn*, not of some easier
+one.
+
+One-hot rather than a binary or Gray code because Hamming distance has to
+mean something: moving one coordinate by one bin flips exactly two bits.
+A binary code would flip up to log2(bins) bits for the same motion and the
+mined action set would be far larger than the real transition structure.
+
+This module has no command line of its own. `deprecated/position_oracle.py`
+writes an ordinary export from these functions, so `plan_video.py`,
+`harness.py` and all three planning methods consume it unchanged.
+"""
+
+import numpy as np
+
+# The canvas the loaders rasterise onto (puzzle_labeled_objects.CANVAS_*).
+# Duplicated as plain numbers so this module never imports keras.
+CANVAS_H = 200
+CANVAS_W = 300
+
+# The real decoder's bbox resolution: PICSIZE // 5.
+DEFAULT_BINS_X = CANVAS_W // 5
+DEFAULT_BINS_Y = CANVAS_H // 5
+
+
+def quantise(values, n_bins, extent):
+    """Map pixel coordinates to bin indices in [0, n_bins).
+
+    `extent` is the canvas size along that axis. The top edge is inclusive,
+    so a coordinate sitting exactly on the boundary lands in the last bin
+    rather than out of range.
+    """
+    values = np.asarray(values, dtype=np.float64)
+    idx = np.floor(values / float(extent) * n_bins)
+    return np.clip(idx, 0, n_bins - 1).astype(np.int64)
+
+
+def dequantise(idx, n_bins, extent):
+    """Map bin indices back to pixels, exactly as `common/decode.py` does.
+
+    The real decoder takes the bin's **left edge**::
+
+        x1 = np.argmax(x1_oh, axis=-1) * (canvas_w / X)     # decode.py:79
+
+    This used to return the bin *centre*, `(idx + 0.5) * extent / n_bins`.
+    That is the better estimator in isolation — it is the minimum-error
+    dequantiser — but it is not what any trained model's decoder emits, and
+    the oracle exists to be the ceiling those models are measured against.
+    The gap was not small: measured 2026-08-30 on 200 random two-object
+    frames, the floor was **8.37 under bin centres and 34.11 under the
+    decoder's left edges**, a factor of 4.1. Every "the planner is at the
+    floor" statement was therefore comparing against a floor no trained model
+    could reach, for a reason unrelated to learning.
+    """
+    idx = np.asarray(idx, dtype=np.float64)
+    return idx * (float(extent) / n_bins)
+
+
+def _code_width(n_bins):
+    """Bits needed to hold a bin index in a plain binary code.
+
+    `boxes_to_latents` writes `idx + 1`, so that bin 0 is not the all-zero
+    word and stays distinguishable from an absent slot. The field therefore
+    has to hold `n_bins`, not `n_bins - 1`, and sizing it for `n_bins` alone
+    overflowed at every power of two. Measured 2026-08-30: at `bins=8` a box
+    in the top bin drove all four runs to zero, the object block went
+    all-zero, and `latents_to_boxes` read the object as **absent** — the
+    oracle deleted an object that was there. At `bins=32` the box inverted,
+    with `x2` decoding to 4.7 px instead of 296.
+    """
+    return max(1, int(np.ceil(np.log2(n_bins + 1))))
+
+
+def bits_per_object(bins_x, bins_y, encoding="onehot"):
+    """Latent bits one object occupies under the chosen positional code.
+
+    `onehot` matches `common/decode.py`: four runs, x1 | y1 | x2 | y2, one bit
+    per bin. `binary` writes each bin index as a plain binary number, which is
+    far narrower and — measured in `EVAL.md` — far better behaved as an action
+    model: one-hot gives "move one bin" a different effect at all 31 start
+    positions, binary gives it 5.
+    """
+    if encoding == "onehot":
+        return 2 * bins_x + 2 * bins_y
+    if encoding == "binary":
+        return 2 * _code_width(bins_x) + 2 * _code_width(bins_y)
+    raise ValueError("unknown encoding %r; use onehot or binary" % encoding)
+
+
+def boxes_to_latents(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
+                     width=CANVAS_W, height=CANVAS_H, encoding="onehot"):
+    """Encode (N, num_objs, 4) pixel boxes as (N, num_objs*bits) binary.
+
+    Each object contributes four one-hot runs laid out x1 | y1 | x2 | y2,
+    matching `common/decode.py`.
+
+    A padded slot — an all-zero box, which is how the loaders mark "no
+    object here" — encodes to an all-zero block rather than to bin 0 of
+    every coordinate. Otherwise the oracle would invent an object in the
+    top-left corner of every frame and the planner would have to move it.
+    """
+    boxes = np.asarray(boxes, dtype=np.float64)
+    if boxes.ndim != 3 or boxes.shape[-1] != 4:
+        raise ValueError(f"boxes must be (N, num_objs, 4); got {boxes.shape}")
+
+    n_states, n_objs, _ = boxes.shape
+    per_obj = bits_per_object(bins_x, bins_y, encoding)
+    out = np.zeros((n_states, n_objs * per_obj), dtype=np.int8)
+
+    occupied = np.abs(boxes).sum(axis=-1) > 0        # (N, num_objs)
+
+    runs = (
+        (0, bins_x, width),                          # x1
+        (1, bins_y, height),                         # y1
+        (2, bins_x, width),                          # x2
+        (3, bins_y, height),                         # y2
+    )
+
+    for o in range(n_objs):
+        base = o * per_obj
+        offset = 0
+        rows = np.nonzero(occupied[:, o])[0]
+        for coord, n_bins, extent in runs:
+            idx = quantise(boxes[:, o, coord], n_bins, extent)
+            if encoding == "onehot":
+                out[rows, base + offset + idx[rows]] = 1
+                offset += n_bins
+            else:
+                width_bits = _code_width(n_bins)
+                # +1 so that bin 0 is not the all-zero word, which would be
+                # indistinguishable from an absent slot.
+                for bit in range(width_bits):
+                    set_rows = rows[(((idx[rows] + 1) >> bit) & 1) == 1]
+                    out[set_rows, base + offset + bit] = 1
+                offset += width_bits
+    return out
+
+
+def latents_to_boxes(latents, n_objs, bins_x=DEFAULT_BINS_X,
+                     bins_y=DEFAULT_BINS_Y, width=CANVAS_W, height=CANVAS_H,
+                     encoding="onehot"):
+    """Decode binary latents back to (N, num_objs, 4) pixel boxes.
+
+    argmax per run, exactly as `common/decode.py` does, so a run with no
+    bit set decodes to bin 0 — and an all-zero object block therefore comes
+    back as an all-zero box, round-tripping the padding.
+    """
+    latents = np.asarray(latents)
+    if latents.ndim == 1:
+        latents = latents[None, :]
+    n_states = latents.shape[0]
+    per_obj = bits_per_object(bins_x, bins_y, encoding)
+    expected = n_objs * per_obj
+    if latents.shape[1] != expected:
+        raise ValueError(
+            f"latent width {latents.shape[1]} does not match {n_objs} objects "
+            f"at {per_obj} bits each ({expected})")
+
+    boxes = np.zeros((n_states, n_objs, 4), dtype=np.float32)
+    runs = (
+        (0, bins_x, width),
+        (1, bins_y, height),
+        (2, bins_x, width),
+        (3, bins_y, height),
+    )
+    for o in range(n_objs):
+        base = o * per_obj
+        block = latents[:, base:base + per_obj]
+        empty = block.sum(axis=1) == 0
+        offset = 0
+        for coord, n_bins, extent in runs:
+            if encoding == "onehot":
+                run = block[:, offset:offset + n_bins]
+                idx = run.argmax(axis=1)
+                offset += n_bins
+            else:
+                width_bits = _code_width(n_bins)
+                run = block[:, offset:offset + width_bits]
+                word = np.zeros(n_states, dtype=np.int64)
+                for bit in range(width_bits):
+                    word |= (run[:, bit].astype(np.int64) << bit)
+                idx = np.clip(word - 1, 0, n_bins - 1)
+                offset += width_bits
+            boxes[:, o, coord] = dequantise(idx, n_bins, extent)
+        boxes[empty, o, :] = 0.0
+    return boxes
+
+
+def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
+                     width=CANVAS_W, height=CANVAS_H, encoding="onehot"):
+    """Mean squared pixel error introduced by the discretisation alone.
+
+    This is the floor the oracle cannot go below, and it is worth reporting
+    next to the planner's error: if the two are close, the planner is doing
+    as well as this representation permits.
+
+    Averaged over **present** object-frames only, which is the denominator
+    `bbox_mse` uses. Averaging over padding slots too made the two numbers
+    incomparable while the docstring invited exactly that comparison: with
+    `--max-objects 3` and one real object, the printed floor was a third of
+    the truth (8.11 became 2.70).
+
+    **The caller chooses the frames, and the choice is not cosmetic.** This
+    averages over whatever is handed to it, so a floor taken over one window's
+    intermediate frames and a floor taken over a whole clip are different
+    numbers, and any ratio built on them is a different number too. Both are
+    in circulation: `common/harness.py` takes the window, while the paired
+    figure of 2026-08-31 took the whole clip and reused that one value for
+    every window of the clip. Measured over 19 VidVRD clips at window 16, the
+    median oracle ratio is **1.70 per window against 1.56 per clip** — the same
+    runs, the same code here, a 9% gap from the frame set alone. Whichever is
+    meant has to be said out loud; `planner/p1_floor.py` writes both,
+    under names that cannot be mistaken for each other.
+    """
+    boxes = np.asarray(boxes, dtype=np.float64)
+    z = boxes_to_latents(boxes, bins_x, bins_y, width, height,
+                         encoding=encoding)
+    back = latents_to_boxes(z, boxes.shape[1], bins_x, bins_y, width, height,
+                            encoding=encoding)
+    d = back.astype(np.float64) - boxes
+    present = np.abs(boxes).sum(axis=-1) > 0
+    n = int(present.sum())
+    if not n:
+        return None
+    return float((d * d).sum(axis=-1)[present].sum() / n)
+
+
+def load_canvas_scaler():
+    """Return `(_scale_bbox_to_canvas, CANVAS_W, CANVAS_H)` from the loader.
+
+    `puzzle_labeled_objects` needs only os, json, numpy and PIL, but importing
+    it through the package runs `model/__init__.py`, which pulls in
+    TensorFlow. That blocks every environment without the training stack —
+    including the one this module's own docstring promises to work in.
+
+    So the package import is tried first, and on failure the module is loaded
+    directly from its file. Either way the **same function** is imported, never
+    copied, which SPEC V5 requires: the canvas geometry must have one
+    definition.
+    """
+    try:
+        from model.loaders.labeled_objects import (
+            _scale_bbox_to_canvas, CANVAS_W, CANVAS_H)
+        return _scale_bbox_to_canvas, CANVAS_W, CANVAS_H
+    except ImportError:
+        pass
+
+    import importlib.util
+    import os
+
+    path = os.path.join(
+        os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__))),
+        "model", "loaders", "labeled_objects.py")
+    if not os.path.exists(path):
+        raise SystemExit(
+            "cannot find model/loaders/labeled_objects.py, which "
+            "defines the canvas geometry. Run from the repository root.")
+
+    spec = importlib.util.spec_from_file_location("_plo_direct", path)
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except ImportError as exc:
+        raise SystemExit(
+            "reading VidVRD annotations needs numpy and pillow, and one is "
+            "missing (%s). The rest of box_geometry.py needs only numpy." % exc)
+    return (module._scale_bbox_to_canvas, module.CANVAS_W, module.CANVAS_H)
+
+
+def boxes_from_something_else_frames(frames, width, height, num_objs=3):
+    """Convert one Something-Else video's annotations into canvas boxes.
+
+    Something-Else adds per-frame boxes to Something-Something v2: 180,049
+    videos, 8.18M annotated frames, MIT licensed, and every clip an instance of
+    a named action (`DATASETS_CONSIDERED.md`). Each label carries `box2d` with
+    `x1, y1, x2, y2` and a `standard_category` that is a **per-video slot id** —
+    `0000`, `0001`, `hand`.
+
+    Columns are ordered by that slot id, not by list position. The order inside
+    a frame's `labels` is not stable, so keying on position would let a slot
+    swap between frames and silently corrupt every trajectory.
+
+    A slot absent from a frame stays all-zero, which the metrics read as "not
+    in this frame" rather than "at the origin". That case is normal here: on
+    the median sample clip the least-present slot covers only 78% of frames.
+
+    Returns (boxes, meta) with boxes shaped (n_frames, num_objs, 4).
+    """
+    import numpy as np
+
+    scale, canvas_w, canvas_h = load_canvas_scaler()
+
+    slots = []
+    for frame in frames:
+        for label in frame.get("labels") or []:
+            cat = label.get("standard_category")
+            if cat is not None and cat not in slots:
+                slots.append(cat)
+    # Objects first in id order, hand last: the hand is a participant in nearly
+    # every clip, so putting it last keeps object slots stable as num_objs
+    # varies.
+    slots.sort(key=lambda c: (c == "hand", c))
+    slots = slots[:num_objs]
+
+    boxes = np.zeros((len(frames), num_objs, 4), dtype=np.float32)
+    absent = 0
+    for i, frame in enumerate(frames):
+        present = {}
+        for label in frame.get("labels") or []:
+            cat = label.get("standard_category")
+            if cat in slots:
+                b = label["box2d"]
+                present[cat] = scale([b["x1"], b["y1"], b["x2"], b["y2"]],
+                                     width, height)
+        for j, slot in enumerate(slots):
+            if slot in present:
+                boxes[i, j] = present[slot]
+            else:
+                absent += 1
+
+    return boxes, {"frames": len(frames), "slots": slots, "absent": absent,
+                   "source_size": (width, height),
+                   "canvas": (canvas_w, canvas_h)}
+
+
+def boxes_from_something_else(path, video_id=None, num_objs=3,
+                              width=None, height=None):
+    """Read one video out of a Something-Else annotation file.
+
+    The released annotations are a dict mapping video id to a list of
+    per-frame records. Something-Something v2 frames are 240 pixels high with
+    a variable width; the sample records carry no size, so `width`/`height`
+    default to the 427x240 that the release documents.
+    """
+    import json
+
+    with open(path) as fh:
+        data = json.load(fh)
+    if video_id is None:
+        video_id = sorted(data)[0]
+    if video_id not in data:
+        raise SystemExit("video %s is not in %s (it holds %d videos)"
+                         % (video_id, path, len(data)))
+
+    boxes, meta = boxes_from_something_else_frames(
+        data[video_id], width or 427, height or 240, num_objs=num_objs)
+    meta["video_id"] = video_id
+    return boxes, meta
+
+
+def ag_runs_within(frames, max_gap):
+    """Maximal runs of frame numbers whose consecutive gaps are <= max_gap.
+
+    `tools/datasets/screen_actiongenome.py` has a near-twin returning run
+    *lengths*, for the dataset screen. This one returns the frames themselves,
+    which the loader needs. They stay separate on purpose: this module imports
+    nothing beyond numpy so it runs on the cluster's Python 3.6 venv, while the
+    screen reads the dataset through pickle.
+    """
+    if not frames:
+        return []
+    frames = sorted(frames)
+    out, start = [], 0
+    for i in range(len(frames) - 1):
+        if frames[i + 1] - frames[i] > max_gap:
+            out.append(frames[start:i + 1])
+            start = i + 1
+    out.append(frames[start:])
+    return out
+
+
+def boxes_from_actiongenome_clip(objects_by_frame, person_by_frame,
+                                 num_objs=3, max_gap=6):
+    """One Action Genome clip's densest run, as canvas boxes.
+
+    Action Genome annotates a fraction of frames, so a clip is usable only
+    where its annotated frames sit close enough together to read as
+    consecutive states. The **longest run** within `max_gap` is taken and the
+    rest of the clip is discarded, which is why the dataset yields 553 usable
+    clips rather than either 9,601 or none.
+
+    **The person goes in the last slot**, for the same reason Something-Else
+    puts the hand last: the actor appears in nearly every frame, so keeping it
+    at the end leaves the object slots stable as `num_objs` varies.
+
+    **The two annotation files use different box conventions.** Object records
+    are `xywh`; person records are `xyxy`, and say so in their `bbox_mode`.
+    Measured on 7,841 records: 100% are consistent with `xywh` and only 19%
+    with `xyxy`, so reading the objects as corner pairs would compress every
+    object box and corrupt every trajectory without raising anything.
+
+    The frame size comes from `person_bbox`, which is the only place Action
+    Genome records it. The object records carry none, and they describe the same
+    frame, so they share it.
+
+    A slot absent from a frame stays all-zero, which the metrics read as "not in
+    this frame" rather than "at the origin" (`SPEC.md` V30).
+
+    Returns (boxes, meta) with boxes shaped (n_frames, num_objs, 4).
+    """
+    import numpy as np
+
+    scale, canvas_w, canvas_h = load_canvas_scaler()
+
+    shared = sorted(set(objects_by_frame) & set(person_by_frame))
+    runs = ag_runs_within(shared, max_gap)
+    frames = max(runs, key=len) if runs else []
+    if not frames:
+        return np.zeros((0, num_objs, 4), dtype=np.float32), {
+            "frames": 0, "slots": [], "absent": 0, "run_gap": max_gap}
+
+    # Slots are chosen from the run, by how often each class is visible, so a
+    # class that appears once does not displace one present throughout.
+    seen = {}
+    for f in frames:
+        for rec in objects_by_frame[f]:
+            if rec.get("visible") and rec.get("bbox"):
+                seen[rec["class"]] = seen.get(rec["class"], 0) + 1
+    classes = sorted(seen, key=lambda c: (-seen[c], c))[:max(num_objs - 1, 0)]
+    slots = sorted(classes) + ["person"]
+    slots = slots[:num_objs]
+
+    size = person_by_frame[frames[0]].get("bbox_size")
+    width, height = size if size else (480, 270)
+
+    boxes = np.zeros((len(frames), num_objs, 4), dtype=np.float32)
+    absent = 0
+    for i, f in enumerate(frames):
+        present = {}
+        for rec in objects_by_frame[f]:
+            if rec.get("visible") and rec.get("bbox") \
+                    and rec["class"] in slots:
+                x1, y1, w, h = rec["bbox"]
+                present[rec["class"]] = scale([x1, y1, x1 + w, y1 + h],
+                                              width, height)
+        pbox = person_by_frame[f].get("bbox")
+        if pbox is not None and len(pbox):
+            present["person"] = scale(list(pbox[0]), width, height)
+        for j, slot in enumerate(slots):
+            if slot in present:
+                boxes[i, j] = present[slot]
+            else:
+                absent += 1
+
+    return boxes, {"frames": len(frames), "slots": slots, "absent": absent,
+                   "source_size": (width, height),
+                   "canvas": (canvas_w, canvas_h),
+                   "run_gap": max_gap,
+                   "first_frame": frames[0], "last_frame": frames[-1]}
+
+
+def boxes_from_vidvrd(ann_path, num_objs=3, fill=True):
+    """Read one VidVRD annotation JSON into canvas-space boxes.
+
+    Lets the ceiling be measured on real trajectories rather than on a
+    synthetic curve, without needing the extracted frames, keras, or the
+    cluster. Only the annotation JSON is read.
+
+    The canvas scaling comes from `puzzle_labeled_objects` rather than being
+    copied here (SPEC V5). That import pulls the latplan package chain, so
+    this one function needs the project environment even though the rest of
+    the module needs only numpy.
+
+    `fill` carries the last non-empty frame forward through frames the
+    dataset left unannotated, matching `--fill-annotations` in the loader.
+
+    Returns (boxes, meta) with boxes shaped (n_frames, num_objs, 4).
+    """
+    import json
+
+    _scale_bbox_to_canvas, W, H = load_canvas_scaler()
+
+    with open(ann_path) as f:
+        ann = json.load(f)
+
+    src_w, src_h = ann["width"], ann["height"]
+    trajectories = ann.get("trajectories", [])
+
+    # Slots are keyed on `tid`, the annotation's own track id, exactly as the
+    # Something-Else reader keys on `standard_category`.
+    #
+    # This used to sort by box area per frame and call that "stable frame to
+    # frame". It is not. When two objects' areas cross, their slots swap, and
+    # the oracle's own docstring calls these latents "perfect by
+    # construction". Measured 2026-08-30 on a synthetic pair: two objects held
+    # at fixed positions, one shrinking past the other, produced slot 0
+    # teleporting from x=0 to x=75 at the crossing frame. A newly-appearing
+    # larger object could also evict an existing track from the clip
+    # entirely. Both inject fabricated transitions into the action set and
+    # inflate the baseline.
+    #
+    # Which tracks get the slots is decided once, over the whole clip, by
+    # total annotated area — so the choice is still "the most prominent
+    # objects", but it no longer changes from frame to frame.
+    def area(o):
+        b = o["bbox"]
+        return float((b["xmax"] - b["xmin"]) * (b["ymax"] - b["ymin"]))
+
+    totals = {}
+    for frame in trajectories:
+        for o in (frame or []):
+            tid = o.get("tid")
+            if tid is None:
+                continue
+            totals[tid] = totals.get(tid, 0.0) + area(o)
+
+    if not totals:
+        raise SystemExit(f"{ann_path}: no trajectory carries a tid")
+
+    keep = sorted(totals, key=lambda t: totals[t], reverse=True)[:num_objs]
+    slot_of = {tid: i for i, tid in enumerate(keep)}
+
+    rows, last = [], None
+    for frame in trajectories:
+        objs = frame if frame else None
+        if objs is None:
+            if fill and last is not None:
+                objs = last
+            else:
+                continue
+        else:
+            last = objs
+
+        row = np.zeros((num_objs, 4), dtype=np.float32)
+        for o in objs:
+            i = slot_of.get(o.get("tid"))
+            if i is None:
+                continue
+            b = o["bbox"]
+            row[i] = _scale_bbox_to_canvas(
+                (b["xmin"], b["ymin"], b["xmax"], b["ymax"]), src_w, src_h)
+        rows.append(row)
+
+    if not rows:
+        raise SystemExit(f"{ann_path}: no annotated frames")
+
+    meta = {"video_id": ann.get("video_id"), "fps": ann.get("fps"),
+            "frames": len(rows), "source_size": (src_w, src_h)}
+    return np.stack(rows), meta
+
+
+def _load_boxes(path):
+    """Return (gt_boxes, frame_ids) from either an export or a dataset npz."""
+    # allow_pickle is needed only for frame_ids, which numpy stores as an
+    # object array. The file is one we baked ourselves under data/npz or
+    # eval/exports, never a downloaded artefact.
+    data = np.load(path, allow_pickle=True)
+    files = set(data.files)
+
+    if "gt_boxes" in files:                       # already a planner export
+        boxes = data["gt_boxes"]
+        frame_ids = data["frame_ids"] if "frame_ids" in files else None
+    elif "bboxes" in files:                       # a baked dataset npz
+        boxes = data["bboxes"]
+        frame_ids = data["frame_ids"] if "frame_ids" in files else None
+    else:
+        raise SystemExit(
+            f"{path}: expected a planner export (gt_boxes) or a baked dataset "
+            f"npz (bboxes); found {sorted(files)}")
+
+    if frame_ids is not None:
+        frame_ids = np.asarray([str(f) for f in frame_ids.tolist()])
+    return np.asarray(boxes, dtype=np.float32), frame_ids

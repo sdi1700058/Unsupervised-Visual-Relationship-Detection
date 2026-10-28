@@ -35,16 +35,16 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 sys.path.insert(0, ROOT)
 
-from planner import box_geometry as oracle
+from metrics import box_geometry as oracle
 
-_STUBBED = ("model", "model.util", "model.puzzles",
-            "model.puzzles.puzzle_labeled_objects",
-            "planner.common.decode")
+_STUBBED = ("model", "model.loaders",
+            "model.loaders.labeled_objects",
+            "model.latents.decode")
 
 
 def _real_picsize():
     """`PICSIZE` from the real loader, read from file so TensorFlow stays out."""
-    path = os.path.join(ROOT, "model", "puzzles", "puzzle_labeled_objects.py")
+    path = os.path.join(ROOT, "model", "loaders", "labeled_objects.py")
     spec = importlib.util.spec_from_file_location("_plo_for_decode", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -57,13 +57,13 @@ class TestTheContract(unittest.TestCase):
         self._saved = dict((k, sys.modules.get(k)) for k in _STUBBED)
         picsize = _real_picsize()
 
-        for name in ("model", "model.util", "model.puzzles"):
+        for name in ("model", "model.loaders"):
             sys.modules.setdefault(name, types.ModuleType(name))
-        plo = types.ModuleType("model.puzzles.puzzle_labeled_objects")
+        plo = types.ModuleType("model.loaders.labeled_objects")
         plo.PICSIZE = picsize
-        sys.modules["model.puzzles.puzzle_labeled_objects"] = plo
+        sys.modules["model.loaders.labeled_objects"] = plo
 
-        path = os.path.join(ROOT, "planner", "common", "decode.py")
+        path = os.path.join(ROOT, "model", "latents", "decode.py")
         spec = importlib.util.spec_from_file_location("_decode_direct", path)
         self.decode = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(self.decode)

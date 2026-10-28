@@ -29,7 +29,7 @@ can be placed beside a published row.
 
 ## The protocol, and where it came from
 
-`planner/m7_map.py` is a port of the dataset author's own toolkit:
+`metrics/m7_map.py` is a port of the dataset author's own toolkit:
 
 - <https://github.com/xdshang/VidVRD-helper/blob/master/evaluation/visual_relation_detection.py>
 - <https://github.com/xdshang/VidVRD-helper/blob/master/evaluation/common.py>

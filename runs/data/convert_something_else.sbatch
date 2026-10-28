@@ -32,7 +32,7 @@ cd "${ROOT}"
 module load system
 module load ffmpeg/7.1
 RAW=data/video/something_else/raw
-.venv-local/bin/python tools/video/convert_something_else.py \
+.venv-local/bin/python tools/datasets/convert_something_else.py \
     --boxes "${RAW}/bounding_box_smthsmth_part2.json" \
             "${RAW}/bounding_box_smthsmth_part3.json" \
             "${RAW}/bounding_box_smthsmth_part4.json" \

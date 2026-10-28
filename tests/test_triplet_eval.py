@@ -23,7 +23,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
-from planner import triplet_eval as te    # noqa: E402
+from metrics import triplet_eval as te    # noqa: E402
 
 HAVE_OFFICIAL = os.path.isfile(os.path.join(
     te.EVAL_SRC, te.OFFICIAL["dir"], "evaluation",

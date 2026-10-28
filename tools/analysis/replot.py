@@ -34,7 +34,7 @@ setattr(keras.optimizers, "adabound", AdaBound)
 
 import model
 import model.model
-from model.puzzles.util import preprocess
+from model.loaders.image import preprocess
 import model.train.strips as _strips
 # plot_autoencoding_image short-circuits unless `strips.mode` contains "plot"
 # (upstream gating). Force it on so this replot script does its job.
@@ -49,9 +49,9 @@ def _auto_domain(model_dir):
 
 
 def _load_video(model_dir, domain, num):
-    from model.puzzles.puzzle_vidvrd import build_dataset
-    from model.puzzles.puzzle_labeled_objects import PICSIZE
-    from model.util.cache import load_cached
+    from model.loaders.vidvrd import build_dataset
+    from model.loaders.labeled_objects import PICSIZE
+    from model.loaders.cache import load_cached
 
     manifest = json.load(open(os.path.join(model_dir, "loaded_videos.json")))
     cat       = manifest.get("category_filter")
@@ -91,7 +91,7 @@ def _load_video(model_dir, domain, num):
     rng = np.random.RandomState(0)
     n_train = None
     if split_info.get("test_clips"):
-        from model.util.split import frames_of
+        from model.loaders.split import frames_of
         test_pool = frames_of(frame_ids, split_info["test_clips"])
         held = set(frames_of(frame_ids, list(split_info.get("val_clips") or [])
                              + list(split_info["test_clips"])))
@@ -120,7 +120,7 @@ def _load_video(model_dir, domain, num):
 
 
 def _load_blocks(track, num):
-    from model.util.paths import find_dataset
+    from model.paths import find_dataset
     path = find_dataset(track + ".npz")
     with np.load(path) as data:
         images = data["images"].astype(np.float32) / 256
@@ -143,9 +143,9 @@ def _load_blocks(track, num):
 
 
 def _load_puzzle(ptype, width, height, num):
-    from model.util.paths import find_dataset
+    from model.paths import find_dataset
     import importlib
-    p = importlib.import_module(f"model.puzzles.puzzle_{ptype}")
+    p = importlib.import_module(f"model.loaders.{ptype}")
     p.setup()
     path = find_dataset(f"puzzle-{ptype}-{width}-{height}.npz")
     with np.load(path) as data:

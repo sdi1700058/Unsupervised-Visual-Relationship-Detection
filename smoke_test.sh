@@ -27,13 +27,13 @@ python3 -c "import model; import model.model; print('  model:', model.__file__)"
 python3 -c "from model import config_cpu" \
     && ok "config_cpu import" || fail "config_cpu import"
 
-python3 -c "from model.util.paths import DATA_DIR, OUT_DIR; print('  DATA_DIR:', DATA_DIR)" \
+python3 -c "from model.paths import DATA_DIR, OUT_DIR; print('  DATA_DIR:', DATA_DIR)" \
     && ok "paths import" || fail "paths import"
 
-python3 -c "from model.puzzles.puzzle_vidvrd import PATCH_SIZE, MAX_OBJECTS, PICSIZE" \
+python3 -c "from model.loaders.vidvrd import PATCH_SIZE, MAX_OBJECTS, PICSIZE" \
     && ok "puzzle_vidvrd import" || fail "puzzle_vidvrd import"
 
-python3 -c "from model.util.cache import npz_cache_path" \
+python3 -c "from model.loaders.cache import npz_cache_path" \
     && ok "cache import" || fail "cache import"
 
 echo ""

@@ -154,7 +154,7 @@ run crashed this workstation on 2026-08-28.
 To rerun one row by hand, on an export whose encoder did not collapse:
 
 ```bash
-.venv-local/bin/python planner/m6_determinism.py \
+.venv-local/bin/python metrics/m6_determinism.py \
     eval/exports/U40_A2_P10_catH14-winnable88-30fps-mo3-nofill-p8_fps30_0cab2f.npz \
     --out-dir eval/m6
 ```
@@ -183,7 +183,7 @@ guard 0 rather than being replaced, because a table that quietly dropped them
 would hide that half the trained exports on disk carry no state at all.
 
 The two oracle codes are in the table as an **anchor for the metric itself**.
-`planner/box_geometry.py` states that one-hot gives the motion "one bin to the
+`metrics/box_geometry.py` states that one-hot gives the motion "one bin to the
 right" a different effect at every start position and that the binary code
 gives it five. That is an M6 statement about a code nobody trained, and its
 value is known from the code's construction. If M6 does not rank the binary
@@ -206,7 +206,7 @@ Nothing here needs a GPU and nothing writes into `git`.
 
 ## What each outcome means — decided before the run
 
-Every threshold below is also a constant in `planner/m6_determinism.py`.
+Every threshold below is also a constant in `metrics/m6_determinism.py`.
 Moving one after reading the data turns the measurement into a search for a
 story.
 

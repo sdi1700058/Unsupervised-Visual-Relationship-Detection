@@ -96,9 +96,9 @@ def slot_of_tid(doc, num_objs):
     into whichever slot happens to be free.
 
     **THE KEY IS THE BAKE'S AND MUST STAY THAT WAY.**
-    `model/puzzles/puzzle_vidvrd.py:_slot_order_by_tid` decides which object
+    `model/loaders/vidvrd.py:_slot_order_by_tid` decides which object
     FOSAE sees in slot *i*, so it alone defines what a slot means, and
-    `planner/box_geometry.py` and `planner/predicate_probe.py`
+    `metrics/box_geometry.py` and `metrics/predicate_probe.py`
     follow it. This function ranked frame count first from 2026-09-07 until
     2026-10-11. The bake's key went in at 10:50:06 that day and this one at
     11:45:14 with the two terms the other way round, which reads as a slip

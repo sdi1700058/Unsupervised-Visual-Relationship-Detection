@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 class TestWindows(unittest.TestCase):
 
     def test_window_covers_the_frames_between_the_endpoints(self):
-        from planner.common.windows import make_windows
+        from planner.windows import make_windows
 
         windows = make_windows(n_frames=10, window_frames=5, stride=1)
         self.assertEqual(len(windows), 6)
@@ -42,7 +42,7 @@ class TestWindows(unittest.TestCase):
         self.assertEqual(first["plan_length"], 4)
 
     def test_stride_thins_the_windows(self):
-        from planner.common.windows import make_windows
+        from planner.windows import make_windows
 
         dense = make_windows(n_frames=20, window_frames=5, stride=1)
         sparse = make_windows(n_frames=20, window_frames=5, stride=4)
@@ -51,14 +51,14 @@ class TestWindows(unittest.TestCase):
         self.assertEqual([w["init"] for w in sparse], [0, 4, 8, 12])
 
     def test_window_smaller_than_three_frames_is_rejected(self):
-        from planner.common.windows import make_windows
+        from planner.windows import make_windows
 
         # window_frames=2 leaves nothing between the endpoints to score.
         with self.assertRaises(ValueError):
             make_windows(n_frames=10, window_frames=2)
 
     def test_trace_of_the_right_length_passes_through_untouched(self):
-        from planner.common.windows import extract_intermediate_states
+        from planner.windows import extract_intermediate_states
 
         trace = np.arange(5 * 4).reshape(5, 4)
         mid, exact = extract_intermediate_states(trace, expected_count=3)
@@ -66,7 +66,7 @@ class TestWindows(unittest.TestCase):
         np.testing.assert_array_equal(mid, trace[1:-1])
 
     def test_longer_trace_is_resampled_and_flagged(self):
-        from planner.common.windows import extract_intermediate_states
+        from planner.windows import extract_intermediate_states
 
         trace = np.arange(9 * 4).reshape(9, 4)
         mid, exact = extract_intermediate_states(trace, expected_count=3)
@@ -74,7 +74,7 @@ class TestWindows(unittest.TestCase):
         self.assertEqual(len(mid), 3)
 
     def test_plan_that_skips_straight_to_the_goal_repeats_the_init(self):
-        from planner.common.windows import extract_intermediate_states
+        from planner.windows import extract_intermediate_states
 
         trace = np.array([[0, 0], [1, 1]])
         mid, exact = extract_intermediate_states(trace, expected_count=2)
@@ -82,7 +82,7 @@ class TestWindows(unittest.TestCase):
         self.assertEqual(len(mid), 2)
 
     def test_linear_baseline_sits_between_the_endpoints(self):
-        from planner.common.windows import linear_interp_bboxes
+        from planner.windows import linear_interp_bboxes
 
         init = np.array([[0.0, 0.0, 10.0, 10.0]])
         goal = np.array([[100.0, 100.0, 110.0, 110.0]])
@@ -202,7 +202,7 @@ class TestBfs(unittest.TestCase):
         annotations, not from the latents: a model can change its code while
         the objects stand still.
         """
-        from planner.common.metrics import moving_gt_steps
+        from planner.plan_score import moving_gt_steps
 
         boxes = np.array([
             [[0., 0., 10., 10.]],
@@ -216,7 +216,7 @@ class TestBfs(unittest.TestCase):
         self.assertEqual(moving_gt_steps(boxes[:1]), 0)
 
     def test_moving_gt_steps_ignores_movement_below_the_tolerance(self):
-        from planner.common.metrics import moving_gt_steps
+        from planner.plan_score import moving_gt_steps
 
         boxes = np.array([
             [[0., 0., 10., 10.]],
@@ -234,7 +234,7 @@ class TestBfs(unittest.TestCase):
         observed latent. If Hamming distance tracks position that fallback is
         harmless; if it does not, the decoded box is arbitrary.
         """
-        from planner.common.metrics import latent_geometry
+        from planner.plan_score import latent_geometry
 
         # A unary code: frame i has i bits set, and its box sits at x = i.
         n = 8
@@ -249,7 +249,7 @@ class TestBfs(unittest.TestCase):
         self.assertLess(g["nearest_box_error"], 2.0)
 
     def test_latent_geometry_penalises_a_shuffled_code(self):
-        from planner.common.metrics import latent_geometry
+        from planner.plan_score import latent_geometry
 
         n = 8
         # Same boxes, but the codes are assigned in an order unrelated to x.
@@ -262,7 +262,7 @@ class TestBfs(unittest.TestCase):
         self.assertLess(shuffled["spearman"], 0.6)
 
     def test_latent_geometry_handles_a_degenerate_code(self):
-        from planner.common.metrics import latent_geometry
+        from planner.plan_score import latent_geometry
 
         # Every frame encodes identically. No pair carries information, so the
         # correlation is undefined rather than zero.
@@ -280,7 +280,7 @@ class TestBfs(unittest.TestCase):
         frames from filled ones, and measure motion only across annotated
         pairs.
         """
-        from tools.video.screen_vidvrd import clip_stats
+        from tools.datasets.screen_vidvrd import clip_stats
 
         # Six frames; frames 2 and 3 carry no annotation at all.
         def box(x):
@@ -299,7 +299,7 @@ class TestBfs(unittest.TestCase):
         self.assertAlmostEqual(s["mean_disp"], 15.0)
 
     def test_clip_stats_on_a_fully_annotated_clip_reports_no_fill(self):
-        from tools.video.screen_vidvrd import clip_stats
+        from tools.datasets.screen_vidvrd import clip_stats
 
         def box(x):
             return {"tid": 0, "bbox": {"xmin": x, "ymin": 0,
@@ -311,7 +311,7 @@ class TestBfs(unittest.TestCase):
         self.assertEqual(s["annotated"], 5)
 
     def test_clip_stats_survives_a_clip_with_no_boxes(self):
-        from tools.video.screen_vidvrd import clip_stats
+        from tools.datasets.screen_vidvrd import clip_stats
 
         s = clip_stats({"video_id": "v", "trajectories": [[], []],
                         "width": 10, "height": 10})
@@ -325,14 +325,14 @@ class TestBfs(unittest.TestCase):
         straight line already explains, so clips can be screened for the
         property before any are baked.
         """
-        from tools.video.screen_vidvrd import window_nonlinearity
+        from tools.datasets.screen_vidvrd import window_nonlinearity
 
         # One object, constant velocity: interpolation is exact.
         track = {i: (float(i), 0.0, float(i) + 10.0, 10.0) for i in range(9)}
         self.assertAlmostEqual(window_nonlinearity({0: track}, window=5), 0.0)
 
     def test_nonlinearity_is_positive_for_a_step_change(self):
-        from tools.video.screen_vidvrd import window_nonlinearity
+        from tools.datasets.screen_vidvrd import window_nonlinearity
 
         # Still, then one jump, then still. Interpolation smears the jump.
         xs = [0., 0., 0., 0., 40., 40., 40., 40., 40.]
@@ -340,7 +340,7 @@ class TestBfs(unittest.TestCase):
         self.assertGreater(window_nonlinearity({0: track}, window=5), 0.05)
 
     def test_nonlinearity_ignores_windows_that_are_not_contiguous(self):
-        from tools.video.screen_vidvrd import window_nonlinearity
+        from tools.datasets.screen_vidvrd import window_nonlinearity
 
         # Frames 3 and 4 are missing, so no window of 5 is contiguous.
         track = {i: (float(i), 0.0, 1.0, 1.0) for i in (0, 1, 2, 5, 6, 7)}
@@ -353,7 +353,7 @@ class TestBfs(unittest.TestCase):
         floor exceeds the linear-interpolation baseline. Both sides are
         computable without a model, so a clip can be judged before it is baked.
         """
-        from tools.video.screen_vidvrd import window_crossover
+        from tools.datasets.screen_vidvrd import window_crossover
 
         # A big detour: the object goes far off the straight line between the
         # endpoints, so interpolation is badly wrong and the floor is small
@@ -365,7 +365,7 @@ class TestBfs(unittest.TestCase):
         self.assertLess(ratio, 1.0)
 
     def test_crossover_ratio_is_large_when_motion_is_a_straight_line(self):
-        from tools.video.screen_vidvrd import window_crossover
+        from tools.datasets.screen_vidvrd import window_crossover
 
         # Constant velocity: interpolation is exact, so the baseline error is
         # ~0 and the floor dominates however small it is.
@@ -382,7 +382,7 @@ class TestBfs(unittest.TestCase):
         look winnable. Measured on real data: the three top-ranked clips all
         had an object present in only 50-67% of frames.
         """
-        from tools.video.screen_vidvrd import window_crossover
+        from tools.datasets.screen_vidvrd import window_crossover
 
         # tid 0 is present throughout and barely moves, so a straight line
         # predicts it almost exactly. tid 1 vanishes half way.
@@ -399,7 +399,7 @@ class TestBfs(unittest.TestCase):
         self.assertAlmostEqual(both, alone, places=6)
 
     def test_crossover_returns_none_without_a_contiguous_window(self):
-        from tools.video.screen_vidvrd import window_crossover
+        from tools.datasets.screen_vidvrd import window_crossover
 
         track = {i: (float(i), 0.0, 1.0, 1.0) for i in (0, 1, 2, 9, 10)}
         self.assertIsNone(window_crossover({0: track}, width=64,
@@ -412,7 +412,7 @@ class TestBfs(unittest.TestCase):
         position, so it implies a rule. A configurational one only says where
         the two sit. FOSAE needs the first kind; VidVRD is mostly the second.
         """
-        from tools.video.screen_vidvrd import predicate_tier
+        from tools.datasets.screen_vidvrd import predicate_tier
 
         for p in ("chase", "follow", "move_toward", "walk_away", "run_past",
                   "move_with", "bite", "ride", "fight", "toward", "away"):
@@ -432,13 +432,13 @@ class TestBfs(unittest.TestCase):
         the judgement most likely to be wrong, so it is pinned by a test where
         it can be found and changed.
         """
-        from tools.video.screen_vidvrd import predicate_tier
+        from tools.datasets.screen_vidvrd import predicate_tier
 
         self.assertEqual(predicate_tier("walk_past"), "coupled")
         self.assertEqual(predicate_tier("stand_next_to"), "configurational")
 
     def test_every_predicate_classifies(self):
-        from tools.video.screen_vidvrd import predicate_tier, PREDICATE_TIERS
+        from tools.datasets.screen_vidvrd import predicate_tier, PREDICATE_TIERS
 
         # No predicate may fall through to "other": an unclassified predicate
         # is silently excluded from the structure score.
@@ -448,7 +448,7 @@ class TestBfs(unittest.TestCase):
                               ("coupled", "configurational", "attribute"))
 
     def test_coupled_coverage_is_a_fraction_of_the_clip(self):
-        from tools.video.screen_vidvrd import coupled_coverage
+        from tools.datasets.screen_vidvrd import coupled_coverage
 
         # A ten-frame clip with one coupled relation over frames 2..6.
         doc = {"trajectories": [[]] * 10,
@@ -458,7 +458,7 @@ class TestBfs(unittest.TestCase):
         self.assertAlmostEqual(coupled_coverage(doc), 0.5)
 
     def test_coupled_coverage_is_zero_without_coupled_relations(self):
-        from tools.video.screen_vidvrd import coupled_coverage
+        from tools.datasets.screen_vidvrd import coupled_coverage
 
         doc = {"trajectories": [[]] * 8,
                "relation_instances": [
@@ -476,7 +476,7 @@ class TestBfs(unittest.TestCase):
         reaches the module directly, so the same function is imported rather
         than copied.
         """
-        from planner.box_geometry import load_canvas_scaler
+        from metrics.box_geometry import load_canvas_scaler
 
         scale, width, height = load_canvas_scaler()
         self.assertEqual((height, width), (200, 300))
@@ -569,7 +569,7 @@ class TestBfs(unittest.TestCase):
         would then have to undo, and it would silently corrupt every
         trajectory.
         """
-        from planner.box_geometry import boxes_from_something_else_frames
+        from metrics.box_geometry import boxes_from_something_else_frames
 
         def box(x, cat):
             return {"box2d": {"x1": x, "y1": 0.0, "x2": x + 10.0, "y2": 10.0},
@@ -593,7 +593,7 @@ class TestBfs(unittest.TestCase):
                          "interpreter; run under .venv-local")
     def test_something_else_absent_slot_is_zero(self):
         """A slot missing from a frame stays all-zero, meaning 'not here'."""
-        from planner.box_geometry import boxes_from_something_else_frames
+        from metrics.box_geometry import boxes_from_something_else_frames
 
         frames = [
             {"labels": [{"box2d": {"x1": 1., "y1": 1., "x2": 9., "y2": 9.},
@@ -617,7 +617,7 @@ class TestBfs(unittest.TestCase):
         applies. Nothing in the pipeline measured that, so a model could score
         well on reconstruction while its "actions" were all idiosyncratic.
         """
-        from planner.common.metrics import action_effect_consistency
+        from planner.plan_score import action_effect_consistency
 
         # Two actions. Each flips its own pair of bits, every time.
         z = np.array([
@@ -635,7 +635,7 @@ class TestBfs(unittest.TestCase):
         self.assertAlmostEqual(r["consistency"], 1.0, places=6)
 
     def test_action_effect_consistency_is_low_when_effects_are_arbitrary(self):
-        from planner.common.metrics import action_effect_consistency
+        from planner.plan_score import action_effect_consistency
 
         # The same label, but every transition flips different bits.
         z = np.array([
@@ -652,7 +652,7 @@ class TestBfs(unittest.TestCase):
         self.assertLess(r["consistency"], 0.01)
 
     def test_action_effect_consistency_needs_a_repeated_label(self):
-        from planner.common.metrics import action_effect_consistency
+        from planner.plan_score import action_effect_consistency
 
         z = np.array([[0, 0], [1, 0], [0, 0], [0, 1]], dtype=np.int8)
         r = action_effect_consistency(z[0::2], z[1::2], ["A", "B"])
@@ -667,7 +667,7 @@ class TestBfs(unittest.TestCase):
         0.298 for a binary code. This adds the binary option so the claim can
         be tested end to end. Both codes must decode to the same boxes.
         """
-        from planner.box_geometry import boxes_to_latents, latents_to_boxes
+        from metrics.box_geometry import boxes_to_latents, latents_to_boxes
 
         boxes = np.array([[[10., 20., 60., 80.], [100., 30., 150., 90.]]])
         for encoding in ("onehot", "binary"):
@@ -678,7 +678,7 @@ class TestBfs(unittest.TestCase):
             self.assertTrue(np.all(np.abs(back - boxes) <= 6), encoding)
 
     def test_binary_encoding_is_far_smaller(self):
-        from planner.box_geometry import boxes_to_latents
+        from metrics.box_geometry import boxes_to_latents
 
         boxes = np.zeros((1, 2, 4))
         boxes[0, 0] = [10., 20., 60., 80.]
@@ -690,7 +690,7 @@ class TestBfs(unittest.TestCase):
 
     def test_binary_encoding_keeps_an_absent_slot_empty(self):
         """A padded slot must stay all-zero, or the oracle invents an object."""
-        from planner.box_geometry import boxes_to_latents
+        from metrics.box_geometry import boxes_to_latents
 
         boxes = np.array([[[10., 20., 60., 80.], [0., 0., 0., 0.]]])
         z = boxes_to_latents(boxes, 60, 40, encoding="binary")
@@ -700,8 +700,8 @@ class TestBfs(unittest.TestCase):
 
     def test_binary_encoding_gives_an_action_one_effect_more_often(self):
         """The point of the option, stated as a test."""
-        from planner.box_geometry import boxes_to_latents
-        from planner.common.metrics import action_effect_consistency
+        from metrics.box_geometry import boxes_to_latents
+        from planner.plan_score import action_effect_consistency
 
         # One object sliding right one bin at a time, from many start points.
         pre, suc, labels = [], [], []
@@ -831,13 +831,13 @@ class TestPddl(unittest.TestCase):
 class TestMetrics(unittest.TestCase):
 
     def test_identical_boxes_map_to_themselves(self):
-        from planner.common.metrics import match_slots
+        from planner.plan_score import match_slots
 
         boxes = np.array([[0., 0., 10., 10.], [50., 50., 60., 60.]])
         np.testing.assert_array_equal(match_slots(boxes, boxes), [0, 1])
 
     def test_swapped_slots_are_matched_back(self):
-        from planner.common.metrics import match_slots
+        from planner.plan_score import match_slots
 
         gt = np.array([[0., 0., 10., 10.], [50., 50., 60., 60.]])
         np.testing.assert_array_equal(match_slots(gt[::-1], gt), [1, 0])
@@ -850,7 +850,7 @@ class TestMetrics(unittest.TestCase):
         the winnable VidVRD clips at least one object does not span every
         frame, so this is not a corner case.
         """
-        from planner.common.metrics import bbox_mse
+        from planner.plan_score import bbox_mse
 
         gt = np.array([
             [[10., 10., 20., 20.]],
@@ -868,7 +868,7 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(result["skipped_absent"], 1)
 
     def test_mse_reports_when_every_frame_is_absent(self):
-        from planner.common.metrics import bbox_mse
+        from planner.plan_score import bbox_mse
 
         gt = np.zeros((3, 1, 4))
         pred = np.ones((3, 1, 4)) * 5.0
@@ -888,7 +888,7 @@ class TestMetrics(unittest.TestCase):
         planner**. Those object-frames are unscoreable for both sides, not just
         for one, so the exclusion has to be shared.
         """
-        from planner.common.metrics import score_window
+        from planner.plan_score import score_window
 
         # Two objects. Object 1 is absent at the init endpoint.
         init = np.array([[0., 0., 10., 10.], [0., 0., 0., 0.]])
@@ -910,7 +910,7 @@ class TestMetrics(unittest.TestCase):
         self.assertEqual(scored["baseline_linear"]["mean_mse"], 0.0)
 
     def test_score_window_without_endpoints_scores_everything(self):
-        from planner.common.metrics import score_window
+        from planner.plan_score import score_window
 
         gt = np.array([[[10., 0., 20., 10.]]])
         pred = np.array([[[10., 0., 20., 10.]]])
@@ -920,26 +920,26 @@ class TestMetrics(unittest.TestCase):
         self.assertGreater(scored["baseline_linear"]["mean_mse"], 0.0)
 
     def test_error_is_zero_when_the_prediction_is_exact(self):
-        from planner.common.metrics import bbox_mse
+        from planner.plan_score import bbox_mse
 
         boxes = np.random.rand(4, 2, 4) * 100
         self.assertAlmostEqual(bbox_mse(boxes, boxes)["mean_mse"], 0.0)
 
     def test_matching_absorbs_a_slot_permutation(self):
-        from planner.common.metrics import bbox_mse
+        from planner.plan_score import bbox_mse
 
         gt = np.random.rand(3, 2, 4) * 100
         swapped = gt[:, ::-1, :]
         self.assertAlmostEqual(bbox_mse(swapped, gt)["mean_mse"], 0.0)
 
     def test_mismatched_shapes_are_rejected(self):
-        from planner.common.metrics import bbox_mse
+        from planner.plan_score import bbox_mse
 
         with self.assertRaises(ValueError):
             bbox_mse(np.zeros((3, 2, 4)), np.zeros((4, 2, 4)))
 
     def test_temporal_order_is_one_when_the_plan_runs_forwards(self):
-        from planner.common.metrics import temporal_order
+        from planner.plan_score import temporal_order
 
         gt = np.zeros((4, 1, 4))
         for t in range(4):
@@ -948,7 +948,7 @@ class TestMetrics(unittest.TestCase):
         self.assertAlmostEqual(temporal_order(gt, gt), 1.0)
 
     def test_temporal_order_is_negative_when_the_plan_runs_backwards(self):
-        from planner.common.metrics import temporal_order
+        from planner.plan_score import temporal_order
 
         gt = np.zeros((4, 1, 4))
         for t in range(4):
@@ -957,7 +957,7 @@ class TestMetrics(unittest.TestCase):
         self.assertLess(temporal_order(gt[::-1], gt), 0)
 
     def test_score_flags_a_prediction_that_beats_the_straight_line(self):
-        from planner.common.metrics import score_window
+        from planner.plan_score import score_window
 
         gt = np.array([[[10., 10., 20., 20.]], [[20., 20., 30., 30.]]])
         good = gt.copy()
@@ -968,7 +968,7 @@ class TestMetrics(unittest.TestCase):
         self.assertLess(scores["mse_ratio"], 1.0)
 
     def test_summary_records_whether_the_plan_was_the_expected_length(self):
-        from planner.common.metrics import summarize
+        from planner.plan_score import summarize
 
         window = {"init": 0, "goal": 4, "intermediate": [1, 2, 3],
                   "plan_length": 4}
@@ -1018,7 +1018,7 @@ def _fake_export(tmp_dir, n_frames=12, n_bits=16, n_obj=2, linear=False):
 class TestExport(unittest.TestCase):
 
     def test_export_round_trips_without_pickle(self):
-        from planner.common.export import load
+        from model.latents.export import load
 
         with tempfile.TemporaryDirectory() as tmp:
             export = load(_fake_export(tmp))
@@ -1028,7 +1028,7 @@ class TestExport(unittest.TestCase):
         self.assertEqual(export.parameters["U"], 4)
 
     def test_known_latent_returns_its_own_boxes(self):
-        from planner.common.export import load
+        from model.latents.export import load
 
         with tempfile.TemporaryDirectory() as tmp:
             export = load(_fake_export(tmp))
@@ -1038,7 +1038,7 @@ class TestExport(unittest.TestCase):
             self.assertEqual(export.fallback_count, 0)
 
     def test_unknown_latent_falls_back_and_is_counted(self):
-        from planner.common.export import load
+        from model.latents.export import load
 
         with tempfile.TemporaryDirectory() as tmp:
             export = load(_fake_export(tmp))
@@ -1048,7 +1048,7 @@ class TestExport(unittest.TestCase):
             self.assertEqual(export.fallback_count, 1)
 
     def test_transitions_prefer_the_stored_actions(self):
-        from planner.common.export import load
+        from model.latents.export import load
 
         with tempfile.TemporaryDirectory() as tmp:
             export = load(_fake_export(tmp))
@@ -1119,7 +1119,7 @@ class TestFullChain(unittest.TestCase):
 class TestExportDedupe(unittest.TestCase):
 
     def test_repeated_effects_collapse_to_one_row(self):
-        from planner.export_latents import _dedupe_transitions
+        from model.latents.export_latents import _dedupe_transitions
 
         base = np.array([
             [0, 1, 0, 0,  1, 1, 0, 0],   # add bit 0
@@ -1134,7 +1134,7 @@ class TestExportDedupe(unittest.TestCase):
         np.testing.assert_array_equal(kept, base)
 
     def test_transitions_that_change_nothing_are_dropped(self):
-        from planner.export_latents import _dedupe_transitions
+        from model.latents.export_latents import _dedupe_transitions
 
         rows = np.array([
             [1, 0,  1, 0],   # no-op
@@ -1156,7 +1156,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── metrics: an unscoreable window must not score as perfect ──────────
     def test_window_with_no_scoreable_object_reports_none_not_zero(self):
-        from planner.common.metrics import bbox_mse
+        from planner.plan_score import bbox_mse
 
         pred = np.full((4, 2, 4), 400.0)     # wildly wrong everywhere
         gt = np.zeros((4, 2, 4))             # every object absent
@@ -1170,7 +1170,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── metrics: the pairing must not be solved against absent boxes ──────
     def test_match_slots_ignores_absent_ground_truth(self):
-        from planner.common.metrics import match_slots
+        from planner.plan_score import match_slots
 
         # gt object 0 is present and matches pred slot 0 exactly.
         # gt object 1 is ABSENT, and its all-zero box is a strong attractor
@@ -1182,7 +1182,7 @@ class TestReviewRegressions(unittest.TestCase):
         self.assertEqual(int(mapping[0]), 0)
 
     def test_match_slots_pairs_on_a_frame_where_the_object_is_present(self):
-        from planner.common.metrics import match_slots
+        from planner.plan_score import match_slots
 
         # Frame 0 has nothing annotated; the pairing must come from later
         # frames rather than from a frame of zeros.
@@ -1197,7 +1197,7 @@ class TestReviewRegressions(unittest.TestCase):
         self.assertEqual([int(v) for v in mapping], [1, 0])
 
     def test_bbox_mse_does_not_reward_a_wrong_pairing(self):
-        from planner.common.metrics import bbox_mse
+        from planner.plan_score import bbox_mse
 
         pred = np.array([[[20.0, 20, 30, 30], [0, 0, 0, 0]]])
         gt = np.array([[[20.0, 20, 30, 30], [0, 0, 0, 0]]])
@@ -1208,7 +1208,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── metrics: a near-zero baseline must not produce a huge ratio ───────
     def test_mse_ratio_is_none_when_the_baseline_is_degenerate(self):
-        from planner.common.metrics import mse_ratio
+        from planner.plan_score import mse_ratio
 
         self.assertIsNone(mse_ratio(12.0, 4.1e-10))
         self.assertIsNone(mse_ratio(12.0, 0.0))
@@ -1216,7 +1216,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── metrics: motion must not be manufactured by an object vanishing ───
     def test_moving_gt_steps_ignores_appearance_and_disappearance(self):
-        from planner.common.metrics import moving_gt_steps
+        from planner.plan_score import moving_gt_steps
 
         static = np.tile(np.array([[[10.0, 10, 20, 20]]]), (4, 1, 1))
         self.assertEqual(moving_gt_steps(static), 0)
@@ -1227,7 +1227,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── metrics: a single action label cannot be "consistent" ─────────────
     def test_action_effect_consistency_is_none_for_a_single_label(self):
-        from planner.common.metrics import action_effect_consistency
+        from planner.plan_score import action_effect_consistency
 
         rng = np.random.RandomState(0)
         pre = rng.randint(0, 2, size=(8, 12)).astype(np.int8)
@@ -1238,7 +1238,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── oracle: the binary code must hold every bin it claims to ──────────
     def test_binary_code_survives_power_of_two_bin_counts(self):
-        from planner import box_geometry as O
+        from metrics import box_geometry as O
 
         # A box sitting in the TOP bin on every coordinate. Before the fix
         # the code overflowed its field, the object block went all-zero, and
@@ -1261,7 +1261,7 @@ class TestReviewRegressions(unittest.TestCase):
                                     "box inverted at bins=%d" % bins)
 
     def test_code_width_holds_the_offset_value(self):
-        from planner.box_geometry import _code_width
+        from metrics.box_geometry import _code_width
 
         for bins in (2, 8, 16, 31, 32, 33, 64):
             self.assertGreaterEqual(2 ** _code_width(bins) - 1, bins,
@@ -1269,7 +1269,7 @@ class TestReviewRegressions(unittest.TestCase):
 
     # ── oracle: the floor must be the floor the real decoder actually has ─
     def test_dequantise_matches_the_real_decoder(self):
-        from planner import box_geometry as O
+        from metrics import box_geometry as O
 
         # `common/decode.py` maps a bin index to the bin's LEFT EDGE:
         #     x1 = argmax(...) * (canvas_w / X)
@@ -1280,7 +1280,7 @@ class TestReviewRegressions(unittest.TestCase):
         np.testing.assert_allclose(O.dequantise(idx, 60, 300), expected)
 
     def test_round_trip_error_divides_by_present_cells_only(self):
-        from planner import box_geometry as O
+        from metrics import box_geometry as O
 
         one_real = np.array([[[10.0, 10.0, 40.0, 40.0]]])
         with_padding = np.zeros((1, 3, 4))
@@ -1389,7 +1389,7 @@ class TestScreenVidvrdMinorFixes(unittest.TestCase):
         """The JSON load around it was guarded; this was not."""
         import sys
         from pathlib import Path
-        v = str(Path(__file__).resolve().parents[1] / "tools" / "video")
+        v = str(Path(__file__).resolve().parents[1] / "tools" / "datasets")
         if v not in sys.path:
             sys.path.insert(0, v)
         from screen_vidvrd import coupled_coverage
@@ -1401,7 +1401,7 @@ class TestScreenVidvrdMinorFixes(unittest.TestCase):
     def test_predicate_tier_returns_other_for_an_unknown_word(self):
         import sys
         from pathlib import Path
-        v = str(Path(__file__).resolve().parents[1] / "tools" / "video")
+        v = str(Path(__file__).resolve().parents[1] / "tools" / "datasets")
         if v not in sys.path:
             sys.path.insert(0, v)
         from screen_vidvrd import predicate_tier
@@ -1480,31 +1480,31 @@ class TestFloorRatio(unittest.TestCase):
     """
 
     def test_at_the_floor_the_ratio_is_one(self):
-        from planner.common.metrics import floor_ratio
+        from planner.plan_score import floor_ratio
 
         self.assertAlmostEqual(floor_ratio(20.0, 20.0), 1.0)
 
     def test_twice_the_floor_is_two(self):
-        from planner.common.metrics import floor_ratio
+        from planner.plan_score import floor_ratio
 
         self.assertAlmostEqual(floor_ratio(40.0, 20.0), 2.0)
 
     def test_a_missing_input_is_none_not_zero(self):
         """SPEC V29 — a metric must be able to say 'no data'."""
-        from planner.common.metrics import floor_ratio
+        from planner.plan_score import floor_ratio
 
         self.assertIsNone(floor_ratio(None, 20.0))
         self.assertIsNone(floor_ratio(20.0, None))
 
     def test_a_degenerate_floor_is_refused(self):
         """A floor at or below zero makes the ratio meaningless."""
-        from planner.common.metrics import floor_ratio
+        from planner.plan_score import floor_ratio
 
         self.assertIsNone(floor_ratio(20.0, 0.0))
         self.assertIsNone(floor_ratio(20.0, -1.0))
 
     def test_below_one_is_possible_and_not_an_error(self):
         """Matching can beat the floor when slots are re-paired favourably."""
-        from planner.common.metrics import floor_ratio
+        from planner.plan_score import floor_ratio
 
         self.assertAlmostEqual(floor_ratio(10.0, 20.0), 0.5)

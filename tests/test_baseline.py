@@ -8,7 +8,7 @@ under that line learned more than the average frame. Added 2026-10-03, plan
 
 The model's `BCE` metric is Keras `binary_crossentropy` over the flattened
 state, clipped to [1e-7, 1 - 1e-7], averaged over features and then over
-samples (`model/util/distances.py`). The baseline is scored the same way.
+samples (`model/losses.py`). The baseline is scored the same way.
 """
 
 import importlib.util
@@ -22,7 +22,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
 _spec = importlib.util.spec_from_file_location(
-    "_baseline", os.path.join(ROOT, "model", "util", "baseline.py"))
+    "_baseline", os.path.join(ROOT, "model", "train", "baseline.py"))
 baseline = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(baseline)
 
@@ -61,9 +61,9 @@ class TestBceFloor(unittest.TestCase):
     """The lowest BCE that a perfect copy scores on non-binary targets.
 
     BCE reaches 0 only where each target is 0 or 1. The MNIST panels are
-    rounded to 0 and 1 (model/util/mnist.py:8-9), so the sentinel
+    rounded to 0 and 1 (model/loaders/mnist_digits.py:8-9), so the sentinel
     reaches 1e-07. Video patches are equalised and stretched into values
-    between 0 and 1 (model/puzzles/util.py), so a perfect copy still scores
+    between 0 and 1 (model/loaders/image.py), so a perfect copy still scores
     the mean binary entropy of its targets. Added 2026-10-05.
     """
 

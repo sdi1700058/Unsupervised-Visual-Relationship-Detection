@@ -21,9 +21,9 @@ the metric.
 
 WHY THIS AND NOT A PUBLISHED TRIPLET mAP. S3 asks for a published metric
 first, and the published route cannot score FOSAE output at all. Measured
-2026-09-21: `planner/m7_map.py:356` compares triplets by exact tuple
+2026-09-21: `metrics/m7_map.py:356` compares triplets by exact tuple
 equality, and that tuple carries the predicate as a STRING such as `next_to`,
-while `model/util/fol.py:100` names every FOSAE predicate `pred_{p}`. A
+while `metrics/fol.py:100` names every FOSAE predicate `pred_{p}`. A
 numbered predicate never equals a named one, and no amount of data changes
 that.
 
@@ -46,7 +46,7 @@ import unittest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 ".."))
 
-from planner.relation_match import (  # noqa: E402
+from metrics.relation_match import (  # noqa: E402
     similarity, match, mean_matched_similarity, coverage_weighted_score)
 
 

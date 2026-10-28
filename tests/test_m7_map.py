@@ -28,7 +28,7 @@ import numpy as np
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
-from planner.m7_map import (          # noqa: E402
+from metrics.m7_map import (          # noqa: E402
     RidgeAccumulator, TripletPrior, associate_segments, bbox_iou,
     comparison_svg, distinct_latents, eval_detection_scores,
     eval_tagging_scores, evaluate, frequency_predictions,
@@ -461,7 +461,7 @@ class TestDeadExports(unittest.TestCase):
         self.assertEqual(distinct_latents(np.zeros((40, 8), dtype=np.int8)), 1)
 
     def test_a_dead_export_is_dropped_rather_than_scored(self):
-        from planner.predicate_probe import relation_labels
+        from metrics.predicate_probe import relation_labels
 
         rng = np.random.RandomState(0)
         with tempfile.TemporaryDirectory() as tmp:
@@ -489,7 +489,7 @@ class TestRidgeAccumulator(unittest.TestCase):
         # two metrics are measuring different models and neither explains the
         # other. The accumulator exists only because stacking every clip's
         # rows needs about two gigabytes on VidOR.
-        from planner.predicate_probe import ridge_probe_multi
+        from metrics.predicate_probe import ridge_probe_multi
 
         rng = np.random.RandomState(0)
         x1, y1 = rng.rand(30, 5), rng.rand(30, 3)
@@ -548,7 +548,7 @@ class TestFigures(unittest.TestCase):
 class TestCommandLine(unittest.TestCase):
 
     def test_a_perfect_run_end_to_end_writes_one_point_zero(self):
-        from planner.m7_map import main
+        from metrics.m7_map import main
 
         with tempfile.TemporaryDirectory() as tmp:
             ann = os.path.join(tmp, "ann")

@@ -50,7 +50,7 @@ for rung in se kit havid vidvrd; do
     srun --ntasks=1 --cpus-per-task=1 --exact --export=ALL \
         --output="logs/triplet-eval-%j-${rung}.out" \
         --error="logs/triplet-eval-%j-${rung}.err" \
-        .venv-local/bin/python planner/triplet_eval.py \
+        .venv-local/bin/python metrics/triplet_eval.py \
         --dataset "${rung}" --out "${OUT}" &
     pids+=("$!")
 done

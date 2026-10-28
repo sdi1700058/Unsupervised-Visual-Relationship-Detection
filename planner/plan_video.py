@@ -15,7 +15,7 @@ Three planner methods share the same encode/decode/score path:
 Takes a planner export, not a model directory, so it needs numpy alone.
 Make the export once where keras and the model live:
 
-    python3 planner/export_latents.py <model_dir> -o latents.npz
+    python3 model/latents/export_latents.py <model_dir> -o latents.npz
 
 Output lands in eval/planner/<export>/<method>/win_<i>_<j>/.
 """
@@ -67,7 +67,7 @@ def main(argv=None):
     export_path = args.export.resolve()
     if not export_path.exists():
         sys.exit(f"no such export: {export_path}\n"
-                 "Make one with planner/export_latents.py")
+                 "Make one with model/latents/export_latents.py")
 
     out_dir = args.out_dir or output_dir(export_path, args.method,
                                          args.init, args.goal)

@@ -64,7 +64,7 @@ DEGENERATE = [([1, 0, 0, 0, 0, 0], [0, 0, 0, 0, 0, 0]),
 class TestEffects(unittest.TestCase):
 
     def test_effect_is_the_bits_that_turn_on_and_the_bits_that_turn_off(self):
-        from planner.m6_determinism import group_effects
+        from metrics.m6_determinism import group_effects
 
         pre = _states([[1, 0, 1, 0]])
         suc = _states([[1, 1, 0, 0]])
@@ -80,7 +80,7 @@ class TestEffects(unittest.TestCase):
         It is still a transition, so it stays in the denominator of the
         determinism scan. See the no-op test further down.
         """
-        from planner.m6_determinism import group_effects
+        from metrics.m6_determinism import group_effects
 
         pre = _states([[1, 0], [1, 0]])
         suc = _states([[1, 0], [1, 1]])
@@ -89,7 +89,7 @@ class TestEffects(unittest.TestCase):
         self.assertEqual(groups[0]["add"], [1])
 
     def test_two_transitions_that_flip_the_same_bits_are_one_operator(self):
-        from planner.m6_determinism import group_effects
+        from metrics.m6_determinism import group_effects
 
         pre = _states([[0, 0, 0], [0, 0, 1]])
         suc = _states([[1, 0, 0], [1, 0, 1]])
@@ -101,7 +101,7 @@ class TestEffects(unittest.TestCase):
     def test_the_precondition_is_add_bits_off_and_delete_bits_on(self):
         """The weakest precondition the effect implies, which is the one
         `planner/pddl/planner.py` writes into the domain file."""
-        from planner.m6_determinism import applicable_mask
+        from metrics.m6_determinism import applicable_mask
 
         pre = _states([[0, 1, 0],     # add bit 0 off, delete bit 1 on: holds
                        [1, 1, 0],     # add bit already on: does not hold
@@ -110,7 +110,7 @@ class TestEffects(unittest.TestCase):
         self.assertEqual(mask.tolist(), [True, False, False])
 
     def test_an_operator_with_no_precondition_bits_applies_everywhere(self):
-        from planner.m6_determinism import applicable_mask
+        from metrics.m6_determinism import applicable_mask
 
         pre = _states([[0, 1], [1, 1]])
         self.assertEqual(applicable_mask(pre, [], []).tolist(), [True, True])
@@ -120,7 +120,7 @@ class TestTransitions(unittest.TestCase):
 
     def test_a_pair_that_crosses_a_clip_boundary_is_not_a_transition(self):
         """The export concatenates clips, so a pair over the join is a cut."""
-        from planner.m6_determinism import transitions
+        from metrics.m6_determinism import transitions
 
         z = _states([[0], [1], [0], [1]])
         clips = ["a", "a", "b", "b"]
@@ -129,7 +129,7 @@ class TestTransitions(unittest.TestCase):
         self.assertEqual(dropped, 1)
 
     def test_without_clip_names_the_export_is_one_clip(self):
-        from planner.m6_determinism import transitions
+        from metrics.m6_determinism import transitions
 
         z = _states([[0], [1], [0]])
         pre, suc, dropped = transitions(z, None)
@@ -137,7 +137,7 @@ class TestTransitions(unittest.TestCase):
         self.assertEqual(dropped, 0)
 
     def test_clip_names_come_from_the_frame_id_prefix(self):
-        from planner.m6_determinism import clips_from_frame_ids
+        from metrics.m6_determinism import clips_from_frame_ids
 
         ids = ["ILSVRC2015_train_00150010/000000",
                "ILSVRC2015_train_00150010/000001",
@@ -151,7 +151,7 @@ class TestTransitions(unittest.TestCase):
 class TestDeterminism(unittest.TestCase):
 
     def _row(self, pairs, **kw):
-        from planner.m6_determinism import analyse
+        from metrics.m6_determinism import analyse
 
         z, clips = _clip_pairs(pairs)
         return analyse(z, clips, **kw)
@@ -194,7 +194,7 @@ class TestDeterminism(unittest.TestCase):
 
     def test_the_exact_rate_matches_a_brute_force_reference(self):
         """The zero-tolerance path takes a shortcut, so it is checked."""
-        from planner.m6_determinism import (analyse, group_effects,
+        from metrics.m6_determinism import (analyse, group_effects,
                                                   transitions,
                                                   applicable_mask)
 
@@ -221,7 +221,7 @@ class TestTheDegenerateReading(unittest.TestCase):
     """The reading this metric would give if nobody guarded it."""
 
     def _row(self, pairs, **kw):
-        from planner.m6_determinism import analyse
+        from metrics.m6_determinism import analyse
 
         z, clips = _clip_pairs(pairs)
         return analyse(z, clips, **kw)
@@ -233,7 +233,7 @@ class TestTheDegenerateReading(unittest.TestCase):
         self.assertEqual(r["determinism_naive"], 1.0)
 
     def test_and_is_called_degenerate_rather_than_perfect(self):
-        from planner.m6_determinism import verdict
+        from metrics.m6_determinism import verdict
 
         r = self._row(DEGENERATE)
         self.assertEqual(r["reuse"], 1.0)
@@ -247,7 +247,7 @@ class TestTheDegenerateReading(unittest.TestCase):
         self.assertIsNone(r["determinism"])
 
     def test_a_lawful_corpus_is_not_called_degenerate(self):
-        from planner.m6_determinism import verdict
+        from metrics.m6_determinism import verdict
 
         r = self._row(LAWFUL)
         self.assertEqual(r["n_testable"], 1)
@@ -255,7 +255,7 @@ class TestTheDegenerateReading(unittest.TestCase):
 
     def test_the_verdict_checks_reuse_before_it_grades_the_rate(self):
         """Grading first would report the worst dataset as the best one."""
-        from planner.m6_determinism import verdict, MIN_REUSE
+        from metrics.m6_determinism import verdict, MIN_REUSE
 
         r = self._row(DEGENERATE)
         r["determinism"] = 1.0          # force the grader's best case
@@ -263,7 +263,7 @@ class TestTheDegenerateReading(unittest.TestCase):
         self.assertIn("degenerate", verdict(r).lower())
 
     def test_a_vacuous_corpus_is_reported_before_the_rate(self):
-        from planner.m6_determinism import verdict
+        from metrics.m6_determinism import verdict
 
         row = {"reuse": 5.0, "testable_share": 0.0, "n_testable": 0,
                "determinism": 1.0, "determinism_naive": 1.0,
@@ -327,7 +327,7 @@ class TestACollapsedExport(unittest.TestCase):
         file, and the question here is only whether the guard fires, which the
         first frames answer.
         """
-        from planner.m6_determinism import analyse, load_pool
+        from metrics.m6_determinism import analyse, load_pool
 
         path = os.path.join(str(Path(__file__).resolve().parents[1]),
                             "eval", "exports", name)
@@ -339,7 +339,7 @@ class TestACollapsedExport(unittest.TestCase):
         return analyse(z, clips, label=name)
 
     def test_a_single_state_corpus_is_called_dead_and_not_deterministic(self):
-        from planner.m6_determinism import analyse, verdict
+        from metrics.m6_determinism import analyse, verdict
 
         z = _states([[0, 0, 0]] * 6)
         row = analyse(z, ["c", "c", "c", "c", "c", "c"])
@@ -350,7 +350,7 @@ class TestACollapsedExport(unittest.TestCase):
         self.assertIn("dead export", verdict(row).lower())
 
     def test_the_dead_check_runs_before_the_rate_is_graded(self):
-        from planner.m6_determinism import verdict
+        from metrics.m6_determinism import verdict
 
         row = {"n_distinct_states": 1, "n_states": 105, "all_zero": True,
                "reuse": 9.0, "testable_share": 1.0, "determinism": 1.0,
@@ -376,7 +376,7 @@ class TestThePositiveControl(unittest.TestCase):
     """A metric that is negative on every dataset is worth nothing."""
 
     def test_a_constant_effect_corpus_scores_one(self):
-        from planner.m6_determinism import analyse, synthetic_cube_corpus
+        from metrics.m6_determinism import analyse, synthetic_cube_corpus
 
         z, clips = synthetic_cube_corpus(seed=0)
         row = analyse(z, clips, label="synthetic")
@@ -385,14 +385,14 @@ class TestThePositiveControl(unittest.TestCase):
         self.assertEqual(row["testable_share"], 1.0)
 
     def test_and_is_read_as_lawful(self):
-        from planner.m6_determinism import analyse, synthetic_cube_corpus
+        from metrics.m6_determinism import analyse, synthetic_cube_corpus
 
         z, clips = synthetic_cube_corpus(seed=0)
         self.assertIn("lawful", analyse(z, clips)["verdict"].lower())
 
     def test_its_operators_fire_from_states_that_agree_on_little(self):
         """The STRIPS signature: wide applicability, narrow precondition."""
-        from planner.m6_determinism import analyse, synthetic_cube_corpus
+        from metrics.m6_determinism import analyse, synthetic_cube_corpus
 
         z, clips = synthetic_cube_corpus(n_ops=6, n_payload=26, seed=0)
         row = analyse(z, clips)
@@ -400,7 +400,7 @@ class TestThePositiveControl(unittest.TestCase):
         self.assertLess(row["mean_precondition_agreement"], 0.25)
 
     def test_the_shuffled_control_does_not_score_one(self):
-        from planner.m6_determinism import analyse, synthetic_cube_corpus
+        from metrics.m6_determinism import analyse, synthetic_cube_corpus
 
         z, clips = synthetic_cube_corpus(seed=0)
         row = analyse(z, clips)
@@ -410,7 +410,7 @@ class TestThePositiveControl(unittest.TestCase):
 class TestConcentration(unittest.TestCase):
 
     def test_reuse_is_one_when_every_transition_has_its_own_effect(self):
-        from planner.m6_determinism import concentration
+        from metrics.m6_determinism import concentration
 
         c = concentration([1, 1, 1, 1])
         self.assertEqual(c["reuse"], 1.0)
@@ -418,7 +418,7 @@ class TestConcentration(unittest.TestCase):
         self.assertAlmostEqual(c["effective_effects"], 4.0)
 
     def test_one_dominant_effect_shows_up_as_a_top_share(self):
-        from planner.m6_determinism import concentration
+        from metrics.m6_determinism import concentration
 
         c = concentration([5, 1, 1, 1])
         self.assertEqual(c["n_effects"], 4)
@@ -428,7 +428,7 @@ class TestConcentration(unittest.TestCase):
         self.assertLess(c["effective_effects"], 4.0)
 
     def test_no_effects_at_all_is_reported_and_not_divided_by(self):
-        from planner.m6_determinism import concentration
+        from metrics.m6_determinism import concentration
 
         c = concentration([])
         self.assertEqual(c["n_effects"], 0)
@@ -440,7 +440,7 @@ class TestPreconditionAgreement(unittest.TestCase):
     def test_the_aggregate_ignores_operators_that_fired_once(self):
         """A group of one agrees with itself, so averaging them in would
         report the sparsity of the latent code and nothing else."""
-        from planner.m6_determinism import analyse
+        from metrics.m6_determinism import analyse
 
         # Two clips share one effect from states that differ; a third clip
         # carries a singleton effect whose single source trivially agrees.
@@ -454,7 +454,7 @@ class TestPreconditionAgreement(unittest.TestCase):
     def test_the_corpus_wide_agreement_is_reported_beside_it(self):
         """A sparse code drives both up, so only their distance is a
         property of the grouping."""
-        from planner.m6_determinism import analyse
+        from metrics.m6_determinism import analyse
 
         z, clips = _clip_pairs(LAWFUL)
         row = analyse(z, clips)
@@ -463,7 +463,7 @@ class TestPreconditionAgreement(unittest.TestCase):
                              row["mean_precondition_agreement"])
 
     def test_identical_sources_agree_on_every_bit(self):
-        from planner.m6_determinism import precondition_agreement
+        from metrics.m6_determinism import precondition_agreement
 
         pre = _states([[0, 1, 0], [0, 1, 0]])
         a = precondition_agreement(pre, [0, 1], add=[2], dele=[])
@@ -472,7 +472,7 @@ class TestPreconditionAgreement(unittest.TestCase):
         self.assertEqual(a["extra_bits"], 2)
 
     def test_sources_that_differ_agree_on_fewer_bits(self):
-        from planner.m6_determinism import precondition_agreement
+        from metrics.m6_determinism import precondition_agreement
 
         pre = _states([[0, 0, 0], [0, 1, 0], [0, 0, 1]])
         a = precondition_agreement(pre, [0, 1, 2], add=[0], dele=[])
@@ -484,7 +484,7 @@ class TestPreconditionAgreement(unittest.TestCase):
 class TestTheControl(unittest.TestCase):
 
     def test_the_control_keeps_the_successors_and_breaks_the_pairing(self):
-        from planner.m6_determinism import permute_successors
+        from metrics.m6_determinism import permute_successors
 
         suc = _states([[0, 0], [0, 1], [1, 0], [1, 1]])
         out = permute_successors(suc, seed=0)
@@ -492,14 +492,14 @@ class TestTheControl(unittest.TestCase):
                          sorted(map(tuple, suc.tolist())))
 
     def test_the_control_is_reproducible(self):
-        from planner.m6_determinism import permute_successors
+        from metrics.m6_determinism import permute_successors
 
         suc = _states([[0, 0], [0, 1], [1, 0], [1, 1]])
         self.assertTrue(np.array_equal(permute_successors(suc, seed=3),
                                        permute_successors(suc, seed=3)))
 
     def test_every_row_carries_a_control(self):
-        from planner.m6_determinism import analyse
+        from metrics.m6_determinism import analyse
 
         z, clips = _clip_pairs(LAWFUL)
         r = analyse(z, clips)
@@ -523,7 +523,7 @@ class TestPooling(unittest.TestCase):
 
     def test_two_pooled_exports_never_share_a_transition(self):
         """Otherwise the join between two files invents a transition."""
-        from planner.m6_determinism import load_pool, transitions
+        from metrics.m6_determinism import load_pool, transitions
 
         a = self._write("a.npz", [[0], [1]])
         b = self._write("b.npz", [[0], [1]])
@@ -534,7 +534,7 @@ class TestPooling(unittest.TestCase):
         self.assertEqual(dropped, 1)
 
     def test_a_row_argument_may_name_a_label_and_several_files(self):
-        from planner.m6_determinism import parse_row
+        from metrics.m6_determinism import parse_row
 
         a = self._write("a.npz", [[0], [1]])
         b = self._write("b.npz", [[0], [1]])
@@ -543,7 +543,7 @@ class TestPooling(unittest.TestCase):
         self.assertEqual(files, [a, b])
 
     def test_a_bare_path_takes_its_label_from_the_file_name(self):
-        from planner.m6_determinism import parse_row
+        from metrics.m6_determinism import parse_row
 
         label, files = parse_row("eval/exports/H14-P10-150010.npz")
         self.assertEqual(label, "H14-P10-150010")
@@ -559,7 +559,7 @@ class TestFigure(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def _rows(self):
-        from planner.m6_determinism import analyse
+        from metrics.m6_determinism import analyse
 
         out = []
         for label, pairs in (("lawful", LAWFUL),
@@ -571,14 +571,14 @@ class TestFigure(unittest.TestCase):
 
     def test_the_figure_parses_as_xml(self):
         """This project has shipped an unopenable figure three times."""
-        from planner.m6_determinism import write_svg
+        from metrics.m6_determinism import write_svg
 
         path = os.path.join(self.tmp, "m6.svg")
         write_svg(self._rows(), path)
         xml.dom.minidom.parse(path)
 
     def test_the_figure_names_every_row(self):
-        from planner.m6_determinism import write_svg
+        from metrics.m6_determinism import write_svg
 
         path = os.path.join(self.tmp, "m6.svg")
         write_svg(self._rows(), path)
@@ -588,7 +588,7 @@ class TestFigure(unittest.TestCase):
             self.assertIn(label, text)
 
     def test_a_label_holding_an_angle_bracket_is_escaped(self):
-        from planner.m6_determinism import analyse, write_svg
+        from metrics.m6_determinism import analyse, write_svg
 
         z, clips = _clip_pairs(LAWFUL)
         rows = [analyse(z, clips, label="U40 <P20> & more")]
@@ -609,7 +609,7 @@ class TestCommandLine(unittest.TestCase):
         shutil.rmtree(self.tmp, ignore_errors=True)
 
     def test_it_writes_a_json_and_a_figure(self):
-        from planner.m6_determinism import main
+        from metrics.m6_determinism import main
 
         z, clips = _clip_pairs(CONTRADICTED)
         path = os.path.join(self.tmp, "dataset.npz")

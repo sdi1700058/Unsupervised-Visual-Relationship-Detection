@@ -25,7 +25,7 @@ ulimit -v 6000000
 PY=.venv-local/bin/python
 [ -x "$PY" ] || PY=python3
 OUT=eval/M7
-M7="$PY planner/m7_map.py"
+M7="$PY metrics/m7_map.py"
 
 # The harness check below is a gate and not a printout. m7_map.py prints
 # "WARNING: the ground truth scored against itself is ..." and then exits 0,

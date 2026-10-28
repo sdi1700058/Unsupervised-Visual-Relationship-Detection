@@ -62,7 +62,7 @@ def _loader():
     last test here checks the two land on the same function object, because
     SPEC V5 allows the canvas geometry exactly one definition.
     """
-    path = os.path.join(ROOT, "model", "puzzles", "puzzle_labeled_objects.py")
+    path = os.path.join(ROOT, "model", "loaders", "labeled_objects.py")
     spec = importlib.util.spec_from_file_location("_plo_for_aspect", path)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -200,7 +200,7 @@ class TestShapeSurvivesTheCanvas(unittest.TestCase):
         """SPEC V5: one definition of the canvas geometry. `oracle.py` exports
         planner inputs and would otherwise drift from what the loader trains
         on, which is a disagreement no test downstream of either could see."""
-        from planner.box_geometry import load_canvas_scaler
+        from metrics.box_geometry import load_canvas_scaler
 
         scale, width, height = load_canvas_scaler()
         self.assertEqual((width, height), (self.W, self.H))

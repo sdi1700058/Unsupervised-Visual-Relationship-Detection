@@ -5,9 +5,9 @@ import numpy as np
 import numpy.random as random
 import model
 import model.model
-from model.util        import curry
-from model.util.tuning import *
-from model.util.noise  import gaussian
+from model.model import curry
+from model.train.hyperparameters import *
+from model.noise  import gaussian
 
 import keras.backend as K
 import tensorflow as tf
@@ -32,7 +32,7 @@ setattr(keras.optimizers,"radam", RAdam)
 setattr(keras.optimizers,"adabound", AdaBound)
 
 # ── Canonical directories ──────────────────────────────────────────────
-from model.util.paths import (
+from model.paths import (
     PROJECT_ROOT, DATA_DIR, OUT_DIR,
     find_dataset as _find_dataset,
     resolved_out_dir as _resolved_out_dir,
@@ -135,7 +135,7 @@ def plot_autoencoding_image(ae,test,train,plotmode):
     test_plot = test[:6]
     train_plot = train[:6]
     
-    from model.puzzles import shuffle_objects
+    from model.loaders import shuffle_objects
     shuffled_test_plot = shuffle_objects(test[:6])
     shuffled_train_plot = shuffle_objects(train[:6])
 
@@ -231,7 +231,7 @@ def run(path,train,val,parameters,train_out=None,val_out=None,):
         if ae is None:
             # With LIMIT=1 the search never records a best trial, because it
             # updates the best only while len(open_list) < limit
-            # (model/util/tuning.py). The trained network saved itself to
+            # (model/train/hyperparameters.py). The trained network saved itself to
             # `path` at the end of train(), so it loads from there. Found
             # 2026-10-06; every run before only printed this error.
             print("ERROR: Model was not returned by simple_genetic_search; "
@@ -319,7 +319,7 @@ def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=
     _apply_env_overrides(parameters)
 
     import importlib
-    p = importlib.import_module('model.puzzles.puzzle_{}'.format(type))
+    p = importlib.import_module('model.loaders.{}'.format(type))
     p.setup()
     path = _find_dataset("-".join(map(str,["puzzle",type,width,height]))+".npz")
     with np.load(path) as data:
@@ -390,7 +390,7 @@ def blocksworld(aeclass="FirstOrderAE",track="blocks-5-3",U=None,A=None,P=None,n
     default_parameters["picsize"]      = list(map(int,picsize))
     default_parameters["activation"]   = "self.blocks_activation"
 
-    from model.puzzles.util import preprocess
+    from model.loaders.image import preprocess
     images = preprocess(images)
     bboxes_onehot = bboxes_to_onehot(bboxes,X,Y)
     all_states = np.concatenate((       images.reshape       ((num_states, num_objs,-1)),
@@ -458,9 +458,9 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
                       GPU pass per epoch (maximises GPU utilisation on large-VRAM
                       cards like the L40S).
     """
-    from model.puzzles.puzzle_labeled_objects import (
+    from model.loaders.labeled_objects import (
         build_dataset, build_transitions, MAX_OBJECTS, PICSIZE)
-    from model.puzzles.util import preprocess
+    from model.loaders.image import preprocess
     import json as _json
 
     # Propagate any provided hyperparameter overrides
@@ -542,7 +542,7 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
     dump_states (ae, all_states)
     dump_actions(ae, transitions)
 
-    # Persist object names so model/train/extract_fol.py can reconstruct predicate labels
+    # Persist object names so metrics/extract_fol.py can reconstruct predicate labels
     names_path = os.path.join(out_path, "object_names.json")
     with open(names_path, "w") as f:
         _json.dump({"image_ids": image_ids, "object_names": all_object_names}, f, indent=2)
@@ -558,13 +558,13 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
 
     npz_path : str | None
         When set, skip on-the-fly build_dataset() and load the raw-array npz
-        baked by ``tools/setup-dataset.py video_vidvrd``. Useful for the
+        baked by ``tools/datasets/setup_dataset.py video_vidvrd``. Useful for the
         smallest-overfit pipeline (one video, no rebuild on every train).
     """
-    from model.puzzles import puzzle_vidvrd as _pv
-    from model.puzzles.puzzle_vidvrd import build_dataset, build_transitions, PICSIZE, MAX_OBJECTS
-    from model.puzzles.util  import preprocess
-    from model.util.cache    import load_cached
+    from model.loaders import vidvrd as _pv
+    from model.loaders.vidvrd import build_dataset, build_transitions, PICSIZE, MAX_OBJECTS
+    from model.loaders.image  import preprocess
+    from model.loaders.cache    import load_cached
     import json as _json
 
     for name, value in dict(U=U, A=A, P=P).items():
@@ -629,7 +629,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     states = transitions.reshape((num_trans * 2, num_objs, -1))
     # SPLIT=clip gives each clip to one split. The default cut below puts the
     # "after" frame of a val pair in training as the "before" frame of the
-    # next pair, so its val curve is not held out. See model/util/split.py.
+    # next pair, so its val curve is not held out. See model/loaders/split.py.
     # SPLIT=none trains and scores the same frames, for an overfit check.
     split_mode = os.environ.get("SPLIT", "")
     split_info = None
@@ -644,8 +644,8 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
                          f"TRANSITION_MODE={transition_mode!r} would train on "
                          f"pairs the split never saw; use sequential")
     elif split_mode == "clip":
-        from model.util.adjacency import sequential_pairs, strict_from_env
-        from model.util.split import split_states
+        from model.loaders.adjacency import sequential_pairs, strict_from_env
+        from model.loaders.split import split_states
         import re
         _pairs, _ = sequential_pairs(frame_ids, strict=strict_from_env())
         # SPLIT_GROUP, a regex on the clip name, keeps one session in one
@@ -680,8 +680,8 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     os.makedirs(out_path, exist_ok=True)
 
     # The trivial model's loss, drawn as a line by tools/analysis/plot_training_curve.py
-    # so a curve can be read against something. See model/util/baseline.py.
-    from model.util.baseline import mean_baseline
+    # so a curve can be read against something. See model/train/baseline.py.
+    from model.train.baseline import mean_baseline
     with open(os.path.join(out_path, "baseline.json"), "w") as f:
         _json.dump(mean_baseline(train, val), f, indent=2)
 
@@ -692,7 +692,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     # The test clips, scored with the weights that were saved: those of the
     # best val epoch under KEEP_BEST=1, else those of the last epoch. Added
     # 2026-10-06, because no run at patch 48 had a test number.
-    from model.util.baseline import mean_baseline, reconstruction_scores
+    from model.train.baseline import mean_baseline, reconstruction_scores
     _scores = reconstruction_scores(test, ae.autoencode(test, batch_size=1000))
     _base = mean_baseline(train, test)
     _best = {}
@@ -757,5 +757,5 @@ if __name__ == '__main__':
     try:
         main()
     except:
-        import model.util.stacktrace
-        model.util.stacktrace.format()
+        import model.train.stacktrace
+        model.train.stacktrace.format()

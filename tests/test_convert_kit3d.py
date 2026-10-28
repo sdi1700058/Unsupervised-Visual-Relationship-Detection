@@ -12,7 +12,7 @@ import unittest
 
 import numpy as np
 
-from tools.video import convert_kit3d as ck
+from tools.datasets import convert_kit3d as ck
 
 
 TRUE_Q = np.array([560.0, 540.0, 330.0, 250.0, 0.30, -0.05, 0.02,

@@ -14,7 +14,7 @@ Decided 2026-09-06: **count always, refuse only under `STRICT_ADJACENCY=1`.**
 Existing runs reproduce by default so the measurements stay comparable, new
 runs can be clean, and the export records which it was.
 
-`model/util/adjacency.py` imports nothing from `latplan`, so it loads from
+`model/loaders/adjacency.py` imports nothing from `latplan`, so it loads from
 file here without dragging in TensorFlow.
 """
 
@@ -27,7 +27,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
 _spec = importlib.util.spec_from_file_location(
-    "_adjacency", os.path.join(ROOT, "model", "util", "adjacency.py"))
+    "_adjacency", os.path.join(ROOT, "model", "loaders", "adjacency.py"))
 adjacency = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(adjacency)
 

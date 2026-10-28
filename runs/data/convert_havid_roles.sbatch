@@ -23,7 +23,7 @@ cd "${ROOT}"
 # Two steps: `module load system ffmpeg/7.1` on one line fails on Sherlock.
 module load system
 module load ffmpeg/7.1
-.venv-local/bin/python tools/video/convert_havid.py \
+.venv-local/bin/python tools/datasets/convert_havid.py \
     --ext data/video/ha_vid/ext \
     --frame-rates data/video/ha_vid/frame_rates.tsv \
     --out data/video/ha_vid/vidvrd_format \

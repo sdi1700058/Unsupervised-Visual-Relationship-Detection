@@ -10,7 +10,7 @@ import unittest
 
 import numpy as np
 
-from planner.common.encode import apply_in_batches, encode_all
+from model.latents.encode import apply_in_batches, encode_all
 
 
 class _Recorder(object):

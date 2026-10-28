@@ -48,7 +48,7 @@ def _ann(tmp):
 class TestLabels(unittest.TestCase):
 
     def test_relation_spans_become_per_frame_labels(self):
-        from planner.predicate_probe import relation_labels
+        from metrics.predicate_probe import relation_labels
 
         with tempfile.TemporaryDirectory() as tmp:
             lab = relation_labels(_ann(tmp), num_objs=2)
@@ -66,7 +66,7 @@ class TestLabels(unittest.TestCase):
 
     def test_direction_matters(self):
         """(0,1) and (1,0) are different rows; a probe must not conflate them."""
-        from planner.predicate_probe import relation_labels
+        from metrics.predicate_probe import relation_labels
 
         with tempfile.TemporaryDirectory() as tmp:
             lab = relation_labels(_ann(tmp), num_objs=2)
@@ -77,7 +77,7 @@ class TestLabels(unittest.TestCase):
                 self.assertEqual(tuple(lab.pairs[k]), (1, 0))
 
     def test_a_frame_carries_several_predicates_at_once(self):
-        from planner.predicate_probe import relation_labels
+        from metrics.predicate_probe import relation_labels
 
         with tempfile.TemporaryDirectory() as tmp:
             lab = relation_labels(_ann(tmp), num_objs=2)
@@ -92,14 +92,14 @@ class TestSplit(unittest.TestCase):
 
     def test_split_is_temporal_not_random(self):
         """Adjacent frames are near-duplicates, so a random split leaks."""
-        from planner.predicate_probe import temporal_split
+        from metrics.predicate_probe import temporal_split
 
         frames = np.repeat(np.arange(100), 2)
         tr, te = temporal_split(frames, test_frac=0.3)
         self.assertTrue(frames[tr].max() < frames[te].min())
 
     def test_no_frame_appears_on_both_sides(self):
-        from planner.predicate_probe import temporal_split
+        from metrics.predicate_probe import temporal_split
 
         frames = np.repeat(np.arange(50), 3)
         tr, te = temporal_split(frames, test_frac=0.4)
@@ -109,20 +109,20 @@ class TestSplit(unittest.TestCase):
 class TestAveragePrecision(unittest.TestCase):
 
     def test_perfect_ranking_scores_one(self):
-        from planner.predicate_probe import average_precision
+        from metrics.predicate_probe import average_precision
 
         y = np.array([0, 0, 1, 1])
         s = np.array([0.1, 0.2, 0.8, 0.9])
         self.assertAlmostEqual(average_precision(y, s), 1.0)
 
     def test_all_one_class_is_undefined(self):
-        from planner.predicate_probe import average_precision
+        from metrics.predicate_probe import average_precision
 
         self.assertIsNone(average_precision(np.zeros(5), np.arange(5)))
         self.assertIsNone(average_precision(np.ones(5), np.arange(5)))
 
     def test_reversed_ranking_scores_near_the_floor(self):
-        from planner.predicate_probe import average_precision
+        from metrics.predicate_probe import average_precision
 
         y = np.array([1, 1, 0, 0, 0, 0])
         good = average_precision(y, np.array([1.0, .9, .1, .1, .1, .1]))
@@ -140,14 +140,14 @@ class TestProbes(unittest.TestCase):
         return X, y
 
     def test_ridge_probe_recovers_a_linearly_encoded_predicate(self):
-        from planner.predicate_probe import ridge_probe, average_precision
+        from metrics.predicate_probe import ridge_probe, average_precision
 
         X, y = self._separable()
         s = ridge_probe(X[:150], y[:150], X[150:])
         self.assertGreater(average_precision(y[150:], s), 0.95)
 
     def test_ridge_probe_fails_on_a_label_the_latent_does_not_carry(self):
-        from planner.predicate_probe import ridge_probe, average_precision
+        from metrics.predicate_probe import ridge_probe, average_precision
 
         X, _ = self._separable()
         rng = np.random.RandomState(7)
@@ -163,7 +163,7 @@ class TestProbes(unittest.TestCase):
         high kNN score means the relation IS there but is not *expressed*,
         which is a different and weaker claim than "the model learned it".
         """
-        from planner.predicate_probe import (ridge_probe, knn_probe,
+        from metrics.predicate_probe import (ridge_probe, knn_probe,
                                                    average_precision)
 
         rng = np.random.RandomState(3)
@@ -187,7 +187,7 @@ class TestShuffleControl(unittest.TestCase):
         only the representation, so the gap between the two is the part the
         representation is responsible for.
         """
-        from planner.predicate_probe import (ridge_probe,
+        from metrics.predicate_probe import (ridge_probe,
                                                    average_precision)
 
         rng = np.random.RandomState(0)
@@ -226,14 +226,14 @@ class TestControlTask(unittest.TestCase):
         never fit the control task and selectivity is trivially high for the
         wrong reason.
         """
-        from planner.predicate_probe import control_task_labels
+        from metrics.predicate_probe import control_task_labels
 
         z = np.array([[0, 1], [1, 0], [0, 1], [1, 1]], dtype=np.float64)
         y = control_task_labels(z, base_rate=0.5, seed=0)
         self.assertEqual(y[0], y[2])          # same code, same label
 
     def test_the_base_rate_is_preserved(self):
-        from planner.predicate_probe import control_task_labels
+        from metrics.predicate_probe import control_task_labels
 
         rng = np.random.RandomState(0)
         z = rng.randint(0, 2, size=(400, 10)).astype(np.float64)
@@ -248,7 +248,7 @@ class TestControlTask(unittest.TestCase):
         assignments, so it should score near the base rate here. If it did
         not, every M1 number would be suspect.
         """
-        from planner.predicate_probe import (control_task_labels,
+        from metrics.predicate_probe import (control_task_labels,
                                                    ridge_probe,
                                                    average_precision)
 
@@ -264,7 +264,7 @@ class TestControlTask(unittest.TestCase):
         self.assertLess(ap - (prior or 0.0), 0.25)
 
     def test_selectivity_appears_in_the_corpus_summary(self):
-        from planner.predicate_probe import probe_corpus, Labels
+        from metrics.predicate_probe import probe_corpus, Labels
 
         rng = np.random.RandomState(4)
         clips = []

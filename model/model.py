@@ -21,12 +21,12 @@ from keras.objectives import mse, mae
 from keras.callbacks import LambdaCallback, LearningRateScheduler, Callback, CallbackList, ReduceLROnPlateau
 from keras.layers.advanced_activations import LeakyReLU
 import tensorflow as tf
-from .util.noise import gaussian, salt, pepper
-from .util.distances import *
-from .util.layers    import *
-from .util.tuning    import InvalidHyperparameterError
-from .util.plot      import plot_grid, squarify
-from .util           import ensure_list, NpEncoder
+from .noise import gaussian, salt, pepper
+from .losses import *
+from .layers    import *
+from .train.hyperparameters import InvalidHyperparameterError
+from .plot      import plot_grid, squarify
+# curry, ensure_list and NpEncoder sit at the end of this file, so that line numbers stay put.
 
 # utilities ###############################################################
 
@@ -411,8 +411,8 @@ Poor python coders cannot enjoy the cleanness of CLOS :before, :after, :around m
             train_data_to_cache = [[ train_subdata_to[indices] for train_subdata_to in train_data_to ] for indices in indices_cache ]
             # KEEP_BEST=1 keeps the weights of the lowest val BCE and restores
             # them before the save, because the runs at patch 48 overfit after
-            # epoch 1,000 of 5,000 (2026-10-06). See model/util/best.py.
-            from model.util.best import BestKeeper, split_by_counts
+            # epoch 1,000 of 5,000 (2026-10-06). See model/train/best.py.
+            from model.train.best import BestKeeper, split_by_counts
             keeper = None
             if os.environ.get("KEEP_BEST") == "1":
                 # Count only from the end of the pre-encoder fade-in, which is
@@ -502,7 +502,7 @@ The latter two are used for verifying the performance of the AE.
 """
     def _report(self,test_both,**opts):
 
-        from .util.np_distances import mse
+        from .losses_np import mse
 
         test_both(["MSE","vanilla"],
                   lambda data: mse(data, self.autoencode(data,**opts)))
@@ -1322,8 +1322,8 @@ class BaseFirstOrderMixin:
 
     def puzzle_renderer(self):
 
-        from model.puzzles.puzzle_mnist import setting
-        from model.puzzles.model.puzzle import load
+        from model.loaders.mnist import setting
+        from model.loaders.base import load
         load(3,3)
         panels = setting["panels"]
         base = setting["base"]
@@ -1372,7 +1372,7 @@ class BaseFirstOrderMixin:
         images = []
         for seq in zip(x_rendered, y_rendered, diff):
             images.extend(seq)
-        from .util.plot import plot_grid
+        from .plot import plot_grid
         plot_grid(images, w=3, path=path, verbose=verbose)
 
         for i, (x_ren, y_ren) in enumerate(zip(x_rendered, y_rendered)):
@@ -1393,7 +1393,7 @@ class BaseFirstOrderMixin:
         for seq in zip(x_rendered, y_rendered, diff):
             images.extend(seq)
         import os.path
-        from .util.plot import plot_grid
+        from .plot import plot_grid
         plot_grid(images, w=3, path=os.path.splitext(path)[0]+"_each.png", verbose=verbose)
         return
 
@@ -1433,7 +1433,7 @@ class BaseFirstOrderMixin:
         test_both([self.eval.__name__,"ordered","vanilla"],
                   lambda data: float(self.autoencoder.evaluate(data,data,**opts)))
 
-        from model.puzzles import shuffle_objects
+        from model.loaders import shuffle_objects
         test_data = shuffle_objects(test_data)
         train_data = shuffle_objects(train_data)
 
@@ -1577,7 +1577,7 @@ class FirstOrderSAE(BaseFirstOrderMixin, ZeroSuppressMixin, ConcreteLatentMixin,
         images = []
         for seq in zip(x, *_ag, _b, x, y, x_sorted, y_sorted, dy):
             images.extend(seq)
-        from .util.plot import plot_grid
+        from .plot import plot_grid
         plot_grid(images, w=7+len(_ag), path=path, verbose=verbose)
         return
 
@@ -1637,7 +1637,7 @@ class FirstOrderSAE(BaseFirstOrderMixin, ZeroSuppressMixin, ConcreteLatentMixin,
             # exyc
             images.extend(truepic) # xyc
             images.extend(falsepic)
-        from .util.plot import plot_grid
+        from .plot import plot_grid
         plot_grid(images, w=2*examples+1, path=path, verbose=verbose)
         return
 
@@ -1833,7 +1833,7 @@ class BaseActionMixin:
     def _report(self,test_both,**opts):
         super()._report(test_both,**opts)
 
-        from .util.np_distances import mse, mae
+        from .losses_np import mse, mae
 
         test_both(["aae","MSE","vanilla"],
                   lambda data: mse(data[:,1,...], self.net.predict(data,          **opts)[:,1,...]))
@@ -2442,7 +2442,7 @@ class Discriminator(Network):
         self.net = Model(x, y)
 
     def _report(self,test_both,**opts):
-        from .util.np_distances import bce
+        from .losses_np import bce
         test_both(["BCE"], lambda data: bce(data, self.autoencode(data,**opts)))
         return
     def discriminate(self,data,**kwargs):
@@ -2864,3 +2864,28 @@ class UBDiscriminator(Discriminator):
     def discriminate(self,data,**kwargs):
         return self.net.predict(data,**kwargs)
 
+
+# Helpers that lived in model/util/__init__.py until 2026-10-28.
+def curry(fn,*args1,**kwargs1):
+    return lambda *args,**kwargs: fn(*args1,*args,**{**kwargs1,**kwargs})
+
+def ensure_list(x):
+    if type(x) is not list:
+        return [x]
+    else:
+        return x
+
+import json
+import numpy as np
+class NpEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if isinstance(obj, np.integer):
+            return int(obj)
+        elif isinstance(obj, np.bool_):
+            return bool(obj)
+        elif isinstance(obj, np.floating):
+            return float(obj)
+        elif isinstance(obj, np.ndarray):
+            return obj.tolist()
+        else:
+            return super(NpEncoder, self).default(obj)

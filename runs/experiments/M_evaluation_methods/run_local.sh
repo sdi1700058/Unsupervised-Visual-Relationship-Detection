@@ -62,7 +62,7 @@ echo "M1  does the latent encode the relations?"
 echo "=========================================="
 if (( ${#ANNS[@]} >= 2 )); then
     ( ulimit -v "${MEM_KB}"
-      "$PY" planner/predicate_probe.py "${EXPORTS[@]}" \
+      "$PY" metrics/predicate_probe.py "${EXPORTS[@]}" \
           --annotation "${ANNS[@]}" --out-dir "${OUT}/M1" )
 else
     echo "SKIP: M1 needs at least two clips with annotations. Within one clip"

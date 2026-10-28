@@ -37,7 +37,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(
     os.path.abspath(__file__))))
 
-from planner.common.metrics import truthy      # noqa: E402
+from planner.plan_score import truthy      # noqa: E402
 
 
 # Arm A carries 38% more transitions than arm B. Any advantage smaller than

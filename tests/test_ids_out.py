@@ -20,7 +20,7 @@ import shutil
 import tempfile
 import unittest
 
-from tools.video import ids_out
+from tools.datasets import ids_out
 
 
 class Guard(unittest.TestCase):

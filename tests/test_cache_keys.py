@@ -1,6 +1,6 @@
 """A cache key must name everything that changes the shape of what it holds.
 
-`model/util/cache.py` says so in its own docstring: "A cache keyed on
+`model/loaders/cache.py` says so in its own docstring: "A cache keyed on
 category and fps alone returns patch-32 tensors to a caller that asked for
 patch 8, silently and with no shape error, because the model reads the patch
 dim off the data."
@@ -34,9 +34,9 @@ ROOT = os.path.abspath(ROOT)
 # stub left behind makes that import succeed and hands the real oracle tests a
 # `_scale_bbox_to_canvas` that returns None. That is what happened when this
 # file was first written -- eleven tests in three other files went red.
-_STUBBED = ("model", "model.util", "model.puzzles", "model.domains",
-            "model.domains.video", "model.util.paths",
-            "model.puzzles.puzzle_labeled_objects", "model.util.cache")
+_STUBBED = ("model", "model.loaders", "model.domains",
+            "model.domains.video", "model.paths",
+            "model.loaders.labeled_objects", "model.loaders.cache")
 
 
 class StubbedCase(unittest.TestCase):
@@ -64,25 +64,25 @@ def _from_file(name, path):
 
 def _stub_latplan():
     """The minimum of `latplan` these two loaders touch, without TensorFlow."""
-    for name in ("model", "model.util", "model.puzzles",
+    for name in ("model", "model.loaders",
                  "model.domains", "model.domains.video"):
         sys.modules.setdefault(name, types.ModuleType(name))
 
-    paths = types.ModuleType("model.util.paths")
+    paths = types.ModuleType("model.paths")
     paths.DATA_DIR = os.path.join(ROOT, "data")
-    sys.modules["model.util.paths"] = paths
+    sys.modules["model.paths"] = paths
 
-    plo = types.ModuleType("model.puzzles.puzzle_labeled_objects")
+    plo = types.ModuleType("model.loaders.labeled_objects")
     plo.PATCH_SIZE = 32
     plo.MAX_OBJECTS = 10
     plo.CANVAS_H, plo.CANVAS_W = 200, 300
     plo.PICSIZE = (200, 300)
     plo._crop_object = lambda *a, **k: None
     plo._scale_bbox_to_canvas = lambda *a, **k: None
-    sys.modules["model.puzzles.puzzle_labeled_objects"] = plo
+    sys.modules["model.loaders.labeled_objects"] = plo
 
-    return _from_file("model.util.cache",
-                      os.path.join(ROOT, "model", "util", "cache.py"))
+    return _from_file("model.loaders.cache",
+                      os.path.join(ROOT, "model", "loaders", "cache.py"))
 
 
 class TestTheKeyItself(StubbedCase):

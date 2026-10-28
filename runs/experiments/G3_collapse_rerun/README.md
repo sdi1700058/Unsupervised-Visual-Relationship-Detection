@@ -8,7 +8,7 @@ collapses far fewer than five times.**
 
 ## Why the question is open
 
-`planner/liveness.py` reported **7 of 31 exports dead** on 2026-09-18,
+`metrics/liveness.py` reported **7 of 31 exports dead** on 2026-09-18,
 each with `distinct=1`, which means the encoder emitted one latent for every
 frame. Sixteen exports came from one bake, one set of defaults and one sweep.
 Seven collapsed and nine did not, and no axis separates them:
@@ -54,7 +54,7 @@ The export job is chained with `--dependency`, so there is no second visit.
 When `squeue --me` is empty, the number this turns on:
 
 ```bash
-.venv-local/bin/python planner/liveness.py --exports eval/exports --strict
+.venv-local/bin/python metrics/liveness.py --exports eval/exports --strict
 ```
 
 ## What each outcome means, decided in advance

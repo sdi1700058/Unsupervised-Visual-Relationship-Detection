@@ -15,7 +15,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 os.pardir))
 
-from model.util.augment import translate, _padding_mask
+from model.loaders.augment import translate, _padding_mask
 
 
 class TestDegenerateBoxesBecomePadding(unittest.TestCase):

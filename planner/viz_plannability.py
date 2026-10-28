@@ -29,7 +29,7 @@ def as_float(value):
 
 
 # One function for this column across the project, since 2026-09-07.
-from planner.common.metrics import truthy as is_true   # noqa: E402,F401
+from planner.plan_score import truthy as is_true   # noqa: E402,F401
 
 
 def write_caption(png_path, title, what, how):
@@ -184,7 +184,7 @@ def main(argv=None):
     summary_csv = args.summary_dir / "summary.csv"
     if not summary_csv.exists():
         sys.exit(f"no summary.csv in {args.summary_dir}. "
-                 "Run planner/eval_plannability.sh first.")
+                 "Run runs/eval/eval_plannability.sh first.")
 
     rows = read_summary(summary_csv)
     if not rows:

@@ -232,6 +232,6 @@ def _solve(z_init, z_goal, z_all, time_budget_s, out_dir, export=None,
 
 
 def run(export_path, init_idx, goal_idx, out_dir, **kwargs):
-    from planner.common.harness import run_window
+    from planner.harness import run_window
     return run_window(export_path, init_idx, goal_idx, out_dir,
                       solve=_solve, method="bfs", **kwargs)

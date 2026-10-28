@@ -20,7 +20,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
 _spec = importlib.util.spec_from_file_location(
-    "_convert_havid", os.path.join(ROOT, "tools", "video", "convert_havid.py"))
+    "_convert_havid", os.path.join(ROOT, "tools", "datasets", "convert_havid.py"))
 ch = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ch)
 
@@ -187,7 +187,7 @@ class RelationInstances(unittest.TestCase):
     when the action ends. The rule is this project's, so the tier is T3, and
     `workbench/scripts/analysis/havid_relations.py` says so in its own header.
 
-    A clip IS one primitive task: `tools/video/convert_havid.py:283` clamps
+    A clip IS one primitive task: `tools/datasets/convert_havid.py:283` clamps
     the clip to the segment, so the action ends on the clip's last frame and
     the relation holds there and nowhere else. One instance per clip.
     """

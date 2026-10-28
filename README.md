@@ -15,12 +15,12 @@ labels beyond reconstruction loss. The FOSAE paper is at
 
 - `model/` — FOSAE, the model (encoder, decoder, layers), forked from
   upstream Latplan. `model/train/strips.py` trains a model
-  (`model/train/strips.py <mode> <task> ...`), `model/train/extract_fol.py`
+  (`model/train/strips.py <mode> <task> ...`), `metrics/extract_fol.py`
   reads predicates out of a trained model, and `model/config.py` sets up the
   Keras session.
-- `tools/` — the tooling: `tools/video/` converts each dataset's raw
+- `tools/` — the tooling: `tools/datasets/` converts each dataset's raw
   annotations into the common VidVRD-style relation format,
-  `tools/setup-dataset.py` bakes a converted dataset into `.npz`, and
+  `tools/datasets/setup_dataset.py` bakes a converted dataset into `.npz`, and
   `tools/analysis/` holds the training-run analysis scripts.
 - `planner/` — the planners (bfs, pddl, ama3), the latent export
   (`export_latents.py`) and the evaluation, including `triplet_eval.py`
@@ -64,7 +64,7 @@ export TMPDIR=/scratch/users/konkotsa/panos/sgg-thesis/.claude/tmp
 ## Triplet mAP
 
 ```bash
-.venv-local/bin/python planner/triplet_eval.py --dataset se --out workbench/eval/triplet/<date>/
+.venv-local/bin/python metrics/triplet_eval.py --dataset se --out workbench/eval/triplet/<date>/
 ```
 
 `--dataset` selects which converted dataset to score; `--out` is a directory

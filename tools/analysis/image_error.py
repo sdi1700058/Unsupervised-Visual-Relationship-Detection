@@ -42,7 +42,7 @@ def main(argv=None):
     args = ap.parse_args(argv)
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import replot
-    from model.puzzles.puzzle_labeled_objects import PICSIZE
+    from model.loaders.labeled_objects import PICSIZE
     print("| run | states | image dims | image MSE | box MSE | all MSE |")
     print("|---|---|---|---|---|---|")
     for run in args.runs:

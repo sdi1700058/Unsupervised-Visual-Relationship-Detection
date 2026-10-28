@@ -4,7 +4,7 @@
 #   bash runs/experiments/M_evaluation_methods/build_oracle_dataset.sh
 #   N_CLIPS=40 bash runs/experiments/M_evaluation_methods/build_oracle_dataset.sh
 #
-# Any dataset whose annotations read through planner/deprecated/position_oracle.py works, not
+# Any dataset whose annotations read through planner/position_oracle.py works, not
 # only VidVRD. VidOR uses the identical format, so:
 #
 #   CLIPS_FILE=eval/datasets/clips/vidor_winnable_w16.txt \
@@ -43,7 +43,7 @@ echo "using ${PY}"
 
 if [[ ! -f "${CLIPS_FILE}" ]]; then
     echo "FATAL: ${CLIPS_FILE} missing. Produce it with:" >&2
-    echo "  python3 tools/video/screen_vidvrd.py --winnable-only --no-fill-only \\" >&2
+    echo "  python3 tools/datasets/screen_vidvrd.py --winnable-only --no-fill-only \\" >&2
     echo "      --min-frames 45 --list ${CLIPS_FILE}" >&2
     exit 2
 fi
@@ -74,7 +74,7 @@ while read -r clip; do
     # nothing about why -- including when the cause was the memory cap, which
     # looks identical to a malformed annotation.
     if ( ulimit -v "${MEM_KB}"
-         "${PY}" planner/deprecated/position_oracle.py "${ANN}" \
+         "${PY}" planner/position_oracle.py "${ANN}" \
              --out "${OUT_DIR}/${out_name}.npz" --max-objects 3 --no-fill \
              >/dev/null ); then
         built=$((built + 1))

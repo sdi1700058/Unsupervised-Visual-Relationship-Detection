@@ -7,13 +7,13 @@ bit, and until now only one of them could say which objects a bit is about.
 
 `planner/relation_oracle.py` writes `predicates` and `num_objs`, so an
 oracle bit inverts to (subject, object, predicate).
-`planner/export_latents.py` wrote no `bindings` key, so a FOSAE bit
+`model/latents/export_latents.py` wrote no `bindings` key, so a FOSAE bit
 inverted to (unit, predicate) and stopped. That is why stage one of the
 two-stage evaluation was not computable for any dataset, whatever the dataset
 shipped.
 
 The producers already existed. `model/model.py` defines `encode_attention`,
-and `model/util/fol.py` turns that attention into hard bindings by argmax.
+and `metrics/fol.py` turns that attention into hard bindings by argmax.
 Neither was wired into the export.
 
 These tests are pure. They touch no model and no keras, so they run in the
@@ -29,7 +29,7 @@ import numpy as np
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                 ".."))
 
-from planner.export_latents import (  # noqa: E402
+from model.latents.export_latents import (  # noqa: E402
     bindings_from_attention, invert_bit)
 
 
@@ -52,11 +52,11 @@ class TestBindingsFromAttention(unittest.TestCase):
     def test_it_agrees_with_the_producer_in_latplan(self):
         """The export must not invent a second definition of a binding.
 
-        `model/util/fol.py` already computes this, and a copy that drifts
+        `metrics/fol.py` already computes this, and a copy that drifts
         from it would make the oracle arm and the FOSAE arm disagree about
         what a bit means. This pins them together.
         """
-        from model.util.fol import extract_attention_bindings
+        from metrics.fol import extract_attention_bindings
         rng = np.random.RandomState(0)
         attention = rng.rand(5, 4, 2, 6)
         mine = bindings_from_attention(attention)
@@ -99,7 +99,7 @@ class TestInvertBit(unittest.TestCase):
         would name the wrong predicate. So the layout is pinned against the
         producer rather than restated.
         """
-        from model.util.fol import extract_predicate_values
+        from metrics.fol import extract_predicate_values
         U, P = 2, 3
         flat = np.arange(U * P).reshape(1, U * P)
         table = extract_predicate_values(flat, U, P)
@@ -138,7 +138,7 @@ class TestRelationsOfState(unittest.TestCase):
     """
 
     def setUp(self):
-        from planner.export_latents import relations_of_state
+        from model.latents.export_latents import relations_of_state
         self.relations_of_state = relations_of_state
         # U=2, A=2, P=3
         self.bindings = np.array([[5, 6], [7, 8]])
@@ -188,7 +188,7 @@ class TestTheCommand(unittest.TestCase):
     def setUp(self):
         import shutil
         import tempfile
-        from planner import show_relations
+        from metrics import show_relations
         self.show_relations = show_relations
         self.root = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, self.root)

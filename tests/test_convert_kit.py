@@ -17,7 +17,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
 _spec = importlib.util.spec_from_file_location(
-    "_convert_kit", os.path.join(ROOT, "tools", "video", "convert_kit.py"))
+    "_convert_kit", os.path.join(ROOT, "tools", "datasets", "convert_kit.py"))
 ck = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(ck)
 

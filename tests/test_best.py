@@ -2,8 +2,8 @@
 
 Found 2026-10-06: every run saved its weights at the last epoch only, while
 its val BCE was lowest near epoch 1,000 of 5,000 and rose after, so the best
-weights could not be tested. `model/util/best.py` and the scores in
-`model/util/baseline.py` import nothing from `latplan`, so they load here
+weights could not be tested. `model/train/best.py` and the scores in
+`model/train/baseline.py` import nothing from `latplan`, so they load here
 without TensorFlow.
 """
 
@@ -25,8 +25,8 @@ def _load(name, rel):
     return mod
 
 
-best = _load("_best", "model/util/best.py")
-baseline = _load("_baseline_b", "model/util/baseline.py")
+best = _load("_best", "model/train/best.py")
+baseline = _load("_baseline_b", "model/train/baseline.py")
 
 
 class BestKeeper(unittest.TestCase):

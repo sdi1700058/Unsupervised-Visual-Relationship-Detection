@@ -165,7 +165,7 @@ class TestSlotsAreStable(unittest.TestCase):
         on 62 per cent of the KIT role clips, 45 of Something-Else, 16 of
         HA-ViD and 2 of VidVRD.
         """
-        from model.puzzles import puzzle_vidvrd as pv
+        from model.loaders import vidvrd as pv
         # Track 0 is in every frame and small, track 1 in one frame and
         # large: area first puts 1 in slot 0, frame count first puts 0 there.
         doc = {"video_id": "c", "subject/objects": [

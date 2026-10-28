@@ -48,20 +48,20 @@ def _compressed(n=40, bits=64, every=3):
 class TestTemporalFidelity(unittest.TestCase):
 
     def test_a_code_that_preserves_time_scores_one(self):
-        from planner.latent_geometry import temporal_fidelity
+        from metrics.latent_geometry import temporal_fidelity
 
         r = temporal_fidelity(_one_bit_per_frame(), ks=(2, 4, 7))
         self.assertAlmostEqual(r["steps_per_frame"], 1.0, places=1)
         self.assertEqual(r["per_k"][7], 7.0)
 
     def test_a_compressed_code_scores_below_one(self):
-        from planner.latent_geometry import temporal_fidelity
+        from metrics.latent_geometry import temporal_fidelity
 
         r = temporal_fidelity(_compressed(every=3), ks=(2, 4, 7))
         self.assertLess(r["steps_per_frame"], 0.8)
 
     def test_compression_is_ordered_by_severity(self):
-        from planner.latent_geometry import temporal_fidelity
+        from metrics.latent_geometry import temporal_fidelity
 
         mild = temporal_fidelity(_compressed(every=2), ks=(4, 7))
         harsh = temporal_fidelity(_compressed(every=5), ks=(4, 7))
@@ -69,14 +69,14 @@ class TestTemporalFidelity(unittest.TestCase):
 
     def test_a_dead_latent_is_undefined_not_zero(self):
         """One distinct code means no path exists. None, not 0.0 (SPEC V29)."""
-        from planner.latent_geometry import temporal_fidelity
+        from metrics.latent_geometry import temporal_fidelity
 
         dead = np.zeros((40, 64), dtype=np.int8)
         r = temporal_fidelity(dead, ks=(2, 4))
         self.assertIsNone(r["steps_per_frame"])
 
     def test_a_clip_shorter_than_the_separation_is_skipped(self):
-        from planner.latent_geometry import temporal_fidelity
+        from metrics.latent_geometry import temporal_fidelity
 
         r = temporal_fidelity(_one_bit_per_frame(n=5), ks=(2, 20))
         self.assertIn(2, r["per_k"])
@@ -84,7 +84,7 @@ class TestTemporalFidelity(unittest.TestCase):
 
     def test_it_needs_no_planner_and_no_ground_truth(self):
         import inspect
-        from planner.latent_geometry import temporal_fidelity
+        from metrics.latent_geometry import temporal_fidelity
 
         args = inspect.getfullargspec(temporal_fidelity).args
         for forbidden in ("gt_boxes", "planner", "boxes"):
