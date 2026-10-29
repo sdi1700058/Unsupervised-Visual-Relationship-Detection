@@ -7,7 +7,7 @@ lost in each frame. They misname objects, for example a hammer as `knife`.
 And they hold no hand. `3d_objects` holds tracked instances such as
 `bowl_7` and `bowl_18`, and both hands as `LeftHand_N` and `RightHand_N`.
 The author decided on 2026-10-05 to convert KIT from them. Plan
-`notes/plans/2026-10-05-dataset-fixes.md`, F3.
+`notes/plans/2026-10-05-dataset-fixes.md`, F3 (archived, see workbench/ARCHIVE.md).
 
 THE CAMERA. The 3D boxes are axis-aligned boxes in mm, and the release ships
 no camera values. Each take fits its own pinhole camera, focal lengths,
@@ -196,7 +196,8 @@ def relation_instances(d3, relations, tracks, start, size, tid_of):
     of the three roles, 5,147 frame-and-track pairs in all, and every relation
     of that track ends there. Smoothing either one would change the ground
     truth, so it is a separate decision. Plan
-    notes/plans/2026-10-10-relations-and-boxes.md, A1.
+    notes/plans/2026-10-10-relations-and-boxes.md, A1
+    (archived, see workbench/ARCHIVE.md).
     """
     keep = set(tracks)
     open_at, out = {}, []

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """A converter must not silently overwrite an ids list it did not write.
 
-WHY THIS EXISTS. `notes/OPEN-ISSUES.md` I28. Two TRACKED ids files were lost
+WHY THIS EXISTS. `notes/OPEN-ISSUES.md` (archived, see workbench/ARCHIVE.md) I28. Two TRACKED ids files were lost
 this way inside six days, each time by a rerun whose `--ids-out` pointed at a
 list somebody else had made:
 

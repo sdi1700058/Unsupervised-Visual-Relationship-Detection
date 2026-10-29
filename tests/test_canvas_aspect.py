@@ -55,9 +55,9 @@ def _has_pillow():
 
 
 def _loader():
-    """The real `puzzle_labeled_objects`, read from file so TensorFlow stays out.
+    """The real `model/loaders/labeled_objects.py`, read from file so TensorFlow stays out.
 
-    Importing through the package runs `model/__init__.py`, which pulls in
+    Importing through the package runs `model/loaders/__init__.py`, which pulls in
     the training stack. `oracle.load_canvas_scaler` does the same dance; the
     last test here checks the two land on the same function object, because
     SPEC V5 allows the canvas geometry exactly one definition.

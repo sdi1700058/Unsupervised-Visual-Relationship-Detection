@@ -16,7 +16,7 @@ Fast Downward is not installed on Sherlock; `install_fd.sh` builds it inside
 a job, not on a login node.
 
     bash planner/install_fd.sh
-    python3 planner/plan_video.py export.npz --method pddl --init 0 --goal 4
+    .venv-local/bin/python planner/plan_video.py export.npz --method pddl --init 0 --goal 4
 
 This is our own encoding, not the paper's. For the paper-faithful path use
 `ama3`. See `../README.md` for the task, the export format and the metrics.

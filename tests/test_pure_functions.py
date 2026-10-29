@@ -17,7 +17,7 @@ import numpy as np
 
 
 def _has_pillow():
-    """`puzzle_labeled_objects` imports PIL, so the scaler test needs it."""
+    """`model/loaders/labeled_objects.py` imports PIL, so the scaler test needs it."""
     try:
         import PIL  # noqa: F401
         return True
@@ -470,11 +470,14 @@ class TestBfs(unittest.TestCase):
     def test_canvas_scaler_loads_without_the_training_stack(self):
         """The oracle claims to need no keras, and it should be true.
 
-        `puzzle_labeled_objects` imports only os, json, numpy and PIL, but
-        importing it through the package runs `model/__init__.py`, which
-        pulls in TensorFlow. That blocked every local oracle run. The loader
-        reaches the module directly, so the same function is imported rather
-        than copied.
+        `model/loaders/labeled_objects.py` imports only os, json, numpy and
+        PIL, but importing it through the package runs
+        `model/loaders/__init__.py`, which pulls in TensorFlow. That blocked
+        every local oracle run. The loader tries the package import first and
+        reads the module from its file only on ImportError, so the same
+        function is imported rather than copied. In `.venv-local` the package
+        import succeeds and loads Keras, so this test does not run the file
+        fallback.
         """
         from metrics.box_geometry import load_canvas_scaler
 

@@ -14,7 +14,7 @@ Decided 2026-09-06: **count always, refuse only under `STRICT_ADJACENCY=1`.**
 Existing runs reproduce by default so the measurements stay comparable, new
 runs can be clean, and the export records which it was.
 
-`model/loaders/adjacency.py` imports nothing from `latplan`, so it loads from
+`model/loaders/adjacency.py` imports nothing from the `model` package, so it loads from
 file here without dragging in TensorFlow.
 """
 

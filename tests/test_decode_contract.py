@@ -17,8 +17,8 @@ the whole suite would stay green while the regression came back in silence.
 This file runs both sides against each other. It fails if either one moves.
 
 `decode.py` cannot be imported through the package, because that runs
-`model/__init__.py` and pulls in TensorFlow. The geometry it needs is loaded
-from the real `puzzle_labeled_objects.py` by file, which is what
+`model/loaders/__init__.py` and pulls in TensorFlow. The geometry it needs is loaded
+from the real `model/loaders/labeled_objects.py` by file, which is what
 `oracle.load_canvas_scaler` does, so the numbers here are the production
 numbers and not a fixture.
 """

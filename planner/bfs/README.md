@@ -10,7 +10,7 @@ lower bound, not a reading of the learned schema.
 Use it as the first smoke test: it exercises the whole search and scoring path
 with nothing installed beyond numpy.
 
-    python3 planner/plan_video.py export.npz --method bfs --init 0 --goal 4
+    .venv-local/bin/python planner/plan_video.py export.npz --method bfs --init 0 --goal 4
 
 Search cost is `O(K^d)` for `K` deltas and plan length `d`, so it only suits
 short windows. See `../README.md` for the task, the export format and the

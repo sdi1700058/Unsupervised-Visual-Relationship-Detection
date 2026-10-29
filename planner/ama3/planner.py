@@ -61,7 +61,7 @@ def write_domain(export, out_dir):
 
     ama3-domain.bin takes the action list and the add and delete effects as
     three separate files, the shape the action autoencoder dumps. FOSAE's own
-    dump_actions writes only pre|suc rows (model.py:1051), so we derive the
+    dump_actions writes only pre|suc rows (model/model.py:1077), so we derive the
     three files here. One action per distinct (add, delete) pair, which is the
     same grouping upstream reaches by way of the action labels.
     """

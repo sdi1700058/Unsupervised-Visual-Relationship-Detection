@@ -22,7 +22,7 @@ parsed is kept even under `STRICT_ADJACENCY=1`, and counted as `unknown_gap`.
 Refusing on ignorance would silently discard whole datasets whose ids are
 formatted differently, which is the same disease with the opposite sign.
 
-This module imports nothing from `latplan`, so it can be read without the
+This module imports nothing from the `model` package, so it can be read without the
 training stack. Standard library only, Python 3.6 clean.
 """
 

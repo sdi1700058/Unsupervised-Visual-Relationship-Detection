@@ -7,7 +7,8 @@ what counts as a relation between two objects, that a static property is
 never a transition, and that a flip needs the effect and the precondition to
 disagree.
 
-Moved here from `workbench/tests/` on 2026-10-11 with the code
+Moved here from `workbench/tools/planner/tests/` (now `workbench/scripts/tests/`)
+on 2026-10-11 with the code
 they cover, because the converter is public and may not import `workbench`.
 """
 

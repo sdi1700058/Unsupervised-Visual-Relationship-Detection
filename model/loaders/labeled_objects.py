@@ -24,7 +24,7 @@ video's aspect ratio, and the bbox block is the network's only position signal.
 See `_scale_bbox_to_canvas` for the measurement and the rejected alternatives.
 
 build_dataset() returns raw (uint8 patches, uint16 pixel bboxes) so that the
-caller (model/train/strips.py / visualize_fol.py / metrics/extract_fol.py) can apply the standard
+caller (model/train/strips.py / metrics/extract_fol.py) can apply the standard
 preprocess() + bboxes_to_onehot() pipeline, identical to blocksworld.
 """
 

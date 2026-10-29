@@ -60,6 +60,13 @@ sits beside them in `planner/`.
     viz_plannability.py     turns summary.csv into figures
     install_fd.sh           builds Fast Downward
     install_roswell.sh      installs Roswell, SBCL, arrival, lisp binaries
+    position_oracle.py      export from quantised ground-truth boxes (deprecated)
+    relation_oracle.py      export from the annotated relations
+    plan_validity.py        M3, plan admissibility without ground truth
+    window_survey.py        finds the window at which mse_ratio is winnable
+    onmanifold.py           plans without leaving the support of the data
+    e1_summary.py           summarises the two arms of E1
+    make_report.py          turns a planner run into one HTML page
 
 Outside `planner/`:
 
@@ -80,14 +87,14 @@ holds the model, so they are split.
 
 Stage one runs where the model lives, usually Sherlock:
 
-    python3 model/latents/export_latents.py <model_dir> -o dog.npz
+    .venv-local/bin/python model/latents/export_latents.py <model_dir> -o dog.npz
 
 That writes the encoded frames, the annotated boxes and the decoder output
 for each frame. It is a few hundred kilobytes, so `scp` it and forget it.
 
 Stage two runs anywhere, on any modern Python:
 
-    python3 planner/plan_video.py dog.npz --method bfs --init 0 --goal 4
+    .venv-local/bin/python planner/plan_video.py dog.npz --method bfs --init 0 --goal 4
 
 An export also decouples the two Python versions. Training is stuck on
 Python 3.6 or 3.7 because of TensorFlow 1.15; the planner is not.
@@ -108,20 +115,21 @@ leaning on that number is not trustworthy.
     sudo apt-get install -y libpng-dev
 
 Scoring needs numpy. Figures also need matplotlib, and scipy makes the slot
-matching faster:
+matching faster. `.venv-local` already holds all three. On another machine,
+install them into a virtual environment:
 
-    pip install -r planner/requirements.txt
+    pip install numpy matplotlib scipy
 
 ## Running
 
 One window:
 
-    python3 planner/plan_video.py dog.npz --method bfs --init 0 --goal 4
+    .venv-local/bin/python planner/plan_video.py dog.npz --method bfs --init 0 --goal 4
 
 Every window in one or more exports:
 
-    bash runs/eval/eval_plannability.sh exports/ --window 5 --methods bfs,pddl
-    python3 planner/viz_plannability.py eval/planner/exports
+    bash runs/eval/eval_plannability.sh eval/exports/ --window 5 --methods bfs,pddl
+    .venv-local/bin/python planner/viz_plannability.py eval/planner/exports
 
 ## Output
 
@@ -148,7 +156,7 @@ order means the plan wandered.
 
 ## Tests
 
-    python3 -m unittest tests/test_pure_functions.py
+    .venv-local/bin/python -m unittest tests/test_pure_functions.py
 
 109 tests on synthetic exports, including full runs through the harness.
 No model, no GPU, no lisp, no scipy.

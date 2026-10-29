@@ -5,16 +5,17 @@ category and fps alone returns patch-32 tensors to a caller that asked for
 patch 8, silently and with no shape error, because the model reads the patch
 dim off the data."
 
-`puzzle_vidvrd.py` follows that. `actiongenome.py` did not: it keyed on
+`model/loaders/vidvrd.py` follows that. `actiongenome.py` did not: it keyed on
 category and fps while `build_dataset` also took `num_objs` and `patch_size`.
 Re-running Action Genome at a different patch size returned the previous
 tensors, with no error anywhere, and the model would have read the wrong patch
 dimension off them.
 
-The loaders cannot be imported normally here, because `model/__init__.py`
-pulls in TensorFlow and this environment has none. They are loaded from file
-with the pieces they need stubbed, the same approach `oracle.load_canvas_scaler`
-takes and for the same reason.
+The loaders are not imported through the package here, because
+`model/loaders/__init__.py` imports `mnist`, which pulls in Keras and
+TensorFlow through `base`. They are loaded from file with the pieces they need
+stubbed, the same approach `metrics.box_geometry.load_canvas_scaler` takes and
+for the same reason.
 """
 
 import importlib.util
@@ -28,14 +29,13 @@ ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 ROOT = os.path.abspath(ROOT)
 
 
-# Everything `_stub_latplan` puts into `sys.modules`. The stubs have to come
-# back out after every test: `oracle.load_canvas_scaler` tries the package
+# Everything `_stub_model` puts into `sys.modules`. The stubs have to come
+# back out after every test: `load_canvas_scaler` tries the package
 # import first and falls back to loading the file only on ImportError, so a
 # stub left behind makes that import succeed and hands the real oracle tests a
 # `_scale_bbox_to_canvas` that returns None. That is what happened when this
 # file was first written -- eleven tests in three other files went red.
-_STUBBED = ("model", "model.loaders", "model.domains",
-            "model.domains.video", "model.paths",
+_STUBBED = ("model", "model.loaders", "model.paths",
             "model.loaders.labeled_objects", "model.loaders.cache")
 
 
@@ -44,7 +44,7 @@ class StubbedCase(unittest.TestCase):
 
     def setUp(self):
         self._saved = dict((k, sys.modules.get(k)) for k in _STUBBED)
-        self.cache = _stub_latplan()
+        self.cache = _stub_model()
 
     def tearDown(self):
         for name, was in self._saved.items():
@@ -62,10 +62,9 @@ def _from_file(name, path):
     return module
 
 
-def _stub_latplan():
-    """The minimum of `latplan` these two loaders touch, without TensorFlow."""
-    for name in ("model", "model.loaders",
-                 "model.domains", "model.domains.video"):
+def _stub_model():
+    """The minimum of the `model` package that the loaders touch, without TensorFlow."""
+    for name in ("model", "model.loaders"):
         sys.modules.setdefault(name, types.ModuleType(name))
 
     paths = types.ModuleType("model.paths")

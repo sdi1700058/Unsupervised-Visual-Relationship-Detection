@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-Model classes for latplan.
+Model classes for FOSAE.
 """
 
 import json

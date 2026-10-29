@@ -7,7 +7,7 @@ weights of its last epoch, so the best weights could not be tested.
 the kept weights before it saves. The weights are copied in memory, so no
 file is written each epoch.
 
-This module imports nothing from `latplan`, so it loads without TensorFlow.
+This module imports nothing from the `model` package, so it loads without TensorFlow.
 """
 
 import math

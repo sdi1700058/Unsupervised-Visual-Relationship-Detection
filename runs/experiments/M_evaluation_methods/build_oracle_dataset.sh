@@ -91,7 +91,7 @@ echo "total exports: ${total}"
 
 # An empty output directory is a failure, and it used to exit 0. The callers
 # read that as "the dataset is built": runs/experiments/M4_temporal_distance and
-# sh/dataset.sh both run this and carry straight on, so a run where every
+# sh/dataset.sh (archived, see workbench/ARCHIVE.md) both run this and carry straight on, so a run where every
 # clip failed reached the scorer as an empty dataset rather than as an error.
 if (( total == 0 )); then
     echo >&2

@@ -1,6 +1,6 @@
 """HA-ViD into the VidVRD format the training builder reads.
 
-Plan `notes/plans/2026-10-03-train-the-rungs.md` step 1.3a. HA-ViD's object
+Plan `notes/plans/2026-10-03-train-the-rungs.md` (archived, see workbench/ARCHIVE.md) step 1.3a. HA-ViD's object
 detection release is COCO, one file per split, read on 2026-10-03 from the
 val file: images named `frame_NNNNNN.PNG` numbered across every video of the
 split in the order of `ObjectDetection_data_video_info.csv`, every frame of
@@ -125,7 +125,7 @@ def _role_boxes():
 
 
 class Roles(unittest.TestCase):
-    """Role-based slot selection. Plan notes/plans/2026-10-05-dataset-fixes.md
+    """Role-based slot selection. Plan notes/plans/2026-10-05-dataset-fixes.md (archived, see workbench/ARCHIVE.md)
     F4, decided by the author on 2026-10-05: the slots are the acting hand,
     the moved object and the target object, from the action labels. The
     codes and their objects are Figure 9 of `zheng2023`, p.17.
@@ -180,15 +180,15 @@ class Roles(unittest.TestCase):
 class RelationInstances(unittest.TestCase):
     """This project's rule over HA-ViD's action codes, in the VidVRD field.
 
-    Plan notes/plans/2026-10-10-relations-and-boxes.md A3. HA-ViD ships no
+    Plan notes/plans/2026-10-10-relations-and-boxes.md (archived, see workbench/ARCHIVE.md) A3. HA-ViD ships no
     relation. It labels each primitive task with a code such as `ibacb`,
     insert ball into cylinder base, and this project reads a key action with
     a target as a relation between the moved object and the target, true
     when the action ends. The rule is this project's, so the tier is T3, and
     `workbench/scripts/analysis/havid_relations.py` says so in its own header.
 
-    A clip IS one primitive task: `tools/datasets/convert_havid.py:283` clamps
-    the clip to the segment, so the action ends on the clip's last frame and
+    A clip IS one primitive task: `_role_clips` in
+    `tools/datasets/convert_havid.py` clamps the clip to the segment, so the action ends on the clip's last frame and
     the relation holds there and nowhere else. One instance per clip.
     """
 

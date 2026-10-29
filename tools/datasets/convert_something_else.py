@@ -6,7 +6,8 @@ training builder reads it: `model/loaders/vidvrd.py` reads VidVRD's
 format only, and its `--annotations-dir` and `--frames-dir` flags exist for a
 dataset written into that format. This writes one VidVRD-format JSON per clip
 and decodes each clip's SSv2 video into the frames the builder expects. Plan
-`notes/plans/2026-10-03-train-the-rungs.md`, steps 1.2a to 1.2c.
+`notes/plans/2026-10-03-train-the-rungs.md`, steps 1.2a to 1.2c
+(archived, see workbench/ARCHIVE.md).
 
 THE SOURCE, read on 2026-10-03 from the head of
 `bounding_box_smthsmth_part2.json`: per video, a list of annotated frames
@@ -127,7 +128,8 @@ def relation_instances(doc, placeholders, action, actions, predicates):
     last, and SSv2 lists the placeholders in the order of the template's
     slots.
 
-    Plan notes/plans/2026-10-10-relations-and-boxes.md, A2.
+    Plan notes/plans/2026-10-10-relations-and-boxes.md, A2
+    (archived, see workbench/ARCHIVE.md).
     """
     first, last = _anchors(doc)
     if first is None:

@@ -7,7 +7,7 @@ flattened state, prediction clipped to [1e-7, 1 - 1e-7], averaged over
 features and then over samples). A val curve under `val_BCE` here learned
 more than the average frame. Added 2026-10-03.
 
-This module imports nothing from `latplan`, so it loads without TensorFlow.
+This module imports nothing from the `model` package, so it loads without TensorFlow.
 """
 
 import numpy as np
@@ -29,7 +29,8 @@ def bce_floor(states):
     equalised and stretched into values between 0 and 1, so a perfect copy
     of a video state still scores this. Clipped as the network clips its
     prediction, so a target of exactly 0 or 1 adds about 1e-07 and not 0.
-    Added 2026-10-05, plan notes/plans/2026-10-04-overfit-viability.md.
+    Added 2026-10-05, plan notes/plans/2026-10-04-overfit-viability.md
+    (archived, see workbench/ARCHIVE.md).
     """
     x = np.clip(states.reshape(len(states), -1).astype(np.float64),
                 EPSILON, 1.0 - EPSILON)

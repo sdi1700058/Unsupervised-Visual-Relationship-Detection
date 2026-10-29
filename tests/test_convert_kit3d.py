@@ -1,6 +1,6 @@
 """KIT Bimanual from `3d_objects`: tracked instances and both hands.
 
-Plan `notes/plans/2026-10-05-dataset-fixes.md`, F3. The author decided on
+Plan `notes/plans/2026-10-05-dataset-fixes.md` (archived, see workbench/ARCHIVE.md), F3. The author decided on
 2026-10-05 to convert KIT from its 3D boxes, because the 2D detections name
 one box for each class, misname objects and hold no hand. No camera values
 ship, so each take fits its own pinhole camera from 3D box centres to the
@@ -165,7 +165,7 @@ def _rel(frames):
 
 class Roles(unittest.TestCase):
     """Role-based slot selection for KIT. Plan
-    notes/plans/2026-10-05-dataset-fixes.md, F5. The labels give an action
+    notes/plans/2026-10-05-dataset-fixes.md (archived, see workbench/ARCHIVE.md), F5. The labels give an action
     for each hand and no object (`dreher2019` p.3), so the moved object is
     the one in contact with the acting hand most often, and the target the
     one in contact with the moved object most often, by the
@@ -205,7 +205,7 @@ class Roles(unittest.TestCase):
 
 class RelationInstances(unittest.TestCase):
     """KIT's own `spatial_relations` into the VidVRD field, plan
-    notes/plans/2026-10-10-relations-and-boxes.md A1. The author chose the
+    notes/plans/2026-10-10-relations-and-boxes.md (archived, see workbench/ARCHIVE.md) A1. The author chose the
     dataset's own relations on 2026-10-10. `begin_fid` counts from the start
     of the CLIP and `end_fid` is one past the last frame, as VidVRD writes
     them."""

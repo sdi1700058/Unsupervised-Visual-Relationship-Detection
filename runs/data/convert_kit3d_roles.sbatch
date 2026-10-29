@@ -2,7 +2,8 @@
 # KIT Bimanual role clips, one for each manipulation cycle of a hand, from
 # takes 0 to 9 of the nine tasks of subjects 2 to 6.
 #
-# Plan workbench/notes/plans/2026-10-05-dataset-fixes.md, F5. Take 0 alone
+# Plan workbench/notes/plans/2026-10-05-dataset-fixes.md, F5
+# (archived, see workbench/ARCHIVE.md). Take 0 alone
 # gave 43 cycles with all three roles on 2026-10-05, too few to hold out two
 # whole subjects, so it took takes 0 to 4, and on 2026-10-06 the author asked
 # for all ten, because KIT stayed the weakest. It unpacks the RGB of

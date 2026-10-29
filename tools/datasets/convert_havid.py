@@ -5,7 +5,8 @@ WHY. The author locked HA-ViD as medium-2 on 2026-10-03, and it is the first
 medium rung to train because its videos are unpacked and its boxes carry a
 track id. No training builder reads it: `model/loaders/vidvrd.py`
 reads VidVRD's format, through `--annotations-dir` and `--frames-dir`. Plan
-`notes/plans/2026-10-03-train-the-rungs.md`, steps 1.3a to 1.3c.
+`notes/plans/2026-10-03-train-the-rungs.md`, steps 1.3a to 1.3c
+(archived, see workbench/ARCHIVE.md).
 
 THE SOURCE, read on 2026-10-03 from the val COCO file. One COCO file per
 split. Images are `frame_NNNNNN.PNG`, numbered across every video of the
@@ -118,7 +119,8 @@ def clip_json(clip, boxes, start, size, width, height, scale):
 
 
 # Role-based slot selection, decided by the author on 2026-10-05. Plan
-# notes/plans/2026-10-05-dataset-fixes.md, F4. An action code is a verb
+# notes/plans/2026-10-05-dataset-fixes.md, F4 (archived, see workbench/ARCHIVE.md).
+# An action code is a verb
 # letter, then two-letter codes for the moved object, the target object and
 # the tool, in that order: `s sh c1 dh` is screw, hex screw, cylinder plate
 # hole 1, hex screwdriver. The list of codes is Figure 9 of `zheng2023`,
@@ -246,7 +248,8 @@ def relation_instances(verb, n_tracks, size):
     what the rule gives. `role_clip_json` fixes tid 0 as the hand, 1 as the
     moved object and 2 as the target, so the arguments need no lookup.
 
-    Plan notes/plans/2026-10-10-relations-and-boxes.md, A3.
+    Plan notes/plans/2026-10-10-relations-and-boxes.md, A3
+    (archived, see workbench/ARCHIVE.md).
     """
     name = KEY_VERB_RELATION.get(verb)
     if name is None or n_tracks < 3 or size < 1:

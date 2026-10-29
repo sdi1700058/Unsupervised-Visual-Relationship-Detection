@@ -2,7 +2,7 @@
 # Something-Else into VidVRD format: choose the clips, decode their frames.
 #
 # Plan workbench/notes/plans/2026-10-03-train-the-rungs.md, steps 1.2b and
-# 1.2c. Reads three 1.1 GB box files, so it runs here and not on a login node.
+# 1.2c (archived, see workbench/ARCHIVE.md). Reads three 1.1 GB box files, so it runs here and not on a login node.
 # The template list comes from
 #   python3 workbench/scripts/analysis/something_else_relations.py \
 #       --flipping-templates workbench/scripts/train/rung_ids/se-flip-templates.txt

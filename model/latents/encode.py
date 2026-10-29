@@ -29,8 +29,8 @@ def load_model(model_dir):
 def load_npz_states(model_dir, npz_path=None):
     """Return the (N, num_objs, feat_dim) states array + auxiliary metadata.
 
-    Loads via the same pipeline as `metrics/extract_fol.py::load_vidvrd_data` /
-    `load_actiongenome_data` — auto-detects domain from `loaded_videos.json`
+    Loads via the same pipeline as `metrics/extract_fol.py::load_vidvrd_data`
+    — auto-detects domain from `loaded_videos.json`
     manifest.
 
     Returns
@@ -72,11 +72,11 @@ def load_npz_states(model_dir, npz_path=None):
     images, bboxes_raw, per_state_names, frame_ids, meta = hit
 
     # Detect domain from manifest to apply the correct preprocessing
-    # (mirrors load_vidvrd_data / load_actiongenome_data in metrics/extract_fol.py).
+    # (mirrors load_vidvrd_data in metrics/extract_fol.py).
     from model.loaders.image import preprocess
     from model.train.strips import bboxes_to_onehot
 
-    # PICSIZE differs per loader — pull from puzzle_labeled_objects (canonical).
+    # PICSIZE differs per loader — pull from model.loaders.labeled_objects (canonical).
     from model.loaders.labeled_objects import PICSIZE
 
     picsize_grid = (np.array(PICSIZE) // 5).astype(int)

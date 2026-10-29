@@ -3,7 +3,7 @@
 VidVRD data loader for FOSAE.
 
 Reads ImageNet-VidVRD annotation JSONs (one per video) + pre-extracted JPEG frames.
-Output arrays are identical in shape and layout to puzzle_labeled_objects so
+Output arrays are identical in shape and layout to model.loaders.labeled_objects so
 model/train/strips.py can reuse the same preprocessing pipeline (blocks_activation, bboxes_to_onehot).
 
 Download data first:  bash runs/data/download_vidvrd.sh
@@ -29,8 +29,8 @@ _DEFAULT_ANN_DIR    = os.path.join(_DEFAULT_ROOT, "annotations")
 def _default_frames_dir(fps):
     return os.path.join(_DEFAULT_ROOT, f"frames_{fps}fps")
 
-# Sidecar populated by build_dataset() so callers (model/train/strips.py, metrics/extract_fol.py,
-# visualize_fol.py) can audit which videos were actually loaded without
+# Sidecar populated by build_dataset() so callers (model/train/strips.py,
+# metrics/extract_fol.py) can audit which videos were actually loaded without
 # breaking the existing 4-tuple return signature.
 last_load_metadata = {}
 

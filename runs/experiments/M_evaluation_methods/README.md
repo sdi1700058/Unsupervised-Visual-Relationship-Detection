@@ -88,6 +88,12 @@ strongest positive result available from this experiment.
 
 ## M2 — a rule, or memorised objects?
 
+`run_local.sh` skips M2. Its script, `tools/planner/compositional.py`
+(archived, see workbench/ARCHIVE.md), is not on disk. The M2 numbers in this
+file are historical.
+`git checkout archive/2026-10-audit -- tools/planner/compositional.py` restores
+the script.
+
 FOSAE is a *First-Order* State AutoEncoder, and first order means a predicate
 abstracts over its arguments. M2 tests that directly: hold out whole object
 **categories**, keep the predicates, and compare against a size-matched

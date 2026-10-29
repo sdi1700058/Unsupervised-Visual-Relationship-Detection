@@ -228,7 +228,7 @@ def main(argv=None):
           "is invisible to reconstruction loss.\n\nAbove that, do NOT rank by "
           "this. Across oracle variants a higher score just\nmeans coarser "
           "bins and tracks planner error the wrong way; use the\n"
-          "quantisation floor printed by planner/oracle.py instead.")
+          "quantisation floor printed by planner/position_oracle.py instead.")
 
     if args.csv:
         os.makedirs(os.path.dirname(args.csv) or ".", exist_ok=True)

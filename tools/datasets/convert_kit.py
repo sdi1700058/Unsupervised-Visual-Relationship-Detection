@@ -4,7 +4,8 @@
 WHY. The author locked KIT Bimanual as medium-1 on 2026-10-03. No training
 builder reads it: `model/loaders/vidvrd.py` reads VidVRD's format,
 through `--annotations-dir` and `--frames-dir`. Plan
-`notes/plans/2026-10-03-train-the-rungs.md`, steps 2.1 to 2.3.
+`notes/plans/2026-10-03-train-the-rungs.md`, steps 2.1 to 2.3
+(archived, see workbench/ARCHIVE.md).
 
 THE SOURCE, read on 2026-10-03. Per take, `2d_objects/frame_N.json` holds a
 list of detections, each `bounding_box {x, y, w, h}` normalised to the image

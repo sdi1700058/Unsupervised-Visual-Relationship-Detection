@@ -6,7 +6,7 @@
 #
 # The AECLASS comes FIRST. model/train/strips.py::main dispatches positionally into
 # puzzle(aeclass, type, width, height, U, A, P, num_examples), so dropping it
-# shifts every argument left and the run dies on `import latplan.puzzles.puzzle_3`.
+# shifts every argument left and the run dies on `import model.loaders.3`.
 # The three Nones matter for the same reason: a bare `... mnist 3 3 100` sets
 # U=100, not num_examples=100, and trains a 100-unit model on the full set.
 # workbench/scripts/train/submit.sh:140 composes the same command the same way.
@@ -31,7 +31,7 @@ python3 -c "from model.paths import DATA_DIR, OUT_DIR; print('  DATA_DIR:', DATA
     && ok "paths import" || fail "paths import"
 
 python3 -c "from model.loaders.vidvrd import PATCH_SIZE, MAX_OBJECTS, PICSIZE" \
-    && ok "puzzle_vidvrd import" || fail "puzzle_vidvrd import"
+    && ok "model.loaders.vidvrd import" || fail "model.loaders.vidvrd import"
 
 python3 -c "from model.loaders.cache import npz_cache_path" \
     && ok "cache import" || fail "cache import"

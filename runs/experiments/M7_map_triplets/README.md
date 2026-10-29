@@ -20,7 +20,7 @@ no-vision frequency floor on VidVRD and on VidOR.
 
 `RELATED_WORK.md` section B holds the published ImageNet-VidVRD ladder, from
 mAP 8.58 in 2017 to 31.33 in 2024, with 43.15 under VrdONE's oracle-trajectory
-condition. `EVAL.md` §5.3 records that this project has never computed that
+condition. `EVAL.md` (archived, see workbench/ARCHIVE.md) §5.3 records that this project has never computed that
 quantity, and that the M1 probe mAP is a *different* measurement: M1 averages
 average precision over predicates on per-frame rows, and the field averages
 average precision over *videos* on localised triplet instances. Supervisor
@@ -53,7 +53,7 @@ and a video with no ground-truth relation is dropped rather than scored zero.
 ## The conditions
 
 Every condition supplies **ground-truth tubelets**, so all of them sit in
-VrdONE's oracle-trajectory regime (`EVAL.md` §5.4). Compare against the 43.15
+VrdONE's oracle-trajectory regime (`EVAL.md` §5.4, archived, see workbench/ARCHIVE.md). Compare against the 43.15
 row, never against 31.33.
 
 | tag | predictor | what it establishes |
@@ -144,7 +144,7 @@ The pre-registered row "frequency mAP near or above the published 2017 row"
 fired, and hard. A predictor that **sees nothing** — the training split's most
 frequent triplets, put on every ordered pair of ground-truth tubelets — scores
 30.33 on VidVRD and 16.94 on VidOR. The published detection ladder runs from
-8.58 to 31.33 on VidVRD, and the best VidOR row in `EVAL.md` §5.3 is 6.85.
+8.58 to 31.33 on VidVRD, and the best VidOR row in `EVAL.md` §5.3 (archived, see workbench/ARCHIVE.md) is 6.85.
 
 So the pre-registered response applies without amendment:
 

@@ -18,7 +18,7 @@ pairs `model.loaders.adjacency.sequential_pairs` made, so this split and
 `build_transitions` agree on which frames are one step apart, including under
 `STRICT_ADJACENCY=1`.
 
-This module imports nothing from `latplan`, so it loads without TensorFlow.
+This module imports nothing from the `model` package, so it loads without TensorFlow.
 """
 
 import collections
@@ -33,7 +33,7 @@ def _video_of(frame_id):
     """The clip of a frame id: everything before the last slash.
 
     The same rule as `model.loaders.adjacency.parse_frame_id`, repeated here so
-    that this module stays free of the `latplan` package import.
+    that this module stays free of the `model` package import.
     """
     return str(frame_id).rpartition("/")[0]
 

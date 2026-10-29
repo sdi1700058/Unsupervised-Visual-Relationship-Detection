@@ -1,6 +1,6 @@
 """KIT Bimanual into the VidVRD format the training builder reads.
 
-Plan `notes/plans/2026-10-03-train-the-rungs.md` step 2.3. KIT ships per frame
+Plan `notes/plans/2026-10-03-train-the-rungs.md` (archived, see workbench/ARCHIVE.md) step 2.3. KIT ships per frame
 `2d_objects/frame_N.json`, a list of detections, each with `bounding_box`
 `{x, y, w, h}` normalised to the image and `candidates`, the first holding
 `class_name` and `certainty`. There is no track id, and one class can appear

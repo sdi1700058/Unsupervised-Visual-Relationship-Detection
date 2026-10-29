@@ -297,6 +297,11 @@ def verdict(result):
             "sequence could not have happened." % (100.0 * v))
 
 
+def _num(x, fmt="%.3f"):
+    """A rate, or n/a when nothing was scored (the rates can be None)."""
+    return "n/a" if x is None else fmt % x
+
+
 def _svg(results, path, width=760, row_h=26):
     """One bar per export: validity, with the scrambled control behind it."""
     if not results:
@@ -314,11 +319,11 @@ def _svg(results, path, width=760, row_h=26):
         out.append('<text x="8" y="%d" font-size="11" fill="#333">%s</text>'
                    % (y + 14, label.replace("&", "&amp;").replace("<", "&lt;")))
         out.append('<rect x="%d" y="%d" width="%.1f" height="18" fill="#c9ced8"/>'
-                   % (left, y, span * r["discrimination"]["scrambled"]))
+                   % (left, y, span * (r["discrimination"]["scrambled"] or 0.0)))
         out.append('<rect x="%d" y="%d" width="%.1f" height="12" fill="#1f6feb" '
-                   'opacity="0.85"/>' % (left, y + 3, span * r["validity"]))
-        out.append('<text x="%.1f" y="%d" font-size="10" fill="#666">%.2f</text>'
-                   % (left + span + 6, y + 14, r["validity"]))
+                   'opacity="0.85"/>' % (left, y + 3, span * (r["validity"] or 0.0)))
+        out.append('<text x="%.1f" y="%d" font-size="10" fill="#666">%s</text>'
+                   % (left + span + 6, y + 14, _num(r["validity"], "%.2f")))
     out.append('</svg>')
     with open(path, "w") as f:
         f.write("".join(out))
@@ -353,11 +358,11 @@ def main(argv=None):
             print("skip %s: %s" % (name, e))
             continue
         results.append((name, r))
-        print("%-42s validity %.3f  scrambled %.3f  sep %+.3f  "
-              "teleport %.3f  flicker %.3f"
-              % (name, r["validity"], r["discrimination"]["scrambled"],
-                 r["discrimination"]["separation"],
-                 r["teleport_rate"], r["flicker_rate"]))
+        print("%-42s validity %s  scrambled %s  sep %s  teleport %s  flicker %s"
+              % (name, _num(r["validity"]),
+                 _num(r["discrimination"]["scrambled"]),
+                 _num(r["discrimination"]["separation"], "%+.3f"),
+                 _num(r["teleport_rate"]), _num(r["flicker_rate"])))
 
     if not results:
         raise SystemExit("nothing scored")
@@ -368,14 +373,24 @@ def main(argv=None):
     else:
         # A dataset verdict, not the first row's. Printing one clip's verdict
         # over a table of twenty reads as a statement about all of them.
-        seps = [r["discrimination"]["separation"] for _, r in results]
-        vals = [r["validity"] for _, r in results]
+        # A clip with nothing to score has no separation and no validity. It
+        # counts as silent and stays out of the medians.
+        scored = [(r["validity"], r["discrimination"]["separation"])
+                  for _, r in results
+                  if r["validity"] is not None
+                  and r["discrimination"]["separation"] is not None]
+        vals = [v for v, _ in scored]
+        seps = [s for _, s in scored]
         loud = [s for s in seps if s >= 0.05]
         print("%d of %d clips are informative (separation >= 0.05); the rest "
               "are SILENT and their validity is not evidence."
               % (len(loud), len(results)))
-        print("median separation %.3f, median validity %.3f"
-              % (float(np.median(seps)), float(np.median(vals))))
+        if len(scored) < len(results):
+            print("%d clips had nothing to score and are left out of the "
+                  "medians." % (len(results) - len(scored)))
+        if scored:
+            print("median separation %.3f, median validity %.3f"
+                  % (float(np.median(seps)), float(np.median(vals))))
         if loud:
             informative = [v for v, s in zip(vals, seps) if s >= 0.05]
             print("across the informative clips only, median validity %.3f"

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # HA-ViD with role-based slot selection: one clip for each primitive task of
 # the boxed M0 videos, holding only the acting hand, the moved object and the
-# target object. Plan workbench/notes/plans/2026-10-05-dataset-fixes.md, F4.
-# The clips share the decoded frames of runs/data/convert_havid.sbatch, and their
+# target object. Plan workbench/notes/plans/2026-10-05-dataset-fixes.md, F4
+# (archived, see workbench/ARCHIVE.md). The clips share the decoded frames of
+# sh/convert_havid.sbatch (archived, see workbench/ARCHIVE.md), and their
 # annotations go to annotations_roles beside the window clips.
 #
 #   sbatch runs/data/convert_havid_roles.sbatch

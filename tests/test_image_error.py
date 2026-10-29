@@ -5,7 +5,7 @@ one-hot code of its box. The box code is 51 per cent of the loss at patch 8
 and 3 per cent at patch 48 (`git show 56dac44:experiments/G5_patch_size/
 README.md`), so a whole-vector MSE is not comparable across patch sizes. The
 image part alone is. Added 2026-10-05, plan
-`notes/plans/2026-10-04-overfit-viability.md`, Task 5.
+`notes/plans/2026-10-04-overfit-viability.md` (archived, see workbench/ARCHIVE.md), Task 5.
 """
 
 import unittest

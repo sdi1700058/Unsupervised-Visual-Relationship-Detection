@@ -21,9 +21,9 @@ Decided 2026-09-07, the same shape as the adjacency fix of the day before:
 area order, so every existing run reproduces; the flag pins each identity to one
 slot for the whole clip.
 
-Neither loader can be imported normally here -- `model/__init__.py` pulls in
-TensorFlow and this environment has none -- so both are loaded from file with
-`latplan` and `PIL` stubbed, the approach `test_cache_keys.py` takes. The stubs
+Neither loader is imported through the package here, because
+`model/loaders/__init__.py` pulls in TensorFlow. So both are loaded from file
+with the `model` package and `PIL` stubbed, the approach `test_cache_keys.py` takes. The stubs
 come back out in `tearDown`; leaving them in `sys.modules` once turned eleven
 tests in three other files red.
 """
@@ -40,8 +40,7 @@ import unittest
 ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)),
                                     os.pardir))
 
-_STUBBED = ("model", "model.loaders", "model.domains",
-            "model.domains.video", "model.paths",
+_STUBBED = ("model", "model.loaders", "model.paths",
             "model.loaders.labeled_objects", "model.loaders.cache",
             "model.loaders.adjacency",
             "model.loaders.vidvrd", "PIL", "PIL.Image")
@@ -64,11 +63,10 @@ class _Img(object):
         return self
 
 
-def _stub_latplan(tmp):
+def _stub_model(tmp):
     import numpy as np
 
-    for name in ("model", "model.loaders",
-                 "model.domains", "model.domains.video"):
+    for name in ("model", "model.loaders"):
         sys.modules.setdefault(name, types.ModuleType(name))
 
     paths = types.ModuleType("model.paths")
@@ -107,12 +105,12 @@ class LoaderCase(unittest.TestCase):
         os.environ.pop("STRICT_ADJACENCY", None)
         self.tmp = tempfile.mkdtemp(prefix="slotid-")
         # Registered before the next line, not in tearDown. unittest skips
-        # tearDown when setUp raises, and _stub_latplan raises whenever the
+        # tearDown when setUp raises, and _stub_model raises whenever the
         # stub targets are not importable. Measured 2026-09-18: that path
-        # leaked 24 directories for each run of tools/check_docs.py, which
+        # leaked 24 directories for each run of tools/check_docs.py (archived, see workbench/ARCHIVE.md), which
         # the notes gate runs at SessionStart and before every commit.
         self.addCleanup(shutil.rmtree, self.tmp, True)
-        _stub_latplan(self.tmp)
+        _stub_model(self.tmp)
 
     def tearDown(self):
         for name, was in self._saved.items():

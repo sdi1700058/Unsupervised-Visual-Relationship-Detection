@@ -35,7 +35,7 @@ import os
 import sys
 
 # Running this as a script puts tools/datasets on sys.path, not the repo root,
-# and `window_crossover` imports the quantisation floor from the planner.
+# and `window_crossover` imports the quantisation floor from metrics/box_geometry.py.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
     os.path.abspath(__file__)))))
 

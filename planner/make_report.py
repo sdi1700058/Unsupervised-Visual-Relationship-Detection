@@ -7,7 +7,7 @@ writes a single self-contained HTML page: the verdict first, then the numbers
 that support it, then a chart, then the per-window detail for anyone who wants
 it.
 
-    python3 planner/make_report.py eval/planner/H15-pddl-150010
+    python3 planner/make_report.py eval/planner/<run>
     python3 planner/make_report.py eval/planner/*/ --index
 
 Standard library only — no matplotlib, no numpy, no network. The chart is

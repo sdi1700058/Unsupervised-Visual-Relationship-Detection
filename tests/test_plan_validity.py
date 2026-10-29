@@ -8,6 +8,7 @@ from observed motion rather than from a constant somebody chose.
     python3 -m unittest tests/test_plan_validity.py
 """
 
+import os
 import unittest
 from pathlib import Path
 
@@ -381,3 +382,39 @@ class TestNothingScoredIsReportedAsSuch(unittest.TestCase):
         result["discrimination"] = plan_validity.discrimination(
             b[80:], b[80:][rng.permutation(40)], m)
         self.assertFalse(plan_validity.verdict(result).startswith("SILENT"))
+
+
+class TestTheCommandLineSurvivesAnUnscoreableClip(unittest.TestCase):
+    """`main` printed every rate with %.3f, so one clip with no object present
+    stopped the whole run with a TypeError (the M3 step of
+    runs/experiments/M_evaluation_methods/run_local.sh, 2026-10-29)."""
+
+    def _result(self, scoreable):
+        b = _walk(n=60, step=3.0, seed=4)
+        m = plan_validity.motion_model(b[:40])
+        trace = b[40:] if scoreable else np.zeros((20, 3, 4))
+        r = plan_validity.plan_validity(trace, m)
+        rng = np.random.RandomState(0)
+        r["discrimination"] = plan_validity.discrimination(
+            trace, trace[rng.permutation(len(trace))], m)
+        return r
+
+    def test_main_reports_an_unscoreable_clip_and_writes_its_files(self):
+        import json
+        import tempfile
+        results = {"real.npz": self._result(True),
+                   "empty.npz": self._result(False)}
+        self.assertIsNone(results["empty.npz"]["validity"])
+        original = plan_validity.score_export
+        plan_validity.score_export = lambda p, *a, **k: results[p]
+        try:
+            with tempfile.TemporaryDirectory() as out:
+                rc = plan_validity.main(["real.npz", "empty.npz",
+                                         "--out-dir", out])
+                self.assertEqual(rc, 0)
+                with open(os.path.join(out, "validity.json")) as f:
+                    written = json.load(f)
+                self.assertIsNone(written["empty"]["validity"])
+                self.assertTrue(os.path.exists(os.path.join(out, "validity.svg")))
+        finally:
+            plan_validity.score_export = original

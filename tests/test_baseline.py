@@ -4,7 +4,7 @@ The author judges the rung runs by eye from `training_curve.png`. A val BCE of
 0.12 says nothing alone, so each run writes `baseline.json`: the BCE and MSE a
 model would score if it always predicted the mean training state. A curve
 under that line learned more than the average frame. Added 2026-10-03, plan
-`notes/plans/2026-10-03-train-the-rungs.md` step 1.0b.
+`notes/plans/2026-10-03-train-the-rungs.md` (archived, see workbench/ARCHIVE.md) step 1.0b.
 
 The model's `BCE` metric is Keras `binary_crossentropy` over the flattened
 state, clipped to [1e-7, 1 - 1e-7], averaged over features and then over

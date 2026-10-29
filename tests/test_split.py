@@ -9,7 +9,7 @@ the rung runs, and confirmed by an adversary from `model/train/strips.py:622-628
 
 `SPLIT=clip` gives each clip to exactly one split. The default is unchanged,
 so earlier runs reproduce. `model/loaders/split.py` imports nothing from
-`latplan`, so it loads from file here without TensorFlow.
+the `model` package, so it loads from file here without TensorFlow.
 """
 
 import importlib.util

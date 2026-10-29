@@ -24,7 +24,7 @@ The last two steps depart from upstream on purpose:
 
 `ama3-domain.bin` wants the action list, the add effects and the delete
 effects as three files. That is the shape the action autoencoder dumps.
-FOSAE's own `dump_actions` writes only `pre|suc` rows (`latplan/model.py:1051`),
+FOSAE's own `dump_actions` writes only `pre|suc` rows (`model/model.py:1077`),
 so `write_domain` derives the three files from the export.
 
 Setup:
@@ -33,7 +33,10 @@ Setup:
     bash planner/install_fd.sh
     bash planner/install_roswell.sh   # Roswell, SBCL, lisp binaries
 
-    python3 planner/plan_video.py export.npz --method ama3 --init 0 --goal 4
+Set `UPSTREAM_LATPLAN` to the path of an upstream latplan checkout. The
+default is `latplan` in the parent directory of this repository.
+
+    .venv-local/bin/python planner/plan_video.py export.npz --method ama3 --init 0 --goal 4
 
 Sherlock has no `sbcl` and no `roswell` module, so this method runs locally
 only. Planning is cheap on CPU, so that is not a problem: export on the

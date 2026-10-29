@@ -292,7 +292,7 @@ def _has_pillow():
 
 @unittest.skipUnless(_has_pillow(), "needs pillow (present in .venv-local)")
 class TestSynthBboxContract(unittest.TestCase):
-    """`boxes_from_vidvrd` must read what `tools/synth_bbox.py` writes.
+    """`boxes_from_vidvrd` must read what `tools/synth_bbox.py` (archived, see workbench/ARCHIVE.md) writes.
 
     That tool runs MediaPipe hands plus Grounded-DINO and produces a
     VidVRD-schema JSON with no `relation_instances`, no `fps` and no

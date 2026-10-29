@@ -1,6 +1,6 @@
 """Something-Else into the VidVRD format the training builder reads.
 
-Plan `notes/plans/2026-10-03-train-the-rungs.md` step 1.2a. The builder
+Plan `notes/plans/2026-10-03-train-the-rungs.md` (archived, see workbench/ARCHIVE.md) step 1.2a. The builder
 `model/loaders/vidvrd.py` reads one JSON per clip: `video_id`,
 `width`, `height`, `subject/objects` of `{tid, category}` and `trajectories`,
 one list per frame of `{tid, bbox{xmin, ymin, xmax, ymax}}`, with frame `fid`
@@ -133,7 +133,7 @@ class Choose(unittest.TestCase):
 class RelationInstances(unittest.TestCase):
     """The PDDL domain's own statement about a clip, in the VidVRD field.
 
-    Plan notes/plans/2026-10-10-relations-and-boxes.md A2. Something-Else
+    Plan notes/plans/2026-10-10-relations-and-boxes.md (archived, see workbench/ARCHIVE.md) A2. Something-Else
     ships no per-frame relation. The clip's SSv2 template names a PDDL
     action, that action's precondition and effect state which binary
     predicates it changes, and those hold at the ends of the clip and

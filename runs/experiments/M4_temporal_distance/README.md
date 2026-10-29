@@ -120,8 +120,13 @@ Runs locally. numpy and the standard library, no model, no GPU, no video
 frames. Memory-capped inside the script: an uncapped run crashed this
 workstation on 2026-08-28.
 
+The two scripts below are not on disk (archived, see workbench/ARCHIVE.md). The commands use
+the paths that the scripts had before the archive.
+`git checkout archive/2026-10-audit -- <path>` restores each script. The
+export `eval/exports/H14-P10-150010.npz` is not on disk.
+
 ```bash
-bash runs/experiments/M4_temporal_distance/run_local.sh
+bash experiments/M4_temporal_distance/run_local.sh
 ```
 
 It builds the two oracle datasets if they are absent (about 4 minutes the first
@@ -130,7 +135,7 @@ time, nothing on later runs), then scores them beside H14's trained arms.
 The metric alone, on exports that already exist:
 
 ```bash
-python3 planner/m4_temporal.py \
+python3 tools/planner/m4_temporal.py \
     vidvrd-oracle=eval/probe/batch \
     vidor-oracle=eval/probe/vidor \
     eval/exports/H14-P10-150010.npz \
@@ -156,7 +161,9 @@ Nothing above this line was changed after the run. **Measured** 2026-09-05,
 `--max-gap 20`, on this workstation. Scoring took **9.7 seconds** with both
 oracle datasets already built, against the two minutes expected.
 
-Figure: `eval/M4/m4_temporal.svg`. Numbers: `eval/M4/m4_temporal.json`.
+Figure: `eval/M4/m4_temporal.svg`. Numbers: `eval/M4/m4_temporal.json`. Both
+files are archived (see `workbench/ARCHIVE.md`), and
+`git -C workbench checkout db1528e -- eval/M4` brings them back.
 
 | group | clips | pairs | spearman | pearson | steps per frame | IQR | exact | saturates |
 |---|---|---|---|---|---|---|---|---|

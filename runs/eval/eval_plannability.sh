@@ -31,8 +31,16 @@
 
 set -eo pipefail
 
-PROJECT_DIR="${SLURM_SUBMIT_DIR:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+# The script's own location first. Under sbatch, Slurm runs a spool copy, so
+# fall back to the submit directory only when the script is not in the repo.
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [[ ! -f "${PROJECT_DIR}/planner/plan_video.py" ]]; then
+    PROJECT_DIR="${SLURM_SUBMIT_DIR:-${PROJECT_DIR}}"
+fi
 cd "${PROJECT_DIR}"
+
+# The system python3 on Sherlock has no numpy.
+PY=.venv-local/bin/python; [ -x "$PY" ] || PY=python3
 
 if [[ $# -lt 1 ]]; then
     sed -n '2,26p' "$0" | sed 's/^# \?//'
@@ -102,7 +110,7 @@ IFS=',' read -ra METHOD_LIST <<< "${METHODS}"
 for EXPORT in "${EXPORTS[@]}"; do
     STEM="$(basename "${EXPORT}" .npz)"
 
-    WINDOWS="$(python3 - "${EXPORT}" "${WINDOW}" "${STRIDE}" "${MAX_WINDOWS}" <<'PY'
+    WINDOWS="$("$PY" - "${EXPORT}" "${WINDOW}" "${STRIDE}" "${MAX_WINDOWS}" <<'PY'
 import sys
 sys.path.insert(0, ".")
 from model.latents.export import load
@@ -123,7 +131,7 @@ PY
             LOG="${LOG_DIR}/${STEM}_${METHOD}_${INIT}_${GOAL}.log"
 
             set +e
-            python3 planner/plan_video.py "${EXPORT}" \
+            "$PY" planner/plan_video.py "${EXPORT}" \
                 --method "${METHOD}" \
                 --init "${INIT}" --goal "${GOAL}" \
                 --time-budget-s "${BUDGET}" \
@@ -144,7 +152,7 @@ PY
                 continue
             fi
 
-            python3 - "${METRICS}" "${STEM}" "${METHOD}" <<'PY' >> "${SUMMARY_CSV}"
+            "$PY" - "${METRICS}" "${STEM}" "${METHOD}" <<'PY' >> "${SUMMARY_CSV}"
 import json, sys
 
 path, stem, method = sys.argv[1:4]

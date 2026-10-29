@@ -30,24 +30,28 @@ Seven exports come from **five** trained models. `U20_A2_P10` and `U40_A2_P20`
 each produced two exports, one on the 88-clip set and one on clip
 `ILSVRC2015_train_00150010`.
 
-This is gap **G3** in `notes/NOW.md`, stated generally: one run per
+This is gap **G3** in `notes/NOW.md` (archived, see workbench/ARCHIVE.md), stated generally: one run per
 configuration, no seeds, no error bars.
 
 ## The command
+
+The two scripts below are not on disk (archived, see workbench/ARCHIVE.md). The commands use
+the paths that the scripts had before the archive.
+`git checkout archive/2026-10-audit -- <path>` restores each script.
 
 Preflight first. It writes nothing, submits nothing, and refuses for a named
 reason:
 
 ```bash
 cd $SCRATCH/panos/sgg-thesis
-bash runs/experiments/G3_collapse_rerun/preflight.sh
+bash experiments/G3_collapse_rerun/preflight.sh
 ```
 
 Then one command, and walk away:
 
 ```bash
 cd $SCRATCH/panos/sgg-thesis && mkdir -p logs
-sbatch runs/experiments/G3_collapse_rerun/rerun_collapsed.sh
+sbatch experiments/G3_collapse_rerun/rerun_collapsed.sh
 ```
 
 The export job is chained with `--dependency`, so there is no second visit.
@@ -65,7 +69,7 @@ Let **k** be how many of the five re-trained configurations collapse again.
 |---|---|---|
 | **0 or 1** | The collapse is the draw, not the configuration | The seven reds carry no information about latent shape. Every single-run export in this project is one sample from a distribution nobody measured, which is exactly what G3 says. The next step is seeds, not a new architecture |
 | **2 to 3** | Both matter, and neither is separable at n=1 | Do not name a shape unusable. The honest next step is three seeds for each of the five, which is fifteen jobs and still cheap on a queue |
-| **4 or 5** | The collapse is the configuration | Those latent shapes do not train under these defaults. Record which, with the count, and stop exporting them. A `SPEC.md` invariant becomes worth writing |
+| **4 or 5** | The collapse is the configuration | Those latent shapes do not train under these defaults. Record which, with the count, and stop exporting them. A `SPEC.md` (archived, see workbench/ARCHIVE.md) invariant becomes worth writing |
 
 **The gate reading is a separate number and it does not decide this.** Dead
 exports fall from 7 by however many re-runs live, and `export liveness` goes

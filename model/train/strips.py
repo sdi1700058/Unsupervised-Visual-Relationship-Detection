@@ -333,7 +333,7 @@ def puzzle(aeclass="FirstOrderAE",type='mnist',width=3,height=3,U=None,A=None,P=
     test  = objects[int(len(objects)*0.95):]
 
     # SPEC C15: out/<domain>/<category>/<run_tag>/ — submit.sh may pre-compose
-    # the per-job dir into JOB_OUT_DIR; else we compose via paths.helpers.
+    # the per-job dir into JOB_OUT_DIR; else we compose via model.paths.resolved_out_dir.
     _U  = parameters.get('U', [default_parameters.get('U', 'x')])[0]
     _A  = parameters.get('A', [default_parameters.get('A', 'x')])[0]
     _P  = parameters.get('P', [default_parameters.get('P', 'x')])[0]
@@ -443,7 +443,7 @@ def labeled_objects(aeclass="FirstOrderAE", U=None, A=None, P=None,
 
     Uses the same encoding as blocksworld (blocks_activation, blocks_renderer):
       feature = [ patch_pixels (32^2*3, sigmoid) | x1_onehot | y1_onehot | x2_onehot | y2_onehot ]
-    Bboxes are letterboxed onto a 200x300 canvas, preserving the source aspect ratio (puzzle_labeled_objects._scale_bbox_to_canvas). The blocks-5-3 attribution this line used to carry was never a reason with a 5px grid.
+    Bboxes are letterboxed onto a 200x300 canvas, preserving the source aspect ratio (model.loaders.labeled_objects._scale_bbox_to_canvas). The blocks-5-3 attribution this line used to carry was never a reason with a 5px grid.
 
     Parameters
     ----------
@@ -576,7 +576,7 @@ def vidvrd(aeclass="FirstOrderSAE", U=None, A=None, P=None,
     # Env-overridable hyperparameters. Default = encoder-collapse-resistant
     # settings tuned for full-dataset realistic-image domains (SPEC §C6).
     # For tiny overfit datasets (one video), match the MNIST baseline:
-    #   LR=0.001 PREENC_LAYERS=0 ZEROSUPPRESS=0 — see README §5.1.
+    #   LR=0.001 PREENC_LAYERS=0 ZEROSUPPRESS=0.
     parameters['preencoder_layers']            = [int(os.environ.get('PREENC_LAYERS', 2))]
     parameters['preencoder_dimention']         = [int(os.environ.get('PREENC_DIM',    256))]
     parameters['preencoder_output_activation'] = [("linear", "MSE")]

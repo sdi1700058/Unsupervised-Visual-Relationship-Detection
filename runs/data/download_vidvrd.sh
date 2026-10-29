@@ -3,7 +3,7 @@
 #
 # Usage:
 #   bash runs/data/download_vidvrd.sh [--annotations-only] [--force]
-#   FPS=3 bash runs/data/download_vidvrd.sh          # extract at 3fps → data/vidvrd/frames_3fps/ (recommended)
+#   FPS=3 bash runs/data/download_vidvrd.sh          # extract at 3fps → data/video/vidvrd/frames_3fps/ (recommended)
 #
 # Skips downloads/extraction if already complete. Use --force to re-download.
 # Requires: wget, ffmpeg, unzip

@@ -248,9 +248,9 @@ def round_trip_error(boxes, bins_x=DEFAULT_BINS_X, bins_y=DEFAULT_BINS_Y,
 def load_canvas_scaler():
     """Return `(_scale_bbox_to_canvas, CANVAS_W, CANVAS_H)` from the loader.
 
-    `puzzle_labeled_objects` needs only os, json, numpy and PIL, but importing
-    it through the package runs `model/__init__.py`, which pulls in
-    TensorFlow. That blocks every environment without the training stack —
+    `model/loaders/labeled_objects.py` needs only os, json, numpy and PIL, but
+    importing it through the package runs `model/loaders/__init__.py`, which
+    pulls in TensorFlow. That blocks every environment without the training stack —
     including the one this module's own docstring promises to work in.
 
     So the package import is tried first, and on failure the module is loaded
